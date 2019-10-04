@@ -18,6 +18,16 @@ class Catalog:
                  fnam_quakeml='catalog.xml',
                  quality=('A', 'B', 'C'),
                  type_select='all'):
+        """
+        Class to hold catalog of multiple events. Initialized from QuakeML
+        with Mars extensions.
+        :param fnam_quakeml: Path to QuakeML file
+        :param quality: Desired event quality
+        :param type_select: Desired event types. Either direct type or
+                            "all" for BB, HF and LF
+                            "higher" for HF and BB
+                            "lower" for LF and BB
+        """
         from mqs_reports.read_BED_Mars import read_QuakeML_BED
 
         if type_select == 'all':
@@ -30,10 +40,6 @@ class Catalog:
         elif type_select == 'lower':
             type_des = ['LOW_FREQUENCY',
                         'BROADBAND']
-        elif type_select == 'HQ':
-            type_des = ['BROADBAND',
-                        'HIGH_FREQUENCY',
-                        'LOW_FREQUENCY']
         else:
             type_des = [type_select]
         self.types = type_des
@@ -43,6 +49,9 @@ class Catalog:
                                        phase_list=['start', 'end',
                                                    'P', 'S',
                                                    'Pg', 'Sg',
+                                                   'Peak_M2.4',
+                                                   'Peak_MbP',
+                                                   'Peak_MbS',
                                                    'noise_start', 'noise_end',
                                                    'P_spectral_start',
                                                    'P_spectral_end',
@@ -50,23 +59,24 @@ class Catalog:
                                                    'S_spectral_end'])
 
 
-    def calc_spectra_events(self, inv, kind, sc3dir, winlen_sec,
-                            filenam_VBB_HG='XB.ELYSE.02.?H?.D.2019.%03d',
-                            filenam_SP_HG='XB.ELYSE.65.EH?.D.2019.%03d'):
-        #events = dict()
-        #for cat_name, event_cat in event_list.items():
+    def calc_spectra(self, winlen_sec):
         for event_name, event in self.events.items():
             print(event.name)
-            event.calc_spectra(filenam_SP_HG=filenam_SP_HG,
-                               filenam_VBB_HG=filenam_VBB_HG,
-                               inv=inv, kind=kind, sc3dir=sc3dir,
-                               winlen_sec=winlen_sec)
+            event.calc_spectra(winlen_sec=winlen_sec)
 
-            #self.events[event_name] = event
-            #write_spectrum(fnam_spectrum, event['spectra'],
-            # event['origin_publicid'])
 
-    def plot_events_new(self, ymin, ymax, df_mute=1.07):
+    def read_waveforms(self, inv, kind, sc3dir,
+                       filenam_VBB_HG='XB.ELYSE.02.?H?.D.2019.%03d',
+                       filenam_SP_HG='XB.ELYSE.65.EH?.D.2019.%03d'):
+        for event_name, event in self.events.items():
+            print(event.name)
+            event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir,
+                                 filenam_VBB_HG=filenam_VBB_HG,
+                                 filenam_SP_HG=filenam_SP_HG)
+
+
+    def plot_spectra(self, event_list='all', ymin=-240, ymax=-170,
+                     df_mute=1.07):
         nevents = len(self.events)
         nrows = max(2, (nevents + 1) // 2)
         fig, ax = plt.subplots(nrows=nrows, ncols=6, figsize=(14, 10),

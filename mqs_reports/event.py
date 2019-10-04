@@ -33,14 +33,95 @@ class Event:
         self.picks = picks
         self.quality = quality
         self.mars_event_type = mars_event_type
+        self._waveforms_read = False
+        self._spectra_available = False
 
-    def calc_spectra(self, filenam_SP_HG, filenam_VBB_HG,
-                     inv, kind, sc3dir, winlen_sec):
+
+    def read_waveforms(self, inv, kind, sc3dir,
+                       filenam_VBB_HG='XB.ELYSE.02.?H?.D.2019.%03d',
+                       filenam_SP_HG='XB.ELYSE.65.EH?.D.2019.%03d'
+                       ):
         if not self.read_data_local():
             self.read_data_from_sc3dir(filenam_SP_HG, filenam_VBB_HG,
                                        inv, kind, sc3dir)
             self.write_data_local()
-        fnam_spectrum = pjoin('spectrum', 'spectrum_%s' % self.name)
+        self._waveforms_read = True
+
+
+    def read_data_local(self):
+        event_path = pjoin('events', '%s' % self.name)
+        waveform_path = pjoin(event_path, 'waveforms')
+        origin_path = pjoin(event_path, 'origin_id.txt')
+        success = False
+        if len(glob(origin_path)) > 0:
+            with open(origin_path, 'r') as f:
+                origin_local = f.readline().strip()
+            if origin_local == self.origin_publicid:
+                self.waveforms_VBB = obspy.read(pjoin(waveform_path,
+                                                      'waveforms_VBB.mseed'))
+                SP_path = pjoin(waveform_path, 'waveforms_SP.mseed')
+                if len(glob(SP_path)):
+                    self.waveforms_SP = obspy.read(SP_path)
+                else:
+                    self.waveforms_SP = None
+                success = True
+        return success
+
+
+    def write_data_local(self):
+        event_path = pjoin('events', '%s' % self.name)
+        waveform_path = pjoin(event_path, 'waveforms')
+        origin_path = pjoin(event_path, 'origin_id.txt')
+        makedirs(waveform_path, exist_ok=True)
+
+        with open(origin_path, 'w') as f:
+            f.write(self.origin_publicid)
+        self.waveforms_VBB.write(pjoin(waveform_path,
+                                       'waveforms_VBB.mseed'),
+                                 format='MSEED', encoding='FLOAT64')
+        if self.waveforms_SP is not None and len(self.waveforms_SP) > 0:
+            self.waveforms_SP.write(pjoin(waveform_path,
+                                          'waveforms_SP.mseed'),
+                                    format='MSEED', encoding='FLOAT64')
+
+
+    def read_data_from_sc3dir(self, filenam_SP_HG, filenam_VBB_HG,
+                              inv, kind, sc3dir, tpre_SP=100, tpre_VBB=900.):
+        self.kind = kind
+        fnam_VBB, fnam_SP = create_fnam_event(
+            filenam_VBB_HG=filenam_VBB_HG,
+            filenam_SP_HG=filenam_SP_HG,
+            sc3dir=sc3dir, time=self.picks['start'])
+        self.picks = self.picks
+        if len(self.picks['noise_start']) > 0:
+            twin_start = min((utct(self.picks['start']),
+                              utct(self.picks['noise_start'])))
+        else:
+            twin_start = utct(self.picks['start'])
+        if len(self.picks['noise_end']) > 0:
+            twin_end = max((utct(self.picks['end']),
+                            utct(self.picks['noise_end'])))
+        else:
+            twin_end = utct(self.picks['end'])
+        if len(glob(fnam_SP)) > 0:
+            # Use SP waveforms only if 65.EH? exists, not otherwise (we
+            # don't need 20sps SP data)
+            self.waveforms_SP = read_data(fnam_SP, inv=inv, kind=kind,
+                                             twin=[twin_start - tpre_SP,
+                                                    twin_end + tpre_SP],
+                                             fmin=0.5)
+        else:
+            self.waveforms_SP = None
+        self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                       kind=kind,
+                                       twin=[twin_start - tpre_VBB,
+                                             twin_end + tpre_VBB])
+
+
+    def calc_spectra(self, winlen_sec):
+        if not self._waveforms_read:
+            raise RuntimeError('waveforms not read in Event object\n' +
+                               'Call Event.read_waveforms() first.')
         twins = (((self.picks['start']),
                   (self.picks['end'])),
                  ((self.picks['noise_start']),
@@ -105,71 +186,33 @@ class Event:
                             np.zeros_like(p)
                 self.spectra_SP[variable]['f'] = f
 
-    def read_data_local(self):
-        event_path = pjoin('events', '%s' % self.name)
-        waveform_path = pjoin(event_path, 'waveforms')
-        origin_path = pjoin(event_path, 'origin_id.txt')
-        success = False
-        if len(glob(origin_path)) > 0:
-            with open(origin_path, 'r') as f:
-                origin_local = f.readline().strip()
-            if origin_local == self.origin_publicid:
-                self.waveforms_VBB = obspy.read(pjoin(waveform_path,
-                                                      'waveforms_VBB.mseed'))
-                SP_path = pjoin(waveform_path, 'waveforms_SP.mseed')
-                if len(glob(SP_path)):
-                    self.waveforms_SP = obspy.read(SP_path)
-                else:
-                    self.waveforms_SP = None
-                success = True
-        return success
+        self._spectra_available = True
 
-
-    def write_data_local(self):
-        event_path = pjoin('events', '%s' % self.name)
-        waveform_path = pjoin(event_path, 'waveforms')
-        origin_path = pjoin(event_path, 'origin_id.txt')
-        makedirs(waveform_path, exist_ok=True)
-
-        with open(origin_path, 'w') as f:
-            f.write(self.origin_publicid)
-        self.waveforms_VBB.write(pjoin(waveform_path,
-                                       'waveforms_VBB.mseed'),
-                                 format='MSEED', encoding='FLOAT64')
-        if self.waveforms_SP is not None and len(self.waveforms_SP) > 0:
-            self.waveforms_SP.write(pjoin(waveform_path,
-                                          'waveforms_SP.mseed'),
-                                    format='MSEED', encoding='FLOAT64')
-
-
-    def read_data_from_sc3dir(self, filenam_SP_HG, filenam_VBB_HG,
-                              inv, kind, sc3dir):
-        self.kind = kind
-        fnam_VBB, fnam_SP = create_fnam_event(
-            filenam_VBB_HG=filenam_VBB_HG,
-            filenam_SP_HG=filenam_SP_HG,
-            sc3dir=sc3dir, time=self.picks['start'])
-        self.picks = self.picks
-        if len(self.picks['noise_start']) > 0:
-            twin_start = min((utct(self.picks['start']),
-                              utct(self.picks['noise_start'])))
+    def pick_amplitude(self, pick, comp, fmin, fmax, instrument='VBB'):
+        if instrument=='VBB':
+            st_work = self.waveforms_VBB.copy()
         else:
-            twin_start = utct(self.picks['start'])
-        if len(self.picks['noise_end']) > 0:
-            twin_end = max((utct(self.picks['end']),
-                            utct(self.picks['noise_end'])))
+            st_work = self.waveforms_SP.copy()
+
+        st_work.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
+        # if not self.kind=='DISP':
+        #     raise ValueError('Waveform must be displacement for amplitudes')
+        if self.picks[pick]=='':
+            return None
         else:
-            twin_end = utct(self.picks['end'])
-        if len(glob(fnam_SP)) > 0:
-            # Use SP waveforms only if 65.EH? exists, not otherwise (we
-            # don't need 20sps SP data)
-            self.waveforms_SP = read_data(fnam_SP, inv=inv, kind=kind,
-                                             twin=[twin_start - 100.,
-                                                    twin_end + 100.],
-                                             fmin=0.5)
-        else:
-            self.waveforms_SP = None
-        self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
-                                       kind=kind,
-                                       twin=[twin_start - 900.,
-                                             twin_end + 900.])
+            tmin = utct(self.picks[pick]) - 10.
+            tmax = utct(self.picks[pick]) - 10.
+            st_work.trim(starttime=tmin, endtime=tmax)
+            if comp in ['Z', 'N', 'E']:
+                return abs(st_work.select(channel='??' + comp)[0].data).max()
+            elif comp == 'all':
+                amp_N = abs(st_work.select(channel='??N')[0].data).max()
+                amp_E = abs(st_work.select(channel='??E')[0].data).max()
+                amp_Z = abs(st_work.select(channel='??Z')[0].data).max()
+                return max((amp_E, amp_N, amp_Z))
+            elif comp == 'horizontal':
+                amp_N = abs(st_work.select(channel='??N')[0].data).max()
+                amp_E = abs(st_work.select(channel='??E')[0].data).max()
+                return max((amp_E, amp_N))
+            elif comp == 'vertical':
+                return abs(st_work.select(channel='??Z')[0].data).max()

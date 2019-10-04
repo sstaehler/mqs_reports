@@ -85,16 +85,6 @@ def plot_waveforms(st_event, st_noise, st_all, flims, fnam):
     plt.close()
 
 
-# def download_data_and_save_local(events):
-#     events = dict()
-#     for cat_name, event_cat in event_list.items():
-#         for event_name, event in event_cat.items():
-#             print(event_name)
-#             if not read_data_local(event_name, event):
-#                 read_data_from_sc3dir(event, filenam_SP_HG, filenam_VBB_HG, inv,
-#                                       kind, sc3dir)
-#                 write_data_local(event_name, event)
-
 def define_arguments():
     helptext = 'Plot spectra of all events defined in CSV file'
     parser = ArgumentParser(description=helptext)
@@ -123,5 +113,15 @@ if __name__ == '__main__':
     events = Catalog(fnam_quakeml=args.input_quakeml,
                               type_select='higher',
                               quality=['A', 'B', 'C'])
-    events.calc_spectra_events(inv, kind, args.sc3_dir, winlen_sec)
-    events.plot_events_new(ymin=-240, ymax=-170)
+    events.read_waveforms(inv, kind, args.sc3_dir)
+
+    for i, event in events.events.items():
+
+        print(i, event.pick_amplitude('Peak_MbP',
+                                      comp='vertical',
+                                      fmin=1./6.,
+                                      fmax=1./2),
+              event.pick_amplitude('Peak_M2.4',
+                                      comp='vertical', fmin=2.2, fmax=2.6))
+    events.calc_spectra(winlen_sec)
+    events.plot_spectra(ymin=-240, ymax=-170)
