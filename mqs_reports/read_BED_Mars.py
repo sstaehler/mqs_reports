@@ -8,7 +8,7 @@ XMLNS_QUAKEML_BED = "http://quakeml.org/xmlns/bed/1.2"
 XMLNS_QUAKEML_BED_MARS = "http://quakeml.org/xmlns/bed/1.2/mars"
 QML_EVENT_NAME_DESCRIPTION_TYPE = 'earthquake name'
 
-
+from mqs_reports.event import Event
 def lxml_prefix_with_namespace(elementname, namespace):
     """Prefix an XML element name with a namsepace in lxml syntax."""
 
@@ -70,7 +70,9 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
                 lxml_prefix_with_namespace(
                     "locationQuality", XMLNS_QUAKEML_BED_MARS)))
 
-        if not lq.text.endswith(tuple(location_quality)):
+        # if not lq.text.endswith(tuple(location_quality)):
+        #     continue
+        if not lq.text[-1] in tuple(location_quality):
             continue
 
         # event type from mars extension
@@ -112,7 +114,8 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
             picks[phase] = qml_get_pick_time_for_phase(ev, pref_ori.text,
                                                        phase)
 
-        event_info[ev_name] = dict(
+        event_info[ev_name] = Event(
+            name=ev_name,
             publicid=ev_publicid,
             origin_publicid=str(pref_ori.text).strip(),
             picks=picks,
@@ -125,17 +128,18 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
 def read_QuakeML_BED(fnam, event_type, phase_list,
                      quality=('A', 'B', 'C', 'D')):
     from lxml import etree
-    events_sorted = dict()
+    #    events_sorted = dict()
     with open(fnam) as fh:
         tree = etree.parse(fh)
         xml_root = tree.getroot()
-        for LQ in quality:
-            events_sorted[LQ] = qml_get_event_info_for_event_waveform_files(
-                xml_root, location_quality=LQ,
+        #for LQ in quality:
+        #    events_sorted[LQ] = qml_get_event_info_for_event_waveform_files(
+        events = qml_get_event_info_for_event_waveform_files(
+                xml_root, location_quality=quality,
                 event_type=event_type,
                 phase_list=phase_list)
 
-    return events_sorted
+    return events
 
 
 if __name__ == '__main__':

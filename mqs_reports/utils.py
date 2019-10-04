@@ -2,8 +2,10 @@ from os.path import join as pjoin
 
 import numpy as np
 import obspy
+from matplotlib import mlab as mlab
 from obspy import UTCDateTime as utct
 from obspy.signal.rotate import rotate2zne
+from obspy.signal.util import next_pow_2
 
 
 def create_fnam_event(
@@ -24,42 +26,6 @@ def create_fnam_event(
         filenam_VBB_HG % utct(time).julday)
 
     return fnam_VBB, fnam_SP
-
-
-def read_catalog(fnam_quakeml='catalog.xml',
-                 quality=('A', 'B', 'C'),
-                 type_select='all'):
-    from mqs_reports.read_BED_Mars import read_QuakeML_BED
-
-    if type_select == 'all':
-        type_des = ['BROADBAND',
-                    'HIGH_FREQUENCY',
-                    'LOW_FREQUENCY']
-    elif type_select == 'higher':
-        type_des = ['HIGH_FREQUENCY',
-                    'BROADBAND']
-    elif type_select == 'lower':
-        type_des = ['LOW_FREQUENCY',
-                    'BROADBAND']
-    elif type_select == 'HQ':
-        type_des = ['BROADBAND',
-                    'HIGH_FREQUENCY',
-                    'LOW_FREQUENCY']
-    else:
-        type_des = [type_select]
-
-    event_list = read_QuakeML_BED(fnam=fnam_quakeml,
-                                  event_type=type_des,
-                                  quality=quality,
-                                  phase_list=['start', 'end',
-                                              'P', 'S',
-                                              'Pg', 'Sg',
-                                              'noise_start', 'noise_end',
-                                              'P_spectral_start',
-                                              'P_spectral_end',
-                                              'S_spectral_start',
-                                              'S_spectral_end'])
-    return event_list
 
 
 def create_ZNE_HG(st, inv=None):
@@ -243,3 +209,15 @@ def __dayplot_set_x_ticks(ax, starttime, endtime, sol=False):
     ax.set_xticklabels(ticklabels)
     ax.set_xlim(float(starttime),
                 float(endtime))
+
+
+def calc_PSD(tr, winlen_sec):
+    Fs = tr.stats.sampling_rate
+    winlen = min(winlen_sec * Fs,
+                 (tr.stats.endtime -
+                  tr.stats.starttime) * Fs / 4.)
+    NFFT = next_pow_2(winlen)
+    p, f = mlab.psd(tr.data,
+                    Fs=Fs, NFFT=NFFT, detrend='linear',
+                    pad_to=NFFT * 2, noverlap=NFFT // 2)
+    return f, p
