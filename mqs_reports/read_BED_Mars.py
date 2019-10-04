@@ -4,7 +4,7 @@
 Some scripts to read in the Mars BED extended QuakeML produced by the MQS
 author: Fabian Euchner, Simon Stähler
 '''
-XMLNS_QUAKEML_BED = "http://quakeml.org/xmln/bed/1.2"
+XMLNS_QUAKEML_BED = "http://quakeml.org/xmlns/bed/1.2"
 XMLNS_QUAKEML_BED_MARS = "http://quakeml.org/xmlns/bed/1.2/mars"
 QML_EVENT_NAME_DESCRIPTION_TYPE = 'earthquake name'
 
