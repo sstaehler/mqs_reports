@@ -9,7 +9,11 @@
 '''
 
 import numpy as np
+from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
+from obspy import UTCDateTime as utct
+
+from mqs_reports.scatter_annot import scatter_annot
 
 
 class Catalog:
@@ -33,7 +37,8 @@ class Catalog:
         if type_select == 'all':
             type_des = ['BROADBAND',
                         'HIGH_FREQUENCY',
-                        'LOW_FREQUENCY']
+                        'LOW_FREQUENCY',
+                        '2.4_HZ']
         elif type_select == 'higher':
             type_des = ['HIGH_FREQUENCY',
                         'BROADBAND']
@@ -73,6 +78,85 @@ class Catalog:
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir,
                                  filenam_VBB_HG=filenam_VBB_HG,
                                  filenam_SP_HG=filenam_SP_HG)
+
+    def plot_pickdiffs(self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None,
+                       vY=None, fig=None, **kwargs):
+        times_X = []
+        times_Y = []
+        names = []
+        for name, event in self.events.items():
+            try:
+                # Remove events that do not have all four picks
+                for pick in [pick1_X, pick1_Y, pick2_X, pick2_Y]:
+                    assert not event.picks[pick] == ''
+            except:
+                print('One or more picks missing for event %s' % (name))
+            else:
+                times_X.append(utct(event.picks[pick1_X]) -
+                               utct(event.picks[pick2_X]))
+                times_Y.append(utct(event.picks[pick1_Y]) -
+                               utct(event.picks[pick2_Y]))
+                names.append(name)
+
+        if fig is None:
+            fig = plt.figure()
+        if vX is not None:
+            times_X = np.asarray(times_X) * vX
+        if vY is not None:
+            times_Y = np.asarray(times_Y) * vY
+
+        fig, ax = scatter_annot(times_X, times_Y, fig=fig,
+                                names=names,
+                                **kwargs)
+        if vX is None:
+            ax.set_xlabel('$T_{%s} - T_{%s}$' % (pick1_X, pick2_X))
+        else:
+            ax.set_xlabel('distance / km (from %s-%s)' % (pick1_X, pick2_X))
+        if vY is None:
+            ax.set_ylabel('$T_{%s} - T_{%s}$' % (pick1_Y, pick2_Y))
+        else:
+            ax.set_ylabel('distance / km (from %s-%s)' % (pick1_Y, pick2_Y))
+
+        if fig is None:
+            plt.show()
+
+
+    def plot_pickdiff_over_time(self, pick1_Y, pick2_Y, vY=None,
+                                fig=None, **kwargs):
+        times_X = []
+        times_Y = []
+        names = []
+        for name, event in self.events.items():
+            try:
+                # Remove events that do not have all four picks
+                for pick in [pick1_Y, pick2_Y, 'start']:
+                    assert not event.picks[pick] == ''
+            except:
+                print('One or more picks missing for event %s' % (name))
+            else:
+                times_X.append(float(solify(utct(event.picks['start']))) /
+                                     86400.)
+                times_Y.append(utct(event.picks[pick1_Y]) -
+                               utct(event.picks[pick2_Y]))
+                names.append(name)
+
+        if fig is None:
+            fig = plt.figure()
+
+        if vY is not None:
+            times_Y = np.asarray(times_Y) * vY
+
+        fig, ax = scatter_annot(times_X, times_Y, fig=fig,
+                                names=names, **kwargs)
+
+        ax.set_xlabel('Sol')
+        if vY is None:
+            ax.set_ylabel('$T_{%s} - T_{%s}$' % (pick1_Y, pick2_Y))
+        else:
+            ax.set_ylabel('distance / km (from %s-%s)' % (pick1_Y, pick2_Y))
+        if fig is None:
+            plt.show()
+
 
 
     def plot_spectra(self, event_list='all', ymin=-240, ymax=-170,
