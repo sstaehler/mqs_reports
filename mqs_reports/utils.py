@@ -133,9 +133,13 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
             st_rot += st_tmp.select(channel='?HN')[0]
             st_rot += st_tmp.select(channel='?HE')[0]
 
-        st_rot.filter('highpass', zerophase=True, freq=fmin)
-
-        st_rot.trim(starttime=twin[0], endtime=twin[1])
+        try:
+            st_rot.filter('highpass', zerophase=True, freq=fmin)
+        except(NotImplementedError):
+            # if there are gaps in the stream, return empty stream
+            st_rot = obspy.Stream()
+        else:
+            st_rot.trim(starttime=twin[0], endtime=twin[1])
 
     return st_rot
 

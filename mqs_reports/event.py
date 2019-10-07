@@ -27,7 +27,7 @@ class Event:
                  picks: dict,
                  quality: str,
                  mars_event_type: str):
-        self.name=name.strip(),
+        self.name = name.strip()
         self.publicid = publicid
         self.origin_publicid = origin_publicid
         self.picks = picks
