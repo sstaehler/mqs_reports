@@ -69,15 +69,11 @@ class Catalog:
             print(event.name)
             event.calc_spectra(winlen_sec=winlen_sec)
 
-
-    def read_waveforms(self, inv, kind, sc3dir,
-                       filenam_VBB_HG='XB.ELYSE.02.?H?.D.2019.%03d',
-                       filenam_SP_HG='XB.ELYSE.65.EH?.D.2019.%03d'):
+    def read_waveforms(self, inv, kind, sc3dir):
         for event_name, event in self.events.items():
-            print(event.name)
-            event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir,
-                                 filenam_VBB_HG=filenam_VBB_HG,
-                                 filenam_SP_HG=filenam_SP_HG)
+            print(event_name)
+            event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
+
 
     def plot_pickdiffs(self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None,
                        vY=None, fig=None, **kwargs):
@@ -268,6 +264,10 @@ class Catalog:
 
         plt.show()
 
+    def write_table(self):
+        from mqs_reports.html import write_html
+
+        write_html(self)
 
 def plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
                   fmin=0.1, fmax=100.,

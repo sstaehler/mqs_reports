@@ -11,21 +11,16 @@ from obspy.signal.util import next_pow_2
 def create_fnam_event(
         time,
         sc3dir,
-        filenam_VBB_HG='XB.ELYSE.02.?H?.D.2019.%03d',
-        filenam_SP_HG='XB.ELYSE.65.EH?.D.2019.%03d',
+        filenam_inst
         ):
     dirnam = pjoin(sc3dir, 'op/data/waveform/2019/XB/ELYSE/')
-    dirnam_VBB_HG = pjoin(dirnam, '?H?.D')
-    dirnam_SP_HG = pjoin(dirnam, '?H?.D')
+    dirnam_inst = pjoin(dirnam, '?H?.D')
 
-    fnam_SP = pjoin(
-        dirnam_SP_HG,
-        filenam_SP_HG % utct(time).julday)
-    fnam_VBB = pjoin(
-        dirnam_VBB_HG,
-        filenam_VBB_HG % utct(time).julday)
+    fnam_inst = pjoin(
+        dirnam_inst,
+        filenam_inst % utct(time).julday)
 
-    return fnam_VBB, fnam_SP
+    return fnam_inst
 
 
 def create_ZNE_HG(st, inv=None):
@@ -69,27 +64,41 @@ def create_ZNE_HG(st, inv=None):
             azi_v = chan_v.azimuth
             azi_w = chan_w.azimuth
 
+        st.resample(sampling_rate=100)
         for tr_1 in st:
             for tr_2 in st:
                 tr_1.trim(starttime=tr_2.stats.starttime,
                           endtime=tr_2.stats.endtime)
+        st.decimate(5)
 
         st_ZNE = obspy.Stream()
-        if (len(st.select(channel=chan_name + 'U')) > 0 and
-                len(st.select(channel=chan_name + 'V')) > 0 and
-                len(st.select(channel=chan_name + 'W')) > 0):
-            data_ZNE = \
-                rotate2zne(st.select(channel=chan_name + 'U')[0].data, azi_u,
-                           dip_u,
-                           st.select(channel=chan_name + 'V')[0].data, azi_v,
-                           dip_v,
-                           st.select(channel=chan_name + 'W')[0].data, azi_w,
-                           dip_w)
-            for channel, data in zip(['Z', 'N', 'E'], data_ZNE):
-                tr = st.select(channel=chan_name + 'U')[0].copy()
-                tr.stats.channel = chan_name + channel
-                tr.data = data
-                st_ZNE += tr
+        try:
+            for tr_1 in st:
+                for tr_2 in st:
+                    assert tr_1.stats.starttime == tr_2.stats.starttime
+
+        except:
+            print('Problem with rotating to ZNE:')
+            print(st)
+        else:
+            if (len(st.select(channel=chan_name + 'U')) > 0 and
+                    len(st.select(channel=chan_name + 'V')) > 0 and
+                    len(st.select(channel=chan_name + 'W')) > 0):
+                data_ZNE = \
+                    rotate2zne(st.select(channel=chan_name + 'U')[0].data,
+                               azi_u,
+                               dip_u,
+                               st.select(channel=chan_name + 'V')[0].data,
+                               azi_v,
+                               dip_v,
+                               st.select(channel=chan_name + 'W')[0].data,
+                               azi_w,
+                               dip_w)
+                for channel, data in zip(['Z', 'N', 'E'], data_ZNE):
+                    tr = st.select(channel=chan_name + 'U')[0].copy()
+                    tr.stats.channel = chan_name + channel
+                    tr.data = data
+                    st_ZNE += tr
     return st_ZNE
 
 
@@ -99,17 +108,19 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
                     endtime=twin[1] + 300
                     )
     st_seis = st.select(channel='?[LH]?')
-    st_seis.detrend(type='demean')
-    st_seis.taper(0.1)
-    st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)
-    st_seis.detrend()
     if len(st_seis) == 0:
         st_rot = obspy.Stream()
     else:
+        correct_subsample_shift(st_seis)
+        st_seis.detrend(type='demean')
+        st_seis.taper(0.1)
+        st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)
+        st_seis.detrend()
         if st_seis[0].stats.starttime < utct('20190418T12:24'):
             correct_shift(st_seis.select(channel='??U')[0], nsamples=-1)
         for tr in st_seis:
             fmax = tr.stats.sampling_rate * 0.45
+            print(tr)
             tr.remove_response(inv,
                                pre_filt=(fmin / 2., fmin, fmax, fmax * 1.2),
                                output=kind)
@@ -117,31 +128,43 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
         st_seis.merge(method=1)
 
         st_rot = create_ZNE_HG(st_seis, inv=inv)
-        if st_rot.select(channel='?HZ')[0].stats.channel == 'MHZ':
-            fnam = fnam_complete[0:-32] + 'BZC' + fnam_complete[-29:-17] + \
-                   '58.BZC' + fnam_complete[-11:]
-            tr_Z = obspy.read(fnam,
-                              starttime=twin[0] - 900.,
-                              endtime=twin[1] + 900)[0]
-            fmax = tr_Z.stats.sampling_rate * 0.45
-            tr_Z.remove_response(inv, pre_filt=(0.005, 0.01, fmax, fmax * 1.2),
-                                 output=kind)
-            st_tmp = st_rot.copy()
-            st_rot = obspy.Stream()
-            tr_Z.stats.channel = 'MHZ'
-            st_rot += tr_Z
-            st_rot += st_tmp.select(channel='?HN')[0]
-            st_rot += st_tmp.select(channel='?HE')[0]
+        if len(st_rot) > 0:
+            if st_rot.select(channel='?HZ')[0].stats.channel == 'MHZ':
+                fnam = fnam_complete[0:-32] + 'BZC' + fnam_complete[-29:-17] + \
+                       '58.BZC' + fnam_complete[-11:]
+                tr_Z = obspy.read(fnam,
+                                  starttime=twin[0] - 900.,
+                                  endtime=twin[1] + 900)[0]
+                fmax = tr_Z.stats.sampling_rate * 0.45
+                tr_Z.remove_response(inv,
+                                     pre_filt=(0.005, 0.01, fmax, fmax * 1.2),
+                                     output=kind)
+                st_tmp = st_rot.copy()
+                st_rot = obspy.Stream()
+                tr_Z.stats.channel = 'MHZ'
+                st_rot += tr_Z
+                st_rot += st_tmp.select(channel='?HN')[0]
+                st_rot += st_tmp.select(channel='?HE')[0]
 
-        try:
-            st_rot.filter('highpass', zerophase=True, freq=fmin)
-        except(NotImplementedError):
-            # if there are gaps in the stream, return empty stream
-            st_rot = obspy.Stream()
-        else:
-            st_rot.trim(starttime=twin[0], endtime=twin[1])
+            try:
+                st_rot.filter('highpass', zerophase=True, freq=fmin)
+            except(NotImplementedError):
+                # if there are gaps in the stream, return empty stream
+                st_rot = obspy.Stream()
+            else:
+                st_rot.trim(starttime=twin[0], endtime=twin[1])
 
     return st_rot
+
+
+def correct_subsample_shift(st):
+    shift = np.zeros(3)
+    for i in range(1, 3):
+        shift[i] = (st[i].stats.starttime - st[0].stats.starttime) % \
+                   st[0].stats.delta
+    if shift.sum() > 0:
+        for i in range(1, 3):
+            st[i].stats.starttime -= shift[i]
 
 
 def correct_shift(tr, nsamples=-1):

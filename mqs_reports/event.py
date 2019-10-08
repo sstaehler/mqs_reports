@@ -36,14 +36,10 @@ class Event:
         self._waveforms_read = False
         self._spectra_available = False
 
-
-    def read_waveforms(self, inv, kind, sc3dir,
-                       filenam_VBB_HG='XB.ELYSE.02.?H?.D.2019.%03d',
-                       filenam_SP_HG='XB.ELYSE.65.EH?.D.2019.%03d'
+    def read_waveforms(self, inv, kind, sc3dir
                        ):
         if not self.read_data_local():
-            self.read_data_from_sc3dir(filenam_SP_HG, filenam_VBB_HG,
-                                       inv, kind, sc3dir)
+            self.read_data_from_sc3dir(inv, kind, sc3dir)
             self.write_data_local()
         self._waveforms_read = True
 
@@ -57,14 +53,17 @@ class Event:
             with open(origin_path, 'r') as f:
                 origin_local = f.readline().strip()
             if origin_local == self.origin_publicid:
-                self.waveforms_VBB = obspy.read(pjoin(waveform_path,
-                                                      'waveforms_VBB.mseed'))
+                try:
+                    self.waveforms_VBB = obspy.read(pjoin(waveform_path,
+                                                          'waveforms_VBB.mseed'))
+                    success = True
+                except(TypeError):
+                    success = False
                 SP_path = pjoin(waveform_path, 'waveforms_SP.mseed')
                 if len(glob(SP_path)):
                     self.waveforms_SP = obspy.read(SP_path)
                 else:
                     self.waveforms_SP = None
-                success = True
         return success
 
 
@@ -84,15 +83,10 @@ class Event:
                                           'waveforms_SP.mseed'),
                                     format='MSEED', encoding='FLOAT64')
 
-
-    def read_data_from_sc3dir(self, filenam_SP_HG, filenam_VBB_HG,
+    def read_data_from_sc3dir(self,
                               inv, kind, sc3dir, tpre_SP=100, tpre_VBB=900.):
         self.kind = kind
-        fnam_VBB, fnam_SP = create_fnam_event(
-            filenam_VBB_HG=filenam_VBB_HG,
-            filenam_SP_HG=filenam_SP_HG,
-            sc3dir=sc3dir, time=self.picks['start'])
-        self.picks = self.picks
+
         if len(self.picks['noise_start']) > 0:
             twin_start = min((utct(self.picks['start']),
                               utct(self.picks['noise_start'])))
@@ -103,6 +97,12 @@ class Event:
                             utct(self.picks['noise_end'])))
         else:
             twin_end = utct(self.picks['end'])
+
+        filenam_SP_HG = 'XB.ELYSE.65.EH?.D.2019.%03d'
+        fnam_SP = create_fnam_event(
+            filenam_inst=filenam_SP_HG,
+            sc3dir=sc3dir, time=self.picks['start'])
+
         if len(glob(fnam_SP)) > 0:
             # Use SP waveforms only if 65.EH? exists, not otherwise (we
             # don't need 20sps SP data)
@@ -112,10 +112,36 @@ class Event:
                                              fmin=0.5)
         else:
             self.waveforms_SP = None
-        self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
-                                       kind=kind,
-                                       twin=[twin_start - tpre_VBB,
-                                             twin_end + tpre_VBB])
+
+        # Try for 02.BH? (20sps VBB)
+        success_VBB = False
+        filenam_VBB_HG = 'XB.ELYSE.02.BH?.D.2019.%03d'
+        fnam_VBB = create_fnam_event(
+            filenam_inst=filenam_VBB_HG,
+            sc3dir=sc3dir, time=self.picks['start'])
+        if len(glob(fnam_VBB)) == 3:
+            self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                           kind=kind,
+                                           twin=[twin_start - tpre_VBB,
+                                                 twin_end + tpre_VBB])
+            if len(self.waveforms_VBB) == 3:
+                success_VBB = True
+
+        if not success_VBB:
+            # Try for 03.BH? (10sps VBB)
+            filenam_VBB_HG = 'XB.ELYSE.03.BH?.D.2019.%03d'
+            fnam_VBB = create_fnam_event(
+                filenam_inst=filenam_VBB_HG,
+                sc3dir=sc3dir, time=self.picks['start'])
+            self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                           kind=kind,
+                                           twin=[twin_start - tpre_VBB,
+                                                 twin_end + tpre_VBB])
+            if len(self.waveforms_VBB) == 3:
+                success_VBB = True
+
+        if not success_VBB:
+            self.waveforms_VBB = None
 
 
     def calc_spectra(self, winlen_sec):
@@ -188,13 +214,27 @@ class Event:
 
         self._spectra_available = True
 
-    def pick_amplitude(self, pick, comp, fmin, fmax, instrument='VBB'):
+    def pick_amplitude(self, pick, comp, fmin, fmax, instrument='VBB',
+                       unit=None):
+        if not self._waveforms_read:
+            raise RuntimeError('waveforms not read in Event object\n' +
+                               'Call Event.read_waveforms() first.')
+
         if instrument=='VBB':
             st_work = self.waveforms_VBB.copy()
         else:
             st_work = self.waveforms_SP.copy()
 
         st_work.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
+
+        if unit is 'nm':
+            output_fac = 1e9
+        elif unit is 'pm':
+            output_fac = 1e12
+        elif unit is 'fm':
+            output_fac = 1e15
+        else:
+            output_fac = 1.
         # if not self.kind=='DISP':
         #     raise ValueError('Waveform must be displacement for amplitudes')
         if self.picks[pick]=='':
@@ -203,16 +243,19 @@ class Event:
             tmin = utct(self.picks[pick]) - 10.
             tmax = utct(self.picks[pick]) - 10.
             st_work.trim(starttime=tmin, endtime=tmax)
+            print(self.name)
             if comp in ['Z', 'N', 'E']:
-                return abs(st_work.select(channel='??' + comp)[0].data).max()
+                return abs(st_work.select(channel='??' + comp)[0].data).max() \
+                       * output_fac
             elif comp == 'all':
                 amp_N = abs(st_work.select(channel='??N')[0].data).max()
                 amp_E = abs(st_work.select(channel='??E')[0].data).max()
                 amp_Z = abs(st_work.select(channel='??Z')[0].data).max()
-                return max((amp_E, amp_N, amp_Z))
+                return max((amp_E, amp_N, amp_Z)) * output_fac
             elif comp == 'horizontal':
                 amp_N = abs(st_work.select(channel='??N')[0].data).max()
                 amp_E = abs(st_work.select(channel='??E')[0].data).max()
-                return max((amp_E, amp_N))
+                return max((amp_E, amp_N)) * output_fac
             elif comp == 'vertical':
-                return abs(st_work.select(channel='??Z')[0].data).max()
+                return abs(st_work.select(channel='??Z')[0].data).max() \
+                       * output_fac
