@@ -106,8 +106,13 @@ if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
 
     events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
-                     type_select='all', quality=('A'))
+                     type_select='all', quality=('A', 'B', 'C'))
     inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
     events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
     events.calc_spectra(winlen_sec=10.)
-    events.events['S0235b'].make_report(fnam_out='./tmp/plotly.html')
+    for name, event in events.events:
+        print(name)
+        try:
+            events.events['S0260a'].make_report(fnam_out='./tmp/plotly.html')
+        except(TypeError):
+            print('Problem')
