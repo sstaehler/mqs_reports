@@ -114,13 +114,31 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
             picks[phase] = qml_get_pick_time_for_phase(ev, pref_ori.text,
                                                        phase)
 
-        event_info[ev_name] = Event(
-            name=ev_name,
-            publicid=ev_publicid,
-            origin_publicid=str(pref_ori.text).strip(),
-            picks=picks,
-            quality=str(lq.text).strip(),
-            mars_event_type=mars_event_type_str)
+        latitude = ev.find("./{}[@publicID='{}']/{}/{}".format(
+            lxml_prefix_with_namespace("origin", XMLNS_QUAKEML_BED),
+            pref_ori.text,
+            lxml_prefix_with_namespace(
+                "latitude", XMLNS_QUAKEML_BED),
+            lxml_prefix_with_namespace(
+                "value", XMLNS_QUAKEML_BED))).text
+        longitude = ev.find("./{}[@publicID='{}']/{}/{}".format(
+            lxml_prefix_with_namespace("origin", XMLNS_QUAKEML_BED),
+            pref_ori.text,
+            lxml_prefix_with_namespace(
+                "longitude", XMLNS_QUAKEML_BED),
+            lxml_prefix_with_namespace(
+                "value", XMLNS_QUAKEML_BED))).text
+
+        if not ev_name == 'S0085a':
+            event_info[ev_name] = Event(
+                name=ev_name,
+                publicid=ev_publicid,
+                origin_publicid=str(pref_ori.text).strip(),
+                picks=picks,
+                quality=str(lq.text).strip(),
+                latitude=float(latitude),
+                longitude=float(longitude),
+                mars_event_type=mars_event_type_str)
 
     return event_info
 

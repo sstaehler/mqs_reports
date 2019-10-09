@@ -12,8 +12,6 @@ import obspy
 from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 
-import mqs_reports.magnitudes as mag
-
 
 def create_row_header(list):
     row = '    <tr>\n'
@@ -44,30 +42,47 @@ def create_row(list, fmts=None, extras=None):
                     row += '<td>' + fmt % (li) + \
                            '</td>\n'
                 else:
-                    row += '<td sorttable_customkey="%d">' % extra + \
-                           fmt % (li) + '</td>\n'
+                    try:
+                        row += 8 * ' ' + '<td sorttable_customkey="%d">' % extra \
+                               + fmt % (li) + '</td>\n'
+                    except(ValueError):
+                        row += 8 * ' ' + '<td sorttable_customkey=0>' + \
+                               fmt % (li) + '</td>\n'
+
     row += '</tr>\n'
     return row
 
 
 def write_html(catalog):
-    output = create_header(('name',
+    output = create_header((' ',
+                            'name',
+                            'type',
+                            'LQ',
                             'Time (UTC)',
                             'Time (LMST)',
                             'duration',
+                            'distance',
                             'P-amplitude',
                             'S-amplitude',
                             '2.4 Hz amplitude',
-                            'M$_{2.4}$'))
-    formats = ('%s', '%s', '%s', '%s', '%8.3E', '%8.3E', '%8.3E', '%3.1f')
+                            'MbP',
+                            'MbS',
+                            'M2.4'))
+    formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%3.1f',
+               '%8.3E', '%8.3E', '%8.3E', '%3.1f', '%3.1f', '%3.1f')
+    ievent = len(catalog.events)
     for event_name, event in catalog.events.items():
         duration = utct(utct(event.picks['end']) -
                         utct(event.picks['start'])).strftime('%M:%S')
         utc_time = utct(event.picks['start']).strftime('%Y-%j')
         lmst_time = solify(utct(event.picks['start'])).strftime('%jM%H:%M:%S')
-        sortkey = (None,
+        sortkey = (ievent,
+                   None,
+                   None,
+                   None,
                    float(utct(event.picks['start'])),
                    float(utct(event.picks['start'])),
+                   None,
                    None,
                    event.pick_amplitude('Peak_MbP',
                                         comp='vertical',
@@ -83,14 +98,20 @@ def write_html(catalog):
                                         comp='vertical',
                                         fmin=2.2, fmax=2.6,
                                         unit='fm'),
+                   None,
+                   None,
                    None
                    )
 
         output += create_row(
-            (event_name,
+            (ievent,
+             event_name,
+             event.mars_event_type_short,
+             event.quality,
              utc_time,
              lmst_time,
              duration,
+             event.distance,
              event.pick_amplitude('Peak_MbP',
                                   comp='vertical',
                                   fmin=1. / 6.,
@@ -102,18 +123,19 @@ def write_html(catalog):
              event.pick_amplitude('Peak_M2.4',
                                   comp='vertical',
                                   fmin=2.2, fmax=2.6),
-             mag.M2_4(event.pick_amplitude('Peak_M2.4',
-                                           comp='vertical',
-                                           fmin=2.2, fmax=2.6),
-                      distance=5.),
+             event.magnitude(type='mb_P', distance=30.),
+             event.magnitude(type='mb_S', distance=30.),
+             event.magnitude(type='m2.4', distance=20.)
              ),
             extras=sortkey,
             fmts=formats)
+        ievent -= 1
     output += '</tbody>'
     footer = '        </table>\n    </body>\n</html>\n'
     output += footer
     with open('tmp/test.html', 'w') as f:
         f.write(output)
+
 
 
 def create_header(column_names):
@@ -138,8 +160,8 @@ def create_header(column_names):
 
 from mqs_reports.catalog import Catalog
 
-events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191004.xml',
-                 type_select='lower', quality=('A', 'B', 'C'))
+events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
+                 type_select='all', quality=('A', 'B', 'C', 'D'))
 inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
 events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
 events.write_table()

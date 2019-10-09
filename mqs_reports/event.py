@@ -15,9 +15,12 @@ from os.path import join as pjoin
 import numpy as np
 import obspy
 from obspy import UTCDateTime as utct
+from obspy.geodetics.base import locations2degrees
 
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 
+LANDER_LAT = 4.5024
+LANDER_LON = 135.6234
 
 class Event:
     def __init__(self,
@@ -26,15 +29,39 @@ class Event:
                  origin_publicid: str,
                  picks: dict,
                  quality: str,
+                 latitude: float,
+                 longitude: float,
                  mars_event_type: str):
         self.name = name.strip()
         self.publicid = publicid
         self.origin_publicid = origin_publicid
         self.picks = picks
-        self.quality = quality
-        self.mars_event_type = mars_event_type
+        self.quality = quality[-1]
+        self.mars_event_type = mars_event_type.split('#')[-1]
+        self.latitude = latitude
+        self.longitude = longitude
+        if (abs(self.latitude - LANDER_LAT) > 1e-3 and
+                abs(self.longitude - LANDER_LON) > 1e-3):
+            self.distance = locations2degrees(lat1=self.latitude,
+                                              long1=self.longitude,
+                                              lat2=LANDER_LAT,
+                                              long2=LANDER_LON)
+        else:
+            self.distance = None
         self._waveforms_read = False
         self._spectra_available = False
+
+        # Set a short event type
+        if self.mars_event_type == 'HIGH_FREQUENCY':
+            self.mars_event_type_short = 'HF'
+        elif self.mars_event_type == 'VERY_HIGH_FREQUENCY':
+            self.mars_event_type_short = 'VF'
+        elif self.mars_event_type == 'BROADBAND':
+            self.mars_event_type_short = 'BB'
+        elif self.mars_event_type == 'LOW_FREQUENCY':
+            self.mars_event_type_short = 'LF'
+        elif self.mars_event_type == '2.4_HZ':
+            self.mars_event_type_short = '24'
 
     def read_waveforms(self, inv, kind, sc3dir
                        ):
@@ -241,7 +268,7 @@ class Event:
             return None
         else:
             tmin = utct(self.picks[pick]) - 10.
-            tmax = utct(self.picks[pick]) - 10.
+            tmax = utct(self.picks[pick]) + 10.
             st_work.trim(starttime=tmin, endtime=tmax)
             print(self.name)
             if comp in ['Z', 'N', 'E']:
@@ -259,3 +286,43 @@ class Event:
             elif comp == 'vertical':
                 return abs(st_work.select(channel='??Z')[0].data).max() \
                        * output_fac
+
+    def magnitude(self, type, instrument='VBB', distance=None):
+        import mqs_reports.magnitudes as mag
+        pick_name = {'mb_P': 'Peak_MbP',
+                     'mb_S': 'Peak_MbS',
+                     'm2.4': 'Peak_M2.4'
+                     }
+        freqs = {'mb_P': (1. / 6., 1. / 2.),
+                 'mb_S': (1. / 6., 1. / 2.),
+                 'm2.4': (2., 3.)
+                 }
+        component = {'mb_P': 'vertical',
+                     'mb_S': 'horizontal',
+                     'm2.4': 'vertical'
+                     }
+        funcs = {'mb_P': mag.mb_P,
+                 'mb_S': mag.mb_S,
+                 'm2.4': mag.M2_4
+                 }
+        if self.distance is None and distance is None:
+            return None
+        elif self.distance is not None:
+            distance = self.distance
+
+        amplitude = self.pick_amplitude(pick=pick_name[type],
+                                        comp=component[type],
+                                        fmin=freqs[type][0],
+                                        fmax=freqs[type][1],
+                                        instrument=instrument
+                                        )
+
+        if amplitude is None:
+            return None
+        else:
+            return funcs[type](amplitude=amplitude,
+                               distance=distance)
+
+    def make_report(self, fnam_out):
+        from mqs_reports.report import make_report
+        make_report(self, fnam_out)

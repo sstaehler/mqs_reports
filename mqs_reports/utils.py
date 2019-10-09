@@ -111,7 +111,6 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     if len(st_seis) == 0:
         st_rot = obspy.Stream()
     else:
-        correct_subsample_shift(st_seis)
         st_seis.detrend(type='demean')
         st_seis.taper(0.1)
         st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)
@@ -126,6 +125,7 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
                                output=kind)
 
         st_seis.merge(method=1)
+        correct_subsample_shift(st_seis)
 
         st_rot = create_ZNE_HG(st_seis, inv=inv)
         if len(st_rot) > 0:
@@ -158,13 +158,14 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
 
 
 def correct_subsample_shift(st):
-    shift = np.zeros(3)
-    for i in range(1, 3):
-        shift[i] = (st[i].stats.starttime - st[0].stats.starttime) % \
-                   st[0].stats.delta
-    if shift.sum() > 0:
+    if len(st) > 1:
+        shift = np.zeros(3)
         for i in range(1, 3):
-            st[i].stats.starttime -= shift[i]
+            shift[i] = (st[i].stats.starttime - st[0].stats.starttime) % \
+                       st[0].stats.delta
+        if shift.sum() > 0:
+            for i in range(1, 3):
+                st[i].stats.starttime -= shift[i]
 
 
 def correct_shift(tr, nsamples=-1):
