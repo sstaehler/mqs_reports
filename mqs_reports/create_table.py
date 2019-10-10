@@ -201,12 +201,16 @@ def define_arguments():
 
 if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
+    import warnings
+
 
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
     inv = obspy.read_inventory(args.inventory)
-    catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
     catalog.calc_spectra(winlen_sec=20.)
     catalog.make_report(dir_out='reports')
     catalog.write_table(fnam_out='./overview.html')
