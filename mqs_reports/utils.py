@@ -242,7 +242,7 @@ def calc_PSD(tr, winlen_sec):
     Fs = tr.stats.sampling_rate
     winlen = min(winlen_sec * Fs,
                  (tr.stats.endtime -
-                  tr.stats.starttime) * Fs / 4.)
+                  tr.stats.starttime) * Fs / 2.)
     NFFT = next_pow_2(winlen)
     p, f = mlab.psd(tr.data,
                     Fs=Fs, NFFT=NFFT, detrend='linear',
