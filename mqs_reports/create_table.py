@@ -8,6 +8,8 @@
     None
 '''
 
+from argparse import ArgumentParser
+
 import obspy
 from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
@@ -69,10 +71,11 @@ def write_html(catalog, fnam_out):
                             'A0',
                             'MbP',
                             'MbS',
-                            'M2.4'))
+                            'M2.4',
+                            'MFB'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%3.1f',
                '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
-               '%3.1f', '%3.1f', '%3.1f')
+               '%3.1f', '%3.1f', '%3.1f', '%3.1f')
     ievent = len(catalog.events)
     for event_name, event in catalog.events.items():
         duration = utct(utct(event.picks['end']) -
@@ -101,7 +104,8 @@ def write_html(catalog, fnam_out):
                                         comp='vertical',
                                         fmin=2.2, fmax=2.6,
                                         unit='fm'),
-                   None,
+                   event.amplitudes['A_24'],
+                   event.amplitudes['A0'],
                    None,
                    None,
                    None,
@@ -137,7 +141,8 @@ def write_html(catalog, fnam_out):
              if event.amplitudes['A0'] is not None else None,
              event.magnitude(type='mb_P', distance=30.),
              event.magnitude(type='mb_S', distance=30.),
-             event.magnitude(type='m2.4', distance=20.)
+             event.magnitude(type='m2.4', distance=20.),
+             event.magnitude(type='MFB', distance=20.)
              ),
             extras=sortkey,
             fmts=formats)
@@ -170,12 +175,38 @@ def create_header(column_names):
     return output
 
 
-from mqs_reports.catalog import Catalog
+def define_arguments():
+    helptext = 'Create HTML overview table and individual event plots'
+    parser = ArgumentParser(description=helptext)
 
-catalog = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
-                  type_select='all', quality=('A', 'B'))
-inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
-catalog.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
-catalog.calc_spectra(winlen_sec=20.)
-catalog.make_report(dir_out='reports')
-catalog.write_table(fnam_out='overview.html')
+    helptext = 'Input QuakeML BED file'
+    parser.add_argument('input_quakeml', help=helptext)
+
+    helptext = 'Inventory file'
+    parser.add_argument('inventory', help=helptext)
+
+    helptext = 'Path to SC3DIR'
+    parser.add_argument('sc3_dir', help=helptext)
+
+    helptext = 'Location qualities (one or more)'
+    parser.add_argument('-q', '--quality', help=helptext,
+                        nargs='+', default=('A', 'B'))
+
+    helptext = 'Event types'
+    parser.add_argument('-t', '--types', help=helptext,
+                        default='all')
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    from mqs_reports.catalog import Catalog
+
+    args = define_arguments()
+    catalog = Catalog(fnam_quakeml=args.input_quakeml,
+                      type_select=args.types, quality=args.quality)
+    inv = obspy.read_inventory(args.inventory)
+    catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
+    catalog.calc_spectra(winlen_sec=20.)
+    catalog.make_report(dir_out='reports')
+    catalog.write_table(fnam_out='./overview.html')

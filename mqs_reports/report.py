@@ -47,7 +47,6 @@ def make_report(event, fnam_out):
     pio.write_html(fig, file=fnam_out,
                    include_plotlyjs=True)
     event.fnam_report = fnam_out
-    # fig.write_image("tmp/plotly.pdf")
 
 
 def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
@@ -202,4 +201,4 @@ if __name__ == '__main__':
     events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
     events.calc_spectra(winlen_sec=20.)
     for name, event in events.events.items():
-        event.make_report(fnam_out='./tmp/plotly_%s.html' % name)
+        event.make_report(fnam_out='./reports/plotly_%s.html' % name)

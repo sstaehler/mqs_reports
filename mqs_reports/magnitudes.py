@@ -36,6 +36,16 @@ def M2_4(amplitude, distance):
         return mag
 
 
+def MFB(amplitude, distance):
+    if amplitude is None:
+        return None
+    else:
+        amp_true = 10 ** (amplitude / 20.)
+        mag = (2. / 3.) * (np.log10(amp_true) +
+                           1.1 * np.log10(distance) + 9.8) + 1.9
+        return mag
+
+
 def lorenz(x, A, x0, xw):
     w = (x - x0) / (xw / 2.)
     return 10 * np.log10(1 / (1 + w ** 2)) + A

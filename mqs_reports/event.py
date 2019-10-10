@@ -297,31 +297,40 @@ class Event:
         import mqs_reports.magnitudes as mag
         pick_name = {'mb_P': 'Peak_MbP',
                      'mb_S': 'Peak_MbS',
-                     'm2.4': 'Peak_M2.4'
+                     'm2.4': 'Peak_M2.4',
+                     'MFB': None
                      }
         freqs = {'mb_P': (1. / 6., 1. / 2.),
                  'mb_S': (1. / 6., 1. / 2.),
-                 'm2.4': (2., 3.)
+                 'm2.4': (2., 3.),
+                 'MFB': None
                  }
         component = {'mb_P': 'vertical',
                      'mb_S': 'horizontal',
-                     'm2.4': 'vertical'
+                     'm2.4': 'vertical',
+                     'MFB': None
                      }
         funcs = {'mb_P': mag.mb_P,
                  'mb_S': mag.mb_S,
-                 'm2.4': mag.M2_4
+                 'm2.4': mag.M2_4,
+                 'MFB': mag.MFB
                  }
         if self.distance is None and distance is None:
             return None
         elif self.distance is not None:
             distance = self.distance
+        if type in ('mb_P', 'mb_S', 'm2.4'):
+            amplitude = self.pick_amplitude(pick=pick_name[type],
+                                            comp=component[type],
+                                            fmin=freqs[type][0],
+                                            fmax=freqs[type][1],
+                                            instrument=instrument
+                                            )
+        elif type == 'MFB':
+            amplitude = self.amplitudes['A0']
 
-        amplitude = self.pick_amplitude(pick=pick_name[type],
-                                        comp=component[type],
-                                        fmin=freqs[type][0],
-                                        fmax=freqs[type][1],
-                                        instrument=instrument
-                                        )
+        else:
+            raise ValueError('unknown magnitude type %s' % type)
 
         if amplitude is None:
             return None
