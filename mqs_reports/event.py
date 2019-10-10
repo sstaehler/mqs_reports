@@ -239,11 +239,16 @@ class Event:
                             np.zeros_like(p)
                 self.spectra_SP[variable]['f'] = f
 
-        self.amplitudes = \
-            fit_spectra(self.spectra['noise']['f'],
-                        self.spectra['all']['p_Z'],
-                        self.spectra['noise']['p_Z'],
-                        type=self.mars_event_type_short)
+        try:
+            self.amplitudes = \
+                fit_spectra(self.spectra['noise']['f'],
+                            self.spectra['all']['p_Z'],
+                            self.spectra['noise']['p_Z'],
+                            type=self.mars_event_type_short)
+        except KeyError:
+            print('Some time windows missing for event %s' % self.name)
+            print(self.spectra)
+
 
         self._spectra_available = True
 
