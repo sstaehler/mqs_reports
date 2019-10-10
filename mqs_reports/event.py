@@ -17,6 +17,7 @@ import obspy
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import locations2degrees
 
+from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 
 LANDER_LAT = 4.5024
@@ -62,6 +63,7 @@ class Event:
             self.mars_event_type_short = 'LF'
         elif self.mars_event_type == '2.4_HZ':
             self.mars_event_type_short = '24'
+        self.amplitudes = dict()
 
     def read_waveforms(self, inv, kind, sc3dir
                        ):
@@ -212,8 +214,6 @@ class Event:
                     else:
                         f = np.arange(0, 1, 0.1)
                         p = np.zeros((10))
-                # else:
-                #     self['spectra'][variable]['p_' + chan] = p
                 self.spectra[variable]['f'] = f
 
             if self.waveforms_SP is not None:
@@ -238,6 +238,12 @@ class Event:
                         self.spectra_SP[variable]['p_' + chan] = \
                             np.zeros_like(p)
                 self.spectra_SP[variable]['f'] = f
+
+        self.amplitudes = \
+            fit_spectra(self.spectra['noise']['f'],
+                        self.spectra['all']['p_Z'],
+                        self.spectra['noise']['p_Z'],
+                        type=self.mars_event_type_short)
 
         self._spectra_available = True
 

@@ -15,6 +15,8 @@ from obspy import UTCDateTime as utct
 from obspy.signal.filter import envelope
 from plotly.subplots import make_subplots
 
+from mqs_reports.magnitudes import lorenz
+
 
 def make_report(event, fnam_out):
     fig = make_subplots(rows=3, cols=2,
@@ -44,6 +46,7 @@ def make_report(event, fnam_out):
     # pio.show(fig)
     pio.write_html(fig, file=fnam_out,
                    include_plotlyjs=True)
+    event.fnam_report = fnam_out
     # fig.write_image("tmp/plotly.pdf")
 
 
@@ -54,10 +57,9 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
     fmins = [0.1, 7.5]
     fmaxs = [7.5, 50]
     specs = [event.spectra, event.spectra_SP]
-    from mqs_reports.magnitudes import fit_spectra
     for spec, fmin, fmax in zip(specs, fmins, fmaxs):
         for kind, color in zip(['noise', 'all', 'P', 'S'], colors):
-            if kind in spec:
+            if kind in spec and 'f' in spec[kind]:
                 f = spec[kind]['f']
                 bol_1Hz_mask = np.array(
                     (np.array((f >= fmin, f <= fmax)).all(axis=0),
@@ -73,10 +75,10 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                                line=go.scatter.Line(color=color),
                                mode="lines", **kwargs),
                     row=row, col=col)
-    A0, tstar = fit_spectra(event.spectra['noise']['f'],
-                            event.spectra['all']['p_Z'],
-                            event.spectra['noise']['p_Z'],
-                            type=event.mars_event_type_short)
+
+    amps = event.amplitudes
+    A0 = amps['A0']
+    tstar = amps['tstar']
     if A0 is not None and tstar is not None:
         fig.add_trace(
             go.Scatter(x=f,
@@ -94,8 +96,32 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                        textfont={'size': 20},
                        line=go.scatter.Line(color='blue', width=2),
                        textposition='bottom right',
-                       mode="line+markers+text", **kwargs),
+                       mode="lines+markers+text", **kwargs),
             row=row, col=col)
+
+    if amps['A_24'] is not None:
+        fig.add_trace(
+            go.Scatter(x=f,
+                       y=lorenz(f, A=amps['A_24'],
+                                x0=amps['f_24'],
+                                xw=amps['width_24']),
+                       name='fit, %ddB, f0*=%4.2fHz' %
+                            (amps['A_24'], amps['f_24']),
+                       line=go.scatter.Line(color='darkblue', width=2),
+                       mode="lines", **kwargs),
+            row=row, col=col)
+        # Add text marker
+        fig.add_trace(
+            go.Scatter(x=[2.3, 2.5],
+                       y=[amps['A_24'], amps['A_24']],
+                       showlegend=False,
+                       text=['', 'A0=%d dB' % amps['A_24']],
+                       textfont={'size': 20},
+                       line=go.scatter.Line(color='blue', width=2),
+                       textposition='bottom right',
+                       mode="lines+markers+text", **kwargs),
+            row=row, col=col)
+
     fig.update_yaxes(range=[ymin, ymax],
                      title_text='PSD, displacement / (m/s²)²/Hz [dB]',
                      row=row, col=col)
@@ -103,7 +129,6 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                      title_text='frequency / Hz',
                      row=row, col=col)
 
-    # fig.update_xaxes(type="log", row=row, col=col)
 
 
 def pick_plot(event, fig, types, row, col, **kwargs):
@@ -172,10 +197,9 @@ if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
 
     events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
-                     type_select='all', quality=('A', 'B'))
+                     type_select='all', quality=('A', 'B', 'C'))
     inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
     events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
     events.calc_spectra(winlen_sec=20.)
     for name, event in events.events.items():
-        print(name)
         event.make_report(fnam_out='./tmp/plotly_%s.html' % name)

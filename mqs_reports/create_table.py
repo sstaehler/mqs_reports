@@ -53,7 +53,7 @@ def create_row(list, fmts=None, extras=None):
     return row
 
 
-def write_html(catalog):
+def write_html(catalog, fnam_out):
     output = create_header((' ',
                             'name',
                             'type',
@@ -64,12 +64,15 @@ def write_html(catalog):
                             'distance',
                             'P-amplitude',
                             'S-amplitude',
-                            '2.4 Hz amplitude',
+                            '2.4 Hz pick',
+                            '2.4 Hz fit',
+                            'A0',
                             'MbP',
                             'MbS',
                             'M2.4'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%3.1f',
-               '%8.3E', '%8.3E', '%8.3E', '%3.1f', '%3.1f', '%3.1f')
+               '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
+               '%3.1f', '%3.1f', '%3.1f')
     ievent = len(catalog.events)
     for event_name, event in catalog.events.items():
         duration = utct(utct(event.picks['end']) -
@@ -100,12 +103,17 @@ def write_html(catalog):
                                         unit='fm'),
                    None,
                    None,
+                   None,
+                   None,
                    None
                    )
 
+        link_report = \
+            '<a href="%s" target="_blank">%s</a>'
+
         output += create_row(
             (ievent,
-             event_name,
+             link_report % (event.fnam_report, event_name),
              event.mars_event_type_short,
              event.quality,
              utc_time,
@@ -123,6 +131,10 @@ def write_html(catalog):
              event.pick_amplitude('Peak_M2.4',
                                   comp='vertical',
                                   fmin=2.2, fmax=2.6),
+             10 ** (event.amplitudes['A_24'] / 20.)
+             if event.amplitudes['A_24'] is not None else None,
+             10 ** (event.amplitudes['A0'] / 20.)
+             if event.amplitudes['A0'] is not None else None,
              event.magnitude(type='mb_P', distance=30.),
              event.magnitude(type='mb_S', distance=30.),
              event.magnitude(type='m2.4', distance=20.)
@@ -133,7 +145,7 @@ def write_html(catalog):
     output += '</tbody>'
     footer = '        </table>\n    </body>\n</html>\n'
     output += footer
-    with open('tmp/test.html', 'w') as f:
+    with open(fnam_out, 'w') as f:
         f.write(output)
 
 
@@ -160,8 +172,10 @@ def create_header(column_names):
 
 from mqs_reports.catalog import Catalog
 
-events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
-                 type_select='all', quality=('A', 'B', 'C', 'D'))
+catalog = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
+                  type_select='all', quality=('A', 'B'))
 inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
-events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
-events.write_table()
+catalog.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
+catalog.calc_spectra(winlen_sec=20.)
+catalog.make_report(dir_out='reports')
+catalog.write_table(fnam_out='overview.html')

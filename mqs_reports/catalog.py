@@ -8,16 +8,18 @@
     None
 '''
 
+from os.path import join as pjoin
+
 import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from obspy import UTCDateTime as utct
+from tqdm import tqdm
 
 from mqs_reports.scatter_annot import scatter_annot
 
 
 class Catalog:
-
     def __init__(self,
                  fnam_quakeml='catalog.xml',
                  quality=('A', 'B', 'C'),
@@ -65,13 +67,11 @@ class Catalog:
 
 
     def calc_spectra(self, winlen_sec):
-        for event_name, event in self.events.items():
-            print(event.name)
+        for event_name, event in tqdm(self.events.items()):
             event.calc_spectra(winlen_sec=winlen_sec)
 
     def read_waveforms(self, inv, kind, sc3dir):
-        for event_name, event in self.events.items():
-            print(event_name)
+        for event_name, event in tqdm(self.events.items()):
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
 
 
@@ -153,7 +153,11 @@ class Catalog:
         if fig is None:
             plt.show()
 
-
+    def make_report(self, dir_out='reports'):
+        for name, event in tqdm(self.events.items()):
+            event.make_report(fnam_out=pjoin(dir_out,
+                                             'mag_report_%s.html' %
+                                             name))
 
     def plot_spectra(self, event_list='all', ymin=-240, ymax=-170,
                      df_mute=1.07):
@@ -171,7 +175,6 @@ class Catalog:
                                         plt.cm.tab20(np.linspace(0, 1, nevents))))
         ievent = 0
         for event_name, event in self.events.items():
-            print(event_name)
             ichan = 0
             if iax == nrows:
                 iax -= nrows
@@ -264,10 +267,10 @@ class Catalog:
 
         plt.show()
 
-    def write_table(self):
+    def write_table(self, fnam_out='overview.html'):
         from mqs_reports.create_table import write_html
 
-        write_html(self)
+        write_html(self, fnam_out=fnam_out)
 
 def plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
                   fmin=0.1, fmax=100.,
