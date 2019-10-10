@@ -64,12 +64,12 @@ def create_ZNE_HG(st, inv=None):
             azi_v = chan_v.azimuth
             azi_w = chan_w.azimuth
 
-        st.resample(sampling_rate=100)
+        # st.resample(sampling_rate=100)
         for tr_1 in st:
             for tr_2 in st:
                 tr_1.trim(starttime=tr_2.stats.starttime,
                           endtime=tr_2.stats.endtime)
-        st.decimate(5)
+        # st.decimate(5)
 
         st_ZNE = obspy.Stream()
         try:
@@ -118,8 +118,7 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
         if st_seis[0].stats.starttime < utct('20190418T12:24'):
             correct_shift(st_seis.select(channel='??U')[0], nsamples=-1)
         for tr in st_seis:
-            fmax = tr.stats.sampling_rate * 0.45
-            print(tr)
+            fmax = tr.stats.sampling_rate * 0.5
             tr.remove_response(inv,
                                pre_filt=(fmin / 2., fmin, fmax, fmax * 1.2),
                                output=kind)
