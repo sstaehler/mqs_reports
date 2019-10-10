@@ -265,7 +265,7 @@ class Catalog:
         plt.show()
 
     def write_table(self):
-        from mqs_reports.html import write_html
+        from mqs_reports.create_table import write_html
 
         write_html(self)
 

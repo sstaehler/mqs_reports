@@ -12,6 +12,7 @@ import numpy as np
 import obspy
 import plotly.graph_objects as go
 from obspy import UTCDateTime as utct
+from obspy.signal.filter import envelope
 from plotly.subplots import make_subplots
 
 
@@ -21,14 +22,12 @@ def make_report(event, fnam_out):
                         specs=[[{"rowspan": 3}, {}],
                                [None, {}],
                                [None, {}]],
-                        print_grid=True,
                         # subplot_titles=(
                         #    "The big thing",
                         #    "Mb picks",
                         #    "M2.4 picks",
                         #    "something small"
                         # )
-
                         )
     pick_plot(event, fig, types=['mb_P', 'mb_S'], row=1, col=2,
               )
@@ -37,22 +36,74 @@ def make_report(event, fnam_out):
     pick_plot(event, fig, types=['m2.4'], row=3, col=2,
               )
     plot_spec(event, fig, row=1, col=1)
+
+    fig.update_layout({"title": {"text": "Event %s overview" % event.name,
+                                 "font": {"size": 30}}})
+
     import plotly.io as pio
-    pio.show(fig)
-    pio.write_html(fig, file='tmp/plotly.html')
-    fig.write_image("tmp/plotly.pdf")
+    # pio.show(fig)
+    pio.write_html(fig, file=fnam_out,
+                   include_plotlyjs=True)
+    # fig.write_image("tmp/plotly.pdf")
 
 
-def plot_spec(event, fig, row, col, **kwargs):
-    colors = ['black', 'aliceblue', 'coral', 'orange']
-    for kind, color in zip(['noise', 'all', 'P', 'S'], colors):
+def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
+              df_mute=1.07, **kwargs):
+    colors = ['black', 'navy', 'coral', 'orange']
+
+    fmins = [0.1, 7.5]
+    fmaxs = [7.5, 50]
+    specs = [event.spectra, event.spectra_SP]
+    from mqs_reports.magnitudes import fit_spectra
+    for spec, fmin, fmax in zip(specs, fmins, fmaxs):
+        for kind, color in zip(['noise', 'all', 'P', 'S'], colors):
+            if kind in spec:
+                f = spec[kind]['f']
+                bol_1Hz_mask = np.array(
+                    (np.array((f >= fmin, f <= fmax)).all(axis=0),
+                     np.array((f < 1. / df_mute,
+                               f > df_mute)).any(axis=0))
+                    ).all(axis=0)
+                p = spec[kind]['p_Z']
+
+                fig.add_trace(
+                    go.Scatter(x=f[bol_1Hz_mask],
+                               y=10 * np.log10(p[bol_1Hz_mask]),
+                               name=kind,
+                               line=go.scatter.Line(color=color),
+                               mode="lines", **kwargs),
+                    row=row, col=col)
+    A0, tstar = fit_spectra(event.spectra['noise']['f'],
+                            event.spectra['all']['p_Z'],
+                            event.spectra['noise']['p_Z'],
+                            type=event.mars_event_type_short)
+    if A0 is not None and tstar is not None:
         fig.add_trace(
-            go.Scatter(x=event.spectra[kind]['f'],
-                       y=10 * np.log10(event.spectra[kind]['p_Z']),
-                       name=kind,
-                       line=go.scatter.Line(color=color),
+            go.Scatter(x=f,
+                       y=A0 + f * tstar,
+                       name='fit, %ddB, t*=%4.2f' % (A0, -tstar * 0.1),
+                       line=go.scatter.Line(color='blue', width=2),
                        mode="lines", **kwargs),
             row=row, col=col)
+        # Add text marker
+        fig.add_trace(
+            go.Scatter(x=[0.05, 0.15],
+                       y=[A0, A0],
+                       showlegend=False,
+                       text=['', 'A0=%d dB' % A0],
+                       textfont={'size': 20},
+                       line=go.scatter.Line(color='blue', width=2),
+                       textposition='bottom right',
+                       mode="line+markers+text", **kwargs),
+            row=row, col=col)
+    fig.update_yaxes(range=[ymin, ymax],
+                     title_text='PSD, displacement / (m/s²)²/Hz [dB]',
+                     row=row, col=col)
+    fig.update_xaxes(range=[-1, 1.5], type='log',
+                     title_text='frequency / Hz',
+                     row=row, col=col)
+
+    # fig.update_xaxes(type="log", row=row, col=col)
 
 
 def pick_plot(event, fig, types, row, col, **kwargs):
@@ -69,50 +120,62 @@ def pick_plot(event, fig, types, row, col, **kwargs):
                  'm2.4': 'vertical'}
 
     tr = event.waveforms_VBB.select(channel='??Z')[0].copy()
+    tr.decimate(2)
     fmin = freqs[types[0]][0]
     fmax = freqs[types[0]][1]
 
     tr.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
-    timevec = [utct(t +
-                    float(tr.stats.starttime)).strftime('%Y-%m-%d %H:%M:%S.%f')
-               for t in tr.times()]
+    env = envelope(tr.data)
+    timevec = _create_timevector(tr)
     fig.add_trace(
-        go.Scatter(x=timevec,  # tr.times() + float(tr.stats.starttime),
+        go.Scatter(x=timevec,
                    y=tr.data,
                    name='time series %s' % types[0],
+                   line=go.scatter.Line(color="darkgrey"),
                    mode="lines", **kwargs),
         row=row, col=col)
-    for pick_type in types:  # ('Peak_MbP', 'Peak_MbS'):
+    fig.add_trace(
+        go.Scatter(x=timevec,
+                   y=env,
+                   name='envelope %s' % types[0],
+                   showlegend=False,
+                   line=go.scatter.Line(color="darkgrey", dash='dot'),
+                   mode="lines", **kwargs),
+        row=row, col=col)
+    for pick_type in types:
         pick = pick_name[pick_type]
-        tmin = utct(event.picks[pick]) - 10.
-        tmax = utct(event.picks[pick]) + 10.
-        tr_pick = tr.slice(starttime=tmin, endtime=tmax)
-        timevec = [utct(t +
-                        float(tr_pick.stats.starttime)).strftime(
-            '%Y-%m-%d %H:%M:%S.%f')
-            for t in tr_pick.times()]
-        fig.add_trace(go.Scatter(x=timevec,
-                                 y=tr_pick.data,
-                                 name='pick window %s' % pick_type,
-                                 mode="lines",
-                                 line=go.scatter.Line(color="red"),
-                                 **kwargs),
-                      row=row, col=col)
+        if event.picks[pick] is not "":
+            tmin = utct(event.picks[pick]) - 10.
+            tmax = utct(event.picks[pick]) + 10.
+            tr_pick = tr.slice(starttime=tmin, endtime=tmax)
+            timevec = _create_timevector(tr_pick)
+            fig.add_trace(go.Scatter(x=timevec,
+                                     y=tr_pick.data,
+                                     name='pick window %s' % pick_type,
+                                     mode="lines",
+                                     line=go.scatter.Line(color="red"),
+                                     **kwargs),
+                          row=row, col=col)
     # fig.update_xaxes(title_text='time', row=row, col=col)
     fig.update_yaxes(title_text='displacement', row=row, col=col)
+
+
+def _create_timevector(tr):
+    strf = '%Y-%m-%d %H:%M:%S.%f'
+    timevec = [utct(t +
+                    float(tr.stats.starttime)).datetime
+               for t in tr.times()]
+    return timevec
 
 
 if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
 
     events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
-                     type_select='all', quality=('A', 'B', 'C'))
+                     type_select='all', quality=('A', 'B'))
     inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
     events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
-    events.calc_spectra(winlen_sec=10.)
-    for name, event in events.events:
+    events.calc_spectra(winlen_sec=20.)
+    for name, event in events.events.items():
         print(name)
-        try:
-            events.events['S0260a'].make_report(fnam_out='./tmp/plotly.html')
-        except(TypeError):
-            print('Problem')
+        event.make_report(fnam_out='./tmp/plotly_%s.html' % name)
