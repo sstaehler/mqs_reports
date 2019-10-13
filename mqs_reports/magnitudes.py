@@ -53,10 +53,12 @@ def lorenz(x, A, x0, xw):
 
 def fit_peak(f, p):
     from scipy.optimize import curve_fit
-
-    popt, pcov = curve_fit(lorenz, f, 10 * np.log10(p),
-                           bounds=((-240, 2.3, 0.2), (-180, 2.5, 0.4)),
-                           p0=(-210, 2.4, 0.25))
+    try:
+        popt, pcov = curve_fit(lorenz, f, 10 * np.log10(p),
+                               bounds=((-240, 2.3, 0.2), (-180, 2.5, 0.4)),
+                               p0=(-210, 2.4, 0.25))
+    except ValueError:
+        popt = [-250, 2.4, 1.0]
 
     # plt.plot(f, 10 * np.log10(p), 'b')
     # plt.plot(f, lorenz(f, *popt), 'r')

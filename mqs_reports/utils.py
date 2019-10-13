@@ -146,6 +146,8 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
                 st_rot += st_tmp.select(channel='?HE')[0]
 
             try:
+                for tr in st_rot:
+                    tr.data[np.isnan(tr.data)] = 0.
                 st_rot.filter('highpass', zerophase=True, freq=fmin)
             except(NotImplementedError):
                 # if there are gaps in the stream, return empty stream
