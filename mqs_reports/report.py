@@ -149,6 +149,8 @@ def pick_plot(event, fig, types, row, col, **kwargs):
     fmax = freqs[types[0]][1]
 
     tr.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
+    tr.trim(starttime=utct(event.picks['start']) - 180.,
+            endtime=utct(event.picks['end']) + 180.)
     env = envelope(tr.data)
     timevec = _create_timevector(tr)
     fig.add_trace(
