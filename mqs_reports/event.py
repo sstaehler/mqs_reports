@@ -39,18 +39,6 @@ class Event:
         self.picks = picks
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
-        self.latitude = latitude
-        self.longitude = longitude
-        if (abs(self.latitude - LANDER_LAT) > 1e-3 and
-                abs(self.longitude - LANDER_LON) > 1e-3):
-            self.distance = locations2degrees(lat1=self.latitude,
-                                              long1=self.longitude,
-                                              lat2=LANDER_LAT,
-                                              long2=LANDER_LON)
-        else:
-            self.distance = None
-        self._waveforms_read = False
-        self._spectra_available = False
 
         # Set a short event type
         if self.mars_event_type == 'HIGH_FREQUENCY':
@@ -64,6 +52,33 @@ class Event:
         elif self.mars_event_type == '2.4_HZ':
             self.mars_event_type_short = '24'
         self.amplitudes = dict()
+
+        # Set distance or calculate it for HF, VHF and 2.4 events
+        self.latitude = latitude
+        self.longitude = longitude
+        self.distance_type = ''
+        if (abs(self.latitude - LANDER_LAT) > 1e-3 and
+                abs(self.longitude - LANDER_LON) > 1e-3):
+            self.distance = locations2degrees(lat1=self.latitude,
+                                              long1=self.longitude,
+                                              lat2=LANDER_LAT,
+                                              long2=LANDER_LON)
+            self.distance_type = 'GUI'
+        elif self.mars_event_type_short in ['HF', 'VF', '24']:
+            self.distance = self.calc_distance()
+            if self.distance is not None:
+                self.distance_type = 'PgSg'
+        else:
+            self.distance = None
+        self._waveforms_read = False
+        self._spectra_available = False
+
+    def calc_distance(self, vp=np.sqrt(3) * 2.0, vs=2.0):
+        if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
+            deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
+            return deltat / (1. / vs - 1. / vp) / 55.
+        else:
+            return None
 
     def read_waveforms(self, inv, kind, sc3dir
                        ):
@@ -249,7 +264,6 @@ class Event:
             print('Some time windows missing for event %s' % self.name)
             print(self.spectra)
 
-
         self._spectra_available = True
 
     def pick_amplitude(self, pick, comp, fmin, fmax, instrument='VBB',
@@ -281,7 +295,6 @@ class Event:
             tmin = utct(self.picks[pick]) - 10.
             tmax = utct(self.picks[pick]) + 10.
             st_work.trim(starttime=tmin, endtime=tmax)
-            print(self.name)
             if comp in ['Z', 'N', 'E']:
                 return abs(st_work.select(channel='??' + comp)[0].data).max() \
                        * output_fac

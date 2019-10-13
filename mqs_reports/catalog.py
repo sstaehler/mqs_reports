@@ -154,10 +154,15 @@ class Catalog:
             plt.show()
 
     def make_report(self, dir_out='reports'):
+        from os.path import exists as pexists
         for name, event in tqdm(self.events.items()):
-            event.make_report(fnam_out=pjoin(dir_out,
-                                             'mag_report_%s.html' %
-                                             name))
+            fnam_report = pjoin(dir_out,
+                                'mag_report_%s.html' %
+                                name)
+            if not pexists(fnam_report):
+                event.make_report(fnam_out=fnam_report)
+            else:
+                event.fnam_report = fnam_report
 
     def plot_spectra(self, event_list='all', ymin=-240, ymax=-170,
                      df_mute=1.07):

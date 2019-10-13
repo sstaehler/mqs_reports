@@ -111,17 +111,23 @@ if __name__ == '__main__':
     winlen_sec = 20.
 
     events = Catalog(fnam_quakeml=args.input_quakeml,
-                              type_select='higher',
-                              quality=['A', 'B', 'C'])
+                     type_select='higher',
+                     quality=['A', 'B', ])
     events.read_waveforms(inv, kind, args.sc3_dir)
 
     for i, event in events.events.items():
-
-        print(i, event.pick_amplitude('Peak_MbP',
-                                      comp='vertical',
-                                      fmin=1./6.,
-                                      fmax=1./2),
-              event.pick_amplitude('Peak_M2.4',
-                                      comp='vertical', fmin=2.2, fmax=2.6))
+        print(  # '%s, %10.3e, %10.e' %
+            i,
+            event.pick_amplitude('Peak_MbP',
+                                 comp='vertical',
+                                 fmin=1. / 6.,
+                                 fmax=1. / 2),
+            event.pick_amplitude('Peak_MbS',
+                                 comp='vertical',
+                                 fmin=1. / 6.,
+                                 fmax=1. / 2),
+            event.pick_amplitude('Peak_M2.4',
+                                 comp='vertical',
+                                 fmin=2.2, fmax=2.6))
     events.calc_spectra(winlen_sec)
     events.plot_spectra(ymin=-240, ymax=-170)
