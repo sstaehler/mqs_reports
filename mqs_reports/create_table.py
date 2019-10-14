@@ -80,14 +80,14 @@ def write_html(catalog, fnam_out):
     for event_name, event in catalog.events.items():
         duration = utct(utct(event.picks['end']) -
                         utct(event.picks['start'])).strftime('%M:%S')
-        utc_time = utct(event.picks['start']).strftime('%Y-%j')
-        lmst_time = solify(utct(event.picks['start'])).strftime('%jM%H:%M:%S')
+        utc_time = utct(event.picks['start']).strftime('%Y-%j %H:%M:%S')
+        lmst_time = solify(utct(event.picks['start'])).strftime('%H:%M:%S')
         sortkey = (ievent,
                    None,
                    None,
                    None,
                    float(utct(event.picks['start'])),
-                   float(utct(event.picks['start'])),
+                   None,
                    None,
                    None,
                    event.pick_amplitude('Peak_MbP',

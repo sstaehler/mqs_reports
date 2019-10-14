@@ -33,8 +33,9 @@ def M2_4(amplitude, distance):
     else:
         # mag = np.log10(amplitude) - np.log10(4.78e-11) + \
         #       (np.log10(distance) - np.log10(30.)) * 1.2 + 3.
-        mag = (2. / 3.) * (np.log10(amplitude) +
-                           1.0 * np.log10(distance) + 9.8) + 1.6
+        amp_true = 10 ** (amplitude / 20.)
+        mag = (2. / 3.) * (np.log10(amp_true) +
+                           1.0 * np.log10(distance) + 9.8) + 1.8
         return mag
 
 

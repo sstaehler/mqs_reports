@@ -209,6 +209,7 @@ class Event:
         for twin, variable in zip(twins, variables):
             self.spectra[variable] = dict()
             if len(twin[0]) == 0:
+                self.spectra[variable] = None
                 continue
             for chan in ['Z', 'N', 'E']:
                 # f, p = read_spectrum(fnam_base=fnam_spectrum,
@@ -254,15 +255,19 @@ class Event:
                             np.zeros_like(p)
                 self.spectra_SP[variable]['f'] = f
 
-        try:
-            self.amplitudes = \
-                fit_spectra(self.spectra['noise']['f'],
-                            self.spectra['all']['p_Z'],
-                            self.spectra['noise']['p_Z'],
-                            type=self.mars_event_type_short)
-        except KeyError:
-            print('Some time windows missing for event %s' % self.name)
-            print(self.spectra)
+        # try:
+        if self.spectra['S'] is not None:
+            sig_spec = self.spectra['S']['p_Z']
+        elif 'noise' in self.spectra and 'all' in self.spectra:
+            sig_spec = self.spectra['all']['p_Z']
+        self.amplitudes = \
+            fit_spectra(self.spectra['noise']['f'],
+                        sig_spec,
+                        self.spectra['noise']['p_Z'],
+                        type=self.mars_event_type_short)
+        # except KeyError:
+        #     print('Some time windows missing for event %s' % self.name)
+        #     print(self.spectra)
 
         self._spectra_available = True
 
@@ -337,7 +342,7 @@ class Event:
             return None
         elif self.distance is not None:
             distance = self.distance
-        if type in ('mb_P', 'mb_S', 'm2.4'):
+        if type in ('mb_P', 'mb_S'):  #, 'm2.4'):
             amplitude = self.pick_amplitude(pick=pick_name[type],
                                             comp=component[type],
                                             fmin=freqs[type][0],
@@ -346,6 +351,8 @@ class Event:
                                             )
         elif type == 'MFB':
             amplitude = self.amplitudes['A0']
+        elif type == 'm2.4':
+            amplitude = self.amplitudes['A_24']
 
         else:
             raise ValueError('unknown magnitude type %s' % type)

@@ -48,7 +48,10 @@ class Catalog:
             type_des = ['LOW_FREQUENCY',
                         'BROADBAND']
         else:
-            type_des = [type_select]
+            if len(type_select) == 1:
+                type_des = [type_select]
+            else:
+                type_des = type_select
         self.types = type_des
         self.events = read_QuakeML_BED(fnam=fnam_quakeml,
                                        event_type=type_des,
