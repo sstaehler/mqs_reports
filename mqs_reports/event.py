@@ -363,6 +363,6 @@ class Event:
             return funcs[type](amplitude=amplitude,
                                distance=distance)
 
-    def make_report(self, fnam_out):
+    def make_report(self, fnam_out, annotations=None):
         from mqs_reports.report import make_report
-        make_report(self, fnam_out)
+        make_report(self, fnam_out, annotations)

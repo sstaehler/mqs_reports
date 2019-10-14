@@ -18,24 +18,26 @@ from plotly.subplots import make_subplots
 from mqs_reports.magnitudes import lorenz
 
 
-def make_report(event, fnam_out):
+def make_report(event, fnam_out, annotations):
     fig = make_subplots(rows=3, cols=2,
                         shared_xaxes=True,
                         specs=[[{"rowspan": 3}, {}],
                                [None, {}],
                                [None, {}]],
-                        # subplot_titles=(
-                        #    "The big thing",
-                        #    "Mb picks",
-                        #    "M2.4 picks",
-                        #    "something small"
-                        # )
+                        subplot_titles=(
+                            "Event spectrum",
+                            "Mb picks",
+                            "M2.4 picks",
+                            "something small")
                         )
     pick_plot(event, fig, types=['mb_P', 'mb_S'], row=1, col=2,
+              annotations=annotations
               )
     pick_plot(event, fig, types=['m2.4'], row=2, col=2,
+              annotations=annotations
               )
     pick_plot(event, fig, types=['m2.4'], row=3, col=2,
+              annotations=annotations
               )
     plot_spec(event, fig, row=1, col=1)
 
@@ -57,23 +59,24 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
     fmaxs = [7.5, 50]
     specs = [event.spectra, event.spectra_SP]
     for spec, fmin, fmax in zip(specs, fmins, fmaxs):
-        for kind, color in zip(['noise', 'all', 'P', 'S'], colors):
-            if kind in spec and 'f' in spec[kind]:
-                f = spec[kind]['f']
-                bol_1Hz_mask = np.array(
-                    (np.array((f >= fmin, f <= fmax)).all(axis=0),
-                     np.array((f < 1. / df_mute,
-                               f > df_mute)).any(axis=0))
-                    ).all(axis=0)
-                p = spec[kind]['p_Z']
+        if len(spec) > 0:
+            for kind, color in zip(['noise', 'all', 'P', 'S'], colors):
+                if spec[kind] is not None and 'f' in spec[kind]:
+                    f = spec[kind]['f']
+                    bol_1Hz_mask = np.array(
+                        (np.array((f >= fmin, f <= fmax)).all(axis=0),
+                         np.array((f < 1. / df_mute,
+                                   f > df_mute)).any(axis=0))
+                        ).all(axis=0)
+                    p = spec[kind]['p_Z']
 
-                fig.add_trace(
-                    go.Scatter(x=f[bol_1Hz_mask],
-                               y=10 * np.log10(p[bol_1Hz_mask]),
-                               name=kind,
-                               line=go.scatter.Line(color=color),
-                               mode="lines", **kwargs),
-                    row=row, col=col)
+                    fig.add_trace(
+                        go.Scatter(x=f[bol_1Hz_mask],
+                                   y=10 * np.log10(p[bol_1Hz_mask]),
+                                   name=kind,
+                                   line=go.scatter.Line(color=color),
+                                   mode="lines", **kwargs),
+                        row=row, col=col)
 
     amps = event.amplitudes
     if 'A0' in amps:
@@ -130,8 +133,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                      row=row, col=col)
 
 
-
-def pick_plot(event, fig, types, row, col, **kwargs):
+def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
     pick_name = {'mb_P': 'Peak_MbP',
                  'mb_S': 'Peak_MbS',
                  'm2.4': 'Peak_M2.4'
@@ -169,6 +171,25 @@ def pick_plot(event, fig, types, row, col, **kwargs):
                    line=go.scatter.Line(color="darkgrey", dash='dot'),
                    mode="lines", **kwargs),
         row=row, col=col)
+
+    if annotations is not None:
+        annotations_event = annotations.select(
+            starttime=utct(event.picks['start']) - 180.,
+            endtime=utct(event.picks['end']) + 180.)
+        if len(annotations_event) > 0:
+            for times in annotations_event:
+                tmin = utct(times[0])
+                tmax = utct(times[1])
+                tr_pick = tr.slice(starttime=tmin, endtime=tmax)
+                timevec = _create_timevector(tr_pick)
+                fig.add_trace(go.Scatter(x=timevec,
+                                         y=tr_pick.data,
+                                         showlegend=False,
+                                         mode="lines",
+                                         line=go.scatter.Line(color="cyan"),
+                                         **kwargs),
+                              row=row, col=col)
+
     for pick_type in types:
         pick = pick_name[pick_type]
         if event.picks[pick] is not "":
@@ -183,7 +204,7 @@ def pick_plot(event, fig, types, row, col, **kwargs):
                                      line=go.scatter.Line(color="red"),
                                      **kwargs),
                           row=row, col=col)
-    # fig.update_xaxes(title_text='time', row=row, col=col)
+
     fig.update_yaxes(title_text='displacement', row=row, col=col)
 
 

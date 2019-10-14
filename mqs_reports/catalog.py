@@ -156,14 +156,15 @@ class Catalog:
         if fig is None:
             plt.show()
 
-    def make_report(self, dir_out='reports'):
+    def make_report(self, dir_out='reports', annotations=None):
         from os.path import exists as pexists
         for name, event in tqdm(self.events.items()):
             fnam_report = pjoin(dir_out,
                                 'mag_report_%s.html' %
                                 name)
             if not pexists(fnam_report):
-                event.make_report(fnam_out=fnam_report)
+                event.make_report(fnam_out=fnam_report,
+                                  annotations=annotations)
             else:
                 event.fnam_report = fnam_report
 

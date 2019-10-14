@@ -182,6 +182,9 @@ def define_arguments():
     helptext = 'Input QuakeML BED file'
     parser.add_argument('input_quakeml', help=helptext)
 
+    helptext = 'Input annotation file'
+    parser.add_argument('input_csv', help=helptext)
+
     helptext = 'Inventory file'
     parser.add_argument('inventory', help=helptext)
 
@@ -201,16 +204,18 @@ def define_arguments():
 
 if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
+    from mqs_reports.annotations import Annotations
     import warnings
 
 
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
+    ann = Annotations(fnam_csv=args.input_csv)
     inv = obspy.read_inventory(args.inventory)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
     catalog.calc_spectra(winlen_sec=20.)
-    catalog.make_report(dir_out='reports')
+    catalog.make_report(dir_out='reports', annotations=ann)
     catalog.write_table(fnam_out='./overview.html')
