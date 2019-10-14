@@ -246,7 +246,8 @@ def calc_PSD(tr, winlen_sec):
                  (tr.stats.endtime -
                   tr.stats.starttime) * Fs / 2.)
     NFFT = next_pow_2(winlen)
+    pad_to = np.max((NFFT * 2, 256))
     p, f = mlab.psd(tr.data,
                     Fs=Fs, NFFT=NFFT, detrend='linear',
-                    pad_to=NFFT * 2, noverlap=NFFT // 2)
+                    pad_to=pad_to, noverlap=NFFT // 2)
     return f, p
