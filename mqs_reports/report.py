@@ -76,27 +76,28 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                     row=row, col=col)
 
     amps = event.amplitudes
-    A0 = amps['A0']
-    tstar = amps['tstar']
-    if A0 is not None and tstar is not None:
-        fig.add_trace(
-            go.Scatter(x=f,
-                       y=A0 + f * tstar,
-                       name='fit, %ddB, t*=%4.2f' % (A0, -tstar * 0.1),
-                       line=go.scatter.Line(color='blue', width=2),
-                       mode="lines", **kwargs),
-            row=row, col=col)
-        # Add text marker
-        fig.add_trace(
-            go.Scatter(x=[0.05, 0.15],
-                       y=[A0, A0],
-                       showlegend=False,
-                       text=['', 'A0=%d dB' % A0],
-                       textfont={'size': 20},
-                       line=go.scatter.Line(color='blue', width=2),
-                       textposition='bottom right',
-                       mode="lines+markers+text", **kwargs),
-            row=row, col=col)
+    if 'A0' in amps:
+        A0 = amps['A0']
+        tstar = amps['tstar']
+        if A0 is not None and tstar is not None:
+            fig.add_trace(
+                go.Scatter(x=f,
+                           y=A0 + f * tstar,
+                           name='fit, %ddB, t*=%4.2f' % (A0, -tstar * 0.1),
+                           line=go.scatter.Line(color='blue', width=2),
+                           mode="lines", **kwargs),
+                row=row, col=col)
+            # Add text marker
+            fig.add_trace(
+                go.Scatter(x=[0.05, 0.15],
+                           y=[A0, A0],
+                           showlegend=False,
+                           text=['', 'A0=%d dB' % A0],
+                           textfont={'size': 20},
+                           line=go.scatter.Line(color='blue', width=2),
+                           textposition='bottom right',
+                           mode="lines+markers+text", **kwargs),
+                row=row, col=col)
 
     if amps['A_24'] is not None:
         fig.add_trace(
