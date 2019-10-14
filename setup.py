@@ -18,4 +18,5 @@ setup(name='mqs_reports',
       author='Simon Stähler, Martin van Driel',
       author_email='staehler@erdw.ethz.ch',
       license='None',
-      packages=find_packages(), install_requires=['obspy, plotly, lxml'])
+      packages=find_packages(),
+      install_requires=['obspy', 'plotly', 'lxml'])
