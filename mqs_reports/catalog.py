@@ -8,6 +8,7 @@
     None
 '''
 
+from obspy.signal.filter import envelope
 from os.path import join as pjoin
 
 import numpy as np
@@ -47,8 +48,11 @@ class Catalog:
         elif type_select == 'lower':
             type_des = ['LOW_FREQUENCY',
                         'BROADBAND']
+        elif isinstance(type_select, list):
+            type_des = type_select
         else:
             type_des = [type_select]
+
         self.types = type_des
         self.events = read_QuakeML_BED(fnam=fnam_quakeml,
                                        event_type=type_des,
@@ -74,9 +78,8 @@ class Catalog:
         for event_name, event in tqdm(self.events.items()):
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
 
-
     def plot_pickdiffs(self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None,
-                       vY=None, fig=None, **kwargs):
+                       vY=None, fig=None, show=True, **kwargs):
         times_X = []
         times_Y = []
         names = []
@@ -96,6 +99,7 @@ class Catalog:
 
         if fig is None:
             fig = plt.figure()
+
         if vX is not None:
             times_X = np.asarray(times_X) * vX
         if vY is not None:
@@ -113,12 +117,12 @@ class Catalog:
         else:
             ax.set_ylabel('distance / km (from %s-%s)' % (pick1_Y, pick2_Y))
 
-        if fig is None:
+        if show:
             plt.show()
 
 
     def plot_pickdiff_over_time(self, pick1_Y, pick2_Y, vY=None,
-                                fig=None, **kwargs):
+                                fig=None, show=True, **kwargs):
         times_X = []
         times_Y = []
         names = []
@@ -150,8 +154,127 @@ class Catalog:
             ax.set_ylabel('$T_{%s} - T_{%s}$' % (pick1_Y, pick2_Y))
         else:
             ax.set_ylabel('distance / km (from %s-%s)' % (pick1_Y, pick2_Y))
-        if fig is None:
+
+        if show:
             plt.show()
+
+    def plot_24_alignment(self, show=True, pre_time=120., post_time=120.,
+                          fmax_filt=2.7, fmin_filt=2.1, envelope_window=100.,
+                          amp_fac=2., show_picks=True,
+                          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+                          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}):
+        events = []
+        for name, event in self.events.items():
+            try:
+                # Remove events that do not have all picks
+                for pick in ['Pg', 'Sg', 'end', 'noise_start', 'noise_end']:
+                    assert not event.picks[pick] == ''
+            except:
+                print('One or more picks missing for event %s' % (name))
+            else:
+                events.append(event)
+
+        # compute TP - TS to sort by distance
+        tt_PgSg = np.array([(utct(event.picks['Sg']) -
+                             utct(event.picks['Pg'])) for event in events])
+        sorted_ids = np.argsort(tt_PgSg)
+
+        def _envelope(tr):
+            tr_env = tr.copy()
+            tr_env.data = envelope(tr_env.data)
+
+            w = np.ones(int(envelope_window / tr.stats.delta))
+            w /= w.sum()
+            tr_env.data = np.convolve(tr_env.data, w, 'valid')
+
+            return tr_env
+
+        for k, i in enumerate(sorted_ids):
+            event = events[i]
+            tt = tt_PgSg[i]
+            duration = utct(event.picks['end']) - utct(event.picks['Pg'])
+
+            # slice to time window
+            trZ = event.waveforms_VBB.select(channel='??Z')[0].copy()
+            starttime = utct(event.picks['Pg']) - pre_time - envelope_window
+            endtime = utct(event.picks['end']) + post_time + envelope_window
+
+            if (starttime - trZ.stats.starttime) < 0.:
+                print(event.name, ': starttime problem')
+                start_shift = - (starttime - trZ.stats.starttime)
+            else:
+                start_shift = 0.
+
+            if (endtime - trZ.stats.endtime) > 0.:
+                print(event.name, ': endtime problem')
+
+            trZ = trZ.slice(starttime=starttime, endtime=endtime)
+
+            # noise time window
+            trZ_noise = event.waveforms_VBB.select(channel='??Z')[0].copy()
+            starttime = utct(event.picks['noise_start'])
+            endtime = utct(event.picks['noise_end'])
+            trZ_noise = trZ_noise.slice(starttime=starttime, endtime=endtime)
+
+            # detrend + filter
+            for tr in [trZ, trZ_noise]:
+                tr.detrend()
+                tr.filter('lowpass', freq=fmax_filt, corners=8)
+                tr.filter('highpass', freq=fmin_filt, corners=8)
+
+            # compute envelopes
+            trZ_env = _envelope(trZ)
+            trZ_noise_env = _envelope(trZ_noise)
+
+            # get max during the event for scaling
+            trZ_env_event = trZ_env.slice(starttime=utct(event.picks['Pg']),
+                                          endtime=utct(event.picks['end']))
+
+            scaling = trZ_env_event.data.max()
+            trZ_env.data /= scaling
+            trZ_noise_env.data /= scaling
+
+            # setup plotting variables
+            X = trZ_env.times() - pre_time + start_shift
+            #Y = trZ_env.data * amp_fac + k
+            #Y0 = np.median(trZ_noise_env.data) * amp_fac + k
+            Y = (trZ_env.data - np.median(trZ_noise_env.data)) * amp_fac + k
+            Y0 = k
+
+            # downsample to speed up plotting
+            X = X[::10]
+            Y = Y[::10]
+
+            plt.plot(X, Y, color=colors[event.mars_event_type],
+                     ls=linestyle[event.quality])
+
+            # fill between noise amplitude estimate and envelope
+            plt.fill_between(X, Y0, Y,  where=((Y>=Y0) * (X>0) * (X<duration)),
+                             color='lightgray', alpha=1., zorder=-20)
+
+            if show_picks:
+                plt.plot([tt, tt], [k, k+0.8], color='C8')
+                plt.plot([duration, duration], [k, k+0.8], color='C9')
+
+            # plot noise
+            X = trZ_noise_env.times()
+            X = X - pre_time - 200 - X[-1]
+            Y = trZ_noise_env.data * amp_fac + k
+            X = X[::10]
+            Y = Y[::10]
+            plt.plot(X, Y, color='k')
+
+            plt.text(-pre_time, k + 0.5, event.name + ' ',
+                     ha='right', va='center')
+
+        plt.axvline(0, color='C4')
+
+        plt.xlabel('time after Pg / s')
+        plt.xlim(-pre_time - 200, None)
+        plt.yticks([], [])
+
+        plt.show()
+
 
     def make_report(self, dir_out='reports'):
         from os.path import exists as pexists
