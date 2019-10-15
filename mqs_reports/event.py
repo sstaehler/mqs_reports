@@ -227,12 +227,16 @@ class Event:
             filenam_inst=filenam_VBB_HG,
             sc3dir=sc3dir, time=self.picks['start'])
         if len(glob(fnam_VBB)) % 3 == 0:
-            self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
-                                           kind=kind,
-                                           twin=[twin_start - tpre_VBB,
-                                                 twin_end + tpre_VBB])
-            if len(self.waveforms_VBB) == 3:
-                success_VBB = True
+            try:
+                self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                               kind=kind,
+                                               twin=[twin_start - tpre_VBB,
+                                                     twin_end + tpre_VBB])
+            except Exception:
+                success_VBB = False
+            else:
+                if len(self.waveforms_VBB) == 3:
+                    success_VBB = True
 
         if not success_VBB:
             # Try for 03.BH? (10sps VBB)
