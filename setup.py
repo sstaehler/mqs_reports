@@ -19,4 +19,5 @@ setup(name='mqs_reports',
       author_email='staehler@erdw.ethz.ch',
       license='None',
       packages=find_packages(),
-      install_requires=['obspy', 'plotly', 'lxml', 'numpy'])
+      install_requires=['obspy', 'plotly', 'lxml', 'numpy', 'matplotlib',
+                        'tqdm'])

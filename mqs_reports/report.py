@@ -36,7 +36,7 @@ def make_report(event, fnam_out, annotations):
     pick_plot(event, fig, types=['m2.4'], row=2, col=2,
               annotations=annotations
               )
-    pick_plot(event, fig, types=['m2.4'], row=3, col=2,
+    pick_plot(event, fig, types=['full'], row=3, col=2,
               annotations=annotations
               )
     plot_spec(event, fig, row=1, col=1)
@@ -61,7 +61,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
     for spec, fmin, fmax in zip(specs, fmins, fmaxs):
         if len(spec) > 0:
             for kind, color in zip(['noise', 'all', 'P', 'S'], colors):
-                if spec[kind] is not None and 'f' in spec[kind]:
+                if kind in spec and 'f' in spec[kind]:
                     f = spec[kind]['f']
                     bol_1Hz_mask = np.array(
                         (np.array((f >= fmin, f <= fmax)).all(axis=0),
@@ -102,7 +102,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                            mode="lines+markers+text", **kwargs),
                 row=row, col=col)
 
-    if amps['A_24'] is not None:
+    if 'A_24' in amps:
         fig.add_trace(
             go.Scatter(x=f,
                        y=lorenz(f, A=amps['A_24'],
@@ -118,7 +118,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
             go.Scatter(x=[2.3, 2.5],
                        y=[amps['A_24'], amps['A_24']],
                        showlegend=False,
-                       text=['', 'A0=%d dB' % amps['A_24']],
+                       text=['', 'A_24=%d dB' % amps['A_24']],
                        textfont={'size': 20},
                        line=go.scatter.Line(color='blue', width=2),
                        textposition='bottom right',
@@ -136,15 +136,18 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
 def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
     pick_name = {'mb_P': 'Peak_MbP',
                  'mb_S': 'Peak_MbS',
-                 'm2.4': 'Peak_M2.4'
+                 'm2.4': 'Peak_M2.4',
+                 'full': 'broad band'
                  }
     freqs = {'mb_P': (1. / 6., 1. / 2.),
              'mb_S': (1. / 6., 1. / 2.),
-             'm2.4': (2., 3.)
+             'm2.4': (2., 3.),
+             'full': (1. / 15., 3.5)
              }
     component = {'mb_P': 'vertical',
                  'mb_S': 'horizontal',
-                 'm2.4': 'vertical'}
+                 'm2.4': 'vertical',
+                 'full': 'vertical'}
 
     tr = event.waveforms_VBB.select(channel='??Z')[0].copy()
     tr.decimate(2)

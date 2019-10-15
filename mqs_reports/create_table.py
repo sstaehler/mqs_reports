@@ -11,7 +11,6 @@
 from argparse import ArgumentParser
 
 import obspy
-from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 
 
@@ -73,15 +72,17 @@ def write_html(catalog, fnam_out):
                             'MbS',
                             'M2.4',
                             'MFB'))
-    formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%3.1f',
+    formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
                '%3.1f', '%3.1f', '%3.1f', '%3.1f')
+    dist_string = {'GUI': '%5.1f',
+                   'PgSg': '%5.1f*',
+                   'unknown': '%s'}
     ievent = len(catalog)
     for event in catalog:
-        duration = utct(utct(event.picks['end']) -
-                        utct(event.picks['start'])).strftime('%M:%S')
-        utc_time = utct(event.picks['start']).strftime('%Y-%j %H:%M:%S')
-        lmst_time = solify(utct(event.picks['start'])).strftime('%H:%M:%S')
+        duration = event.duration.strftime('%M:%S')
+        utc_time = event.starttime.strftime('%Y-%j %H:%M:%S')
+        lmst_time = event.starttime.strftime('%H:%M:%S')
         sortkey = (ievent,
                    None,
                    None,
@@ -104,8 +105,10 @@ def write_html(catalog, fnam_out):
                                         comp='vertical',
                                         fmin=2.2, fmax=2.6,
                                         unit='fm'),
-                   event.amplitudes['A_24'],
-                   event.amplitudes['A0'],
+                   event.amplitudes['A_24']
+                   if 'A_24' in event.amplitudes else 0.,
+                   event.amplitudes['A0']
+                   if 'A0' in event.amplitudes else 0.,
                    None,
                    None,
                    None,
@@ -114,7 +117,6 @@ def write_html(catalog, fnam_out):
 
         link_report = \
             '<a href="%s" target="_blank">%s</a>'
-
         output += create_row(
             (ievent,
              link_report % (event.fnam_report, event.name),
@@ -123,7 +125,7 @@ def write_html(catalog, fnam_out):
              utc_time,
              lmst_time,
              duration,
-             event.distance,
+             dist_string[event.distance_type] % event.distance,
              event.pick_amplitude('Peak_MbP',
                                   comp='vertical',
                                   fmin=1. / 6.,
@@ -136,9 +138,9 @@ def write_html(catalog, fnam_out):
                                   comp='vertical',
                                   fmin=2.2, fmax=2.6),
              10 ** (event.amplitudes['A_24'] / 20.)
-             if event.amplitudes['A_24'] is not None else None,
+             if 'A_24' in event.amplitudes else 0.,
              10 ** (event.amplitudes['A0'] / 20.)
-             if event.amplitudes['A0'] is not None else None,
+             if 'A0' in event.amplitudes else 0.,
              event.magnitude(mag_type='mb_P', distance=30.),
              event.magnitude(mag_type='mb_S', distance=30.),
              event.magnitude(mag_type='m2.4', distance=20.),

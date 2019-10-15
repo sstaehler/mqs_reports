@@ -41,6 +41,9 @@ class Event:
         self.picks = picks
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
+        self.duration = utct(utct(self.picks['end']) -
+                             utct(self.picks['start']))
+        self.starttime = utct(utct(self.picks['start']))
 
         # Set a short event type
         if self.mars_event_type == 'HIGH_FREQUENCY':
@@ -58,7 +61,7 @@ class Event:
         # Set distance or calculate it for HF, VHF and 2.4 events
         self.latitude = latitude
         self.longitude = longitude
-        self.distance_type = ''
+        self.distance_type = 'unknown'
         if (abs(self.latitude - LANDER_LAT) > 1e-3 and
                 abs(self.longitude - LANDER_LON) > 1e-3):
             self.distance = locations2degrees(lat1=self.latitude,
@@ -124,6 +127,7 @@ class Event:
             self.read_data_from_sc3dir(inv, sc3dir, kind)
             self.write_data_local()
         self._waveforms_read = True
+        self.kind = 'DISP'
 
     def read_data_local(self, dir_cache: str = 'events') -> bool:
         """
@@ -275,9 +279,8 @@ class Event:
                      'P',
                      'S')
         for twin, variable in zip(twins, variables):
-            self.spectra[variable] = dict()
+            spectrum_variable = dict()
             if len(twin[0]) == 0:
-                self.spectra[variable] = None
                 continue
             for chan in ['Z', 'N', 'E']:
                 # f, p = read_spectrum(fnam_base=fnam_spectrum,
@@ -293,14 +296,16 @@ class Event:
                 if tr.stats.npts > 0:
                     f, p = calc_PSD(tr,
                                     winlen_sec=winlen_sec)
-                    self.spectra[variable]['p_' + chan] = p
+                    spectrum_variable['p_' + chan] = p
                 else:
                     f = np.arange(0, 1, 0.1)
                     p = np.zeros(10)
-                self.spectra[variable]['f'] = f
+                spectrum_variable['f'] = f
+            if len(spectrum_variable) > 0:
+                self.spectra = spectrum_variable
 
             if self.waveforms_SP is not None:
-                self.spectra_SP[variable] = dict()
+                spectrum_variable = dict()
                 for chan in ['Z', 'N', 'E']:
                     st_sel = self.waveforms_SP.select(
                         channel='??' + chan)
@@ -310,32 +315,37 @@ class Event:
                         if tr.stats.npts > 0:
                             f, p = calc_PSD(tr,
                                             winlen_sec=winlen_sec)
-                            self.spectra_SP[variable]['p_' + chan] = p
+                            spectrum_variable['p_' + chan] = p
                         else:
                             f = np.arange(0, 1, 0.1)
                             p = np.zeros(10)
-                            self.spectra_SP[variable]['p_' + chan] = p
-                            self.spectra_SP[variable]['f_' + chan] = f
+                            spectrum_variable['p_' + chan] = p
+                            spectrum_variable['f_' + chan] = f
                     else:
                         # Case that only SP1==SPZ is switched on
-                        self.spectra_SP[variable]['p_' + chan] = \
+                        spectrum_variable['p_' + chan] = \
                             np.zeros_like(p)
-                self.spectra_SP[variable]['f'] = f
+                spectrum_variable['f'] = f
+
+            if len(spectrum_variable) > 0:
+                self.spectra_SP[variable] = spectrum_variable
 
         # try:
         if 'noise' in self.spectra:
             f = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
             for signal in ('S', 'P', 'all'):
-                p_sig = self.spectra[signal]['p_Z']
-                amplitudes = fit_spectra(f=f,
-                                         p_sig=p_sig,
-                                         p_noise=p_noise,
-                                         type=self.mars_event_type_short)
+                amplitudes = None
+                if signal in self.spectra:
+                    p_sig = self.spectra[signal]['p_Z']
+                    amplitudes = fit_spectra(f=f,
+                                             p_sig=p_sig,
+                                             p_noise=p_noise,
+                                             type=self.mars_event_type_short)
                 if amplitudes is not None:
                     break
-
-            self.amplitudes = amplitudes
+            if amplitudes is not None:
+                self.amplitudes = amplitudes
             # if self.spectra['S'] is not None:
             #     sig_spec = self.spectra['S']['p_Z']
             # elif 'noise' in self.spectra and 'all' in self.spectra:
@@ -345,8 +355,6 @@ class Event:
             #                 sig_spec,
             #                 self.spectra['noise']['p_Z'],
             #                 type=self.mars_event_type_short)
-        else:
-            self.amplitudes = None
         # except KeyError:
         #     print('Some time windows missing for event %s' % self.name)
         #     print(self.spectra)
@@ -464,9 +472,11 @@ class Event:
                                             instrument=instrument
                                             )
         elif mag_type == 'MFB':
-            amplitude = self.amplitudes['A0']
+            amplitude = self.amplitudes['A0'] \
+                if 'A0' in self.amplitudes else None
         elif mag_type == 'm2.4':
-            amplitude = self.amplitudes['A_24']
+            amplitude = self.amplitudes['A_24'] \
+                if 'A_24' in self.amplitudes else None
 
         else:
             raise ValueError('unknown magnitude type %s' % mag_type)
