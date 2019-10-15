@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-'''
+"""
 
 :copyright:
     Simon Stähler (mail@simonstaehler.com), 2019
 :license:
     None
-'''
+"""
 
 from os.path import join as pjoin
 
@@ -16,8 +16,10 @@ from matplotlib import pyplot as plt
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
+from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event
 from mqs_reports.scatter_annot import scatter_annot
+from mqs_reports.utils import plot_spectrum
 
 
 class Catalog:
@@ -95,10 +97,6 @@ class Catalog:
         return self.__class__(events=events)
 
     def __str__(self, extended=False):
-        # if self.events:
-        #     id_length = self and max(len(ev.id) for ev in self) or 0
-        # else:
-        #     id_length = 0
         out = str(len(self.events)) + ' Events(s) in Catalog:\n'
         if len(self.events) <= 20 or extended is True:
             out = out + "\n".join([str(_i) for _i in self])
@@ -109,16 +107,38 @@ class Catalog:
                   'Catalog.__str__(extended=True))" to print all Events]'
         return out
 
-    def calc_spectra(self, winlen_sec):
+    def calc_spectra(self, winlen_sec: float) -> None:
+        """
+        Add spectra to each Event object in Catalog.
+        Spectra are stored in dictionaries
+            event.spectra for VBB
+            event.spectra_SP for SP
+        Spectra are calculated separately for time windows "noise", "all",
+        "P" and "S". If any of the necessary picks is missing, this entry is
+        set to None.
+        :param winlen_sec: window length for Welch estimator
+        """
         for event in tqdm(self):
             event.calc_spectra(winlen_sec=winlen_sec)
 
-    def read_waveforms(self, inv, kind, sc3dir):
+    def read_waveforms(self,
+                       inv,
+                       sc3dir: str,
+                       kind: str = 'DISP') -> None:
+        """
+        Wrapper to check whether local copy of corrected waveform exists and
+        read it from sc3dir otherwise (and create local copy)
+        :param inv: Obspy.Inventory to use for instrument correction
+        :param sc3dir: path to data, in SeisComp3 directory structure
+        :param kind: 'DISP', 'VEL' or 'ACC'. Note that many other functions
+                     expect the data to be in displacement
+        """
         for event in tqdm(self):
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
 
-
-    def plot_pickdiffs(self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None,
+    def plot_pickdiffs(self,
+                       pick1_X, pick2_X,
+                       pick1_Y, pick2_Y, vX=None,
                        vY=None, fig=None, **kwargs):
         times_X = []
         times_Y = []
@@ -128,14 +148,14 @@ class Catalog:
                 # Remove events that do not have all four picks
                 for pick in [pick1_X, pick1_Y, pick2_X, pick2_Y]:
                     assert not event.picks[pick] == ''
-            except:
-                print('One or more picks missing for event %s' % (event.name))
+            except KeyError:
+                print('One or more picks missing for event %s' % event.name)
             else:
                 times_X.append(utct(event.picks[pick1_X]) -
                                utct(event.picks[pick2_X]))
                 times_Y.append(utct(event.picks[pick1_Y]) -
                                utct(event.picks[pick2_Y]))
-                names.append(events.name)
+                names.append(event.name)
 
         if fig is None:
             fig = plt.figure()
@@ -159,7 +179,6 @@ class Catalog:
         if fig is None:
             plt.show()
 
-
     def plot_pickdiff_over_time(self, pick1_Y, pick2_Y, vY=None,
                                 fig=None, **kwargs):
         times_X = []
@@ -170,11 +189,11 @@ class Catalog:
                 # Remove events that do not have all four picks
                 for pick in [pick1_Y, pick2_Y, 'start']:
                     assert not event.picks[pick] == ''
-            except:
-                print('One or more picks missing for event %s' % (event.name))
+            except KeyError:
+                print('One or more picks missing for event %s' % event.name)
             else:
                 times_X.append(float(solify(utct(event.picks['start']))) /
-                                     86400.)
+                               86400.)
                 times_Y.append(utct(event.picks[pick1_Y]) -
                                utct(event.picks[pick2_Y]))
                 names.append(event.name)
@@ -196,7 +215,15 @@ class Catalog:
         if fig is None:
             plt.show()
 
-    def make_report(self, dir_out='reports', annotations=None):
+    def make_report(self,
+                    dir_out: str = 'reports',
+                    annotations: Annotations = None):
+        """
+        Create Magnitude report figure
+        :param dir_out: Directory to write report to
+        :param annotations: Annotations object; used to mark glitches,
+                            if available
+        """
         from os.path import exists as pexists
         for event in tqdm(self):
             fnam_report = pjoin(dir_out,
@@ -208,8 +235,16 @@ class Catalog:
             else:
                 event.fnam_report = fnam_report
 
-    def plot_spectra(self, ymin=-240, ymax=-170,
-                     df_mute=1.07):
+    def plot_spectra(self,
+                     ymin: float = -240.,
+                     ymax: float = -170.,
+                     df_mute: object = 1.07) -> None:
+        """
+        Create big 6xnevent overview plot of all spectra.
+        :param ymin: minimum y in dB
+        :param ymax: maximum y in dB
+        :param df_mute: percentage to mute around 1 Hz
+        """
         nevents = len(self.events)
         nrows = max(2, (nevents + 1) // 2)
         fig, ax = plt.subplots(nrows=nrows, ncols=6, figsize=(14, 10),
@@ -221,9 +256,10 @@ class Catalog:
         second = 0
         for a in ax_all:
             a.set_prop_cycle(plt.cycler('color',
-                                        plt.cm.tab20(np.linspace(0, 1, nevents))))
+                                        plt.cm.tab20(
+                                            np.linspace(0, 1, nevents))))
         ievent = 0
-        for event_name, event in self.events.items():
+        for event in self:
             ichan = 0
             if iax == nrows:
                 iax -= nrows
@@ -276,7 +312,7 @@ class Catalog:
                                   fmin=7., color='r')  # , label='total')
 
             ax[iax, ichan + 2].legend()
-            ax[iax, ichan].text(x=0.55, y=0.75, s=event_name,
+            ax[iax, ichan].text(x=0.55, y=0.75, s=event.name,
                                 fontsize=14,
                                 transform=ax[iax, ichan].transAxes)
 
@@ -316,42 +352,12 @@ class Catalog:
 
         plt.show()
 
-    def write_table(self, fnam_out='overview.html'):
+    def write_table(self,
+                    fnam_out: str = 'overview.html') -> None:
+        """
+        Create HTML overview table for catalog
+        :param fnam_out: filename to write to
+        """
         from mqs_reports.create_table import write_html
 
         write_html(self, fnam_out=fnam_out)
-
-def plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
-                  fmin=0.1, fmax=100.,
-                  **kwargs):
-    f = spectrum['f']
-    for chan in ['Z', 'N', 'E']:
-        try:
-            p = spectrum['p_' + chan]
-        except(KeyError):
-            continue
-        else:
-            bol_1Hz_mask = np.array(
-                (np.array((f > fmin, f < fmax)).all(axis=0),
-                 np.array((f < 1. / df_mute,
-                           f > df_mute)).any(axis=0))
-                ).all(axis=0)
-
-            ax[iax, ichan].plot(f[bol_1Hz_mask],
-                                10 * np.log10(p[bol_1Hz_mask]),
-                                **kwargs)
-            bol_1Hz_mask = np.invert(bol_1Hz_mask)
-            p = np.ma.masked_where(condition=bol_1Hz_mask, a=p,
-                                   copy=False)
-
-            if ichan % 3 == 0:
-                ax_all[ichan % 3].plot(f,
-                                       10 * np.log10(p),
-                                       lw=0.5, c='lightgrey', zorder=1)
-            elif ichan % 3 == 1:
-                tmp2 = p
-            elif ichan % 3 == 2:
-                ax_all[ichan % 3 - 1].plot(f,
-                                           10 * np.log10(tmp2 + p),
-                                           lw=0.5, c='lightgrey', zorder=1)
-            ichan += 1

@@ -251,3 +251,39 @@ def calc_PSD(tr, winlen_sec):
                     Fs=Fs, NFFT=NFFT, detrend='linear',
                     pad_to=pad_to, noverlap=NFFT // 2)
     return f, p
+
+
+def plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
+                  fmin=0.1, fmax=100.,
+                  **kwargs):
+    f = spectrum['f']
+    for chan in ['Z', 'N', 'E']:
+        try:
+            p = spectrum['p_' + chan]
+        except(KeyError):
+            continue
+        else:
+            bol_1Hz_mask = np.array(
+                (np.array((f > fmin, f < fmax)).all(axis=0),
+                 np.array((f < 1. / df_mute,
+                           f > df_mute)).any(axis=0))
+                ).all(axis=0)
+
+            ax[iax, ichan].plot(f[bol_1Hz_mask],
+                                10 * np.log10(p[bol_1Hz_mask]),
+                                **kwargs)
+            bol_1Hz_mask = np.invert(bol_1Hz_mask)
+            p = np.ma.masked_where(condition=bol_1Hz_mask, a=p,
+                                   copy=False)
+
+            if ichan % 3 == 0:
+                ax_all[ichan % 3].plot(f,
+                                       10 * np.log10(p),
+                                       lw=0.5, c='lightgrey', zorder=1)
+            elif ichan % 3 == 1:
+                tmp2 = p
+            elif ichan % 3 == 2:
+                ax_all[ichan % 3 - 1].plot(f,
+                                           10 * np.log10(tmp2 + p),
+                                           lw=0.5, c='lightgrey', zorder=1)
+            ichan += 1
