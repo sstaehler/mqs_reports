@@ -335,6 +335,7 @@ class Event:
                 self.spectra_SP[variable] = spectrum_variable
 
         self.amplitudes = {'A0': None,
+                           'tstar': None,
                            'A_24': None,
                            'f_24': None,
                            'width_24': None}

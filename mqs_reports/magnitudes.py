@@ -117,13 +117,8 @@ def fit_spectra(f, p_sig, p_noise, type,
                              deg=1)
 
             plt.plot(f, 10 * np.log10(p_noise), 'k')
-            # plt.plot(f, 10*np.log10(p_sig), 'r')
-            # plt.plot(f[bol_1Hz_mask], 10*np.log10(p_sig[bol_1Hz_mask]),
-            #          'orange', lw=2)
             A0 = res[1]
-            tstar = res[0]
-            # plt.plot(f, A0 + f * tstar)
-            # plt.show()
+            tstar = res[0] / 10.  # Because dB
 
     if type is not 'LF':
         bol_24_mask = np.array((f > mute_24[0],

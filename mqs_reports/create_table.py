@@ -71,10 +71,11 @@ def write_html(catalog, fnam_out):
                             'MbP',
                             'MbS',
                             'M2.4',
-                            'MFB'))
+                            'MFB',
+                            'tstar'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
-               '%3.1f', '%3.1f', '%3.1f', '%3.1f')
+               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f')
     dist_string = {'GUI': '%5.1f',
                    'PgSg': '%5.1f*',
                    'unknown': '%s'}
@@ -110,6 +111,7 @@ def write_html(catalog, fnam_out):
                    None,
                    None,
                    None,
+                   None,
                    None
                    )
 
@@ -142,7 +144,8 @@ def write_html(catalog, fnam_out):
              event.magnitude(mag_type='mb_P', distance=30.),
              event.magnitude(mag_type='mb_S', distance=30.),
              event.magnitude(mag_type='m2.4', distance=20.),
-             event.magnitude(mag_type='MFB', distance=20.)
+             event.magnitude(mag_type='MFB', distance=20.),
+             event.amplitudes['tstar']
              ),
             extras=sortkey,
             fmts=formats)
