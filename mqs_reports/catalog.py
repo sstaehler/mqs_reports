@@ -8,7 +8,6 @@
     None
 """
 
-from obspy.signal.filter import envelope
 from os.path import join as pjoin
 
 import numpy as np
@@ -20,7 +19,7 @@ from tqdm import tqdm
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event
 from mqs_reports.scatter_annot import scatter_annot
-from mqs_reports.utils import plot_spectrum
+from mqs_reports.utils import plot_spectrum, envelope_smooth
 
 
 class Catalog:
@@ -236,16 +235,6 @@ class Catalog:
                              utct(event.picks['Pg'])) for event in events])
         sorted_ids = np.argsort(tt_PgSg)
 
-        def _envelope(tr):
-            tr_env = tr.copy()
-            tr_env.data = envelope(tr_env.data)
-
-            w = np.ones(int(envelope_window / tr.stats.delta))
-            w /= w.sum()
-            tr_env.data = np.convolve(tr_env.data, w, 'valid')
-
-            return tr_env
-
         for k, i in enumerate(sorted_ids):
             event = events[i]
             tt = tt_PgSg[i]
@@ -280,8 +269,8 @@ class Catalog:
                 tr.filter('highpass', freq=fmin_filt, corners=8)
 
             # compute envelopes
-            trZ_env = _envelope(trZ)
-            trZ_noise_env = _envelope(trZ_noise)
+            trZ_env = envelope_smooth(envelope_window, trZ)
+            trZ_noise_env = envelope_smooth(envelope_window, trZ_noise)
 
             # get max during the event for scaling
             trZ_env_event = trZ_env.slice(starttime=utct(event.picks['Pg']),

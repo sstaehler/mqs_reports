@@ -4,6 +4,7 @@ import numpy as np
 import obspy
 from matplotlib import mlab as mlab
 from obspy import UTCDateTime as utct
+from obspy.signal.filter import envelope
 from obspy.signal.rotate import rotate2zne
 from obspy.signal.util import next_pow_2
 
@@ -298,3 +299,14 @@ def plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
                                            10 * np.log10(tmp2 + p),
                                            lw=0.5, c='lightgrey', zorder=1)
             ichan += 1
+
+
+def envelope_smooth(envelope_window, tr):
+    tr_env = tr.copy()
+    tr_env.data = envelope(tr_env.data)
+
+    w = np.ones(int(envelope_window / tr.stats.delta))
+    w /= w.sum()
+    tr_env.data = np.convolve(tr_env.data, w, 'valid')
+
+    return tr_env
