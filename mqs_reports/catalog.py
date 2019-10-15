@@ -48,11 +48,11 @@ class Catalog:
         elif type_select == 'lower':
             type_des = ['LOW_FREQUENCY',
                         'BROADBAND']
-        elif isinstance(type_select, list):
-            type_des = type_select
         else:
-            type_des = [type_select]
-
+            if len(type_select) == 1:
+                type_des = [type_select]
+            else:
+                type_des = type_select
         self.types = type_des
         self.events = read_QuakeML_BED(fnam=fnam_quakeml,
                                        event_type=type_des,
@@ -78,6 +78,7 @@ class Catalog:
         for event_name, event in tqdm(self.events.items()):
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
 
+
     def plot_pickdiffs(self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None,
                        vY=None, fig=None, show=True, **kwargs):
         times_X = []
@@ -99,7 +100,6 @@ class Catalog:
 
         if fig is None:
             fig = plt.figure()
-
         if vX is not None:
             times_X = np.asarray(times_X) * vX
         if vY is not None:
@@ -276,14 +276,15 @@ class Catalog:
         plt.show()
 
 
-    def make_report(self, dir_out='reports'):
+    def make_report(self, dir_out='reports', annotations=None):
         from os.path import exists as pexists
         for name, event in tqdm(self.events.items()):
             fnam_report = pjoin(dir_out,
                                 'mag_report_%s.html' %
                                 name)
             if not pexists(fnam_report):
-                event.make_report(fnam_out=fnam_report)
+                event.make_report(fnam_out=fnam_report,
+                                  annotations=annotations)
             else:
                 event.fnam_report = fnam_report
 
