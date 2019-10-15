@@ -83,6 +83,14 @@ def fit_peak(f, p):
 
 def fit_spectra(f, p_sig, p_noise, type,
                 df_mute=1.05):
+    if len(p_sig) < len(f):
+        fac = len(f) // len(p_sig)
+        f_dec = f[::fac]
+        p_sig = np.interp(x=f, xp=f_dec, yp=p_sig)
+    if len(p_noise) < len(f):
+        fac = len(f) // len(p_noise)
+        f_dec = f[::fac]
+        p_sig = np.interp(x=f, xp=f_dec, yp=p_noise)
     fmin = 0.1
     fmax = 6.0
     if type == 'LF':

@@ -226,7 +226,7 @@ class Event:
         fnam_VBB = create_fnam_event(
             filenam_inst=filenam_VBB_HG,
             sc3dir=sc3dir, time=self.picks['start'])
-        if len(glob(fnam_VBB)) == 3:
+        if len(glob(fnam_VBB)) % 3 == 0:
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
                                            twin=[twin_start - tpre_VBB,

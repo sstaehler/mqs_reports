@@ -16,9 +16,11 @@ def create_fnam_event(
     dirnam = pjoin(sc3dir, 'op/data/waveform/2019/XB/ELYSE/')
     dirnam_inst = pjoin(dirnam, '?H?.D')
 
-    fnam_inst = pjoin(
-        dirnam_inst,
-        filenam_inst % utct(time).julday)
+    hour = utct(time).strftime('%H')
+    fnam_inst = pjoin(dirnam_inst,
+                      filenam_inst % utct(time).julday)
+    if hour in ['00', '23']:
+        fnam_inst = fnam_inst[:-1] + '?'
 
     return fnam_inst
 
@@ -103,6 +105,15 @@ def create_ZNE_HG(st, inv=None):
 
 
 def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
+    # if type(fnam_complete) is list:
+    #     st = obspy.Stream()
+    #     for f in fnam_complete:
+    #         st += obspy.read(f,
+    #                          starttime=twin[0] - 300.,
+    #                          endtime=twin[1] + 300
+    #                          )
+    #     st.merge()
+    # else:
     st = obspy.read(fnam_complete,
                     starttime=twin[0] - 300.,
                     endtime=twin[1] + 300
