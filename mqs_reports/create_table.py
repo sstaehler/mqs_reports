@@ -105,10 +105,8 @@ def write_html(catalog, fnam_out):
                                         comp='vertical',
                                         fmin=2.2, fmax=2.6,
                                         unit='fm'),
-                   event.amplitudes['A_24']
-                   if 'A_24' in event.amplitudes else 0.,
-                   event.amplitudes['A0']
-                   if 'A0' in event.amplitudes else 0.,
+                   event.amplitudes['A_24'],
+                   event.amplitudes['A0'],
                    None,
                    None,
                    None,
@@ -138,9 +136,9 @@ def write_html(catalog, fnam_out):
                                   comp='vertical',
                                   fmin=2.2, fmax=2.6),
              10 ** (event.amplitudes['A_24'] / 20.)
-             if 'A_24' in event.amplitudes else 0.,
+             if event.amplitudes['A_24'] is not None else 0.,
              10 ** (event.amplitudes['A0'] / 20.)
-             if 'A0' in event.amplitudes else 0.,
+             if event.amplitudes['A0'] is not None else 0.,
              event.magnitude(mag_type='mb_P', distance=30.),
              event.magnitude(mag_type='mb_S', distance=30.),
              event.magnitude(mag_type='m2.4', distance=20.),

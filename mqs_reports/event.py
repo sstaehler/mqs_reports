@@ -302,7 +302,7 @@ class Event:
                     p = np.zeros(10)
                 spectrum_variable['f'] = f
             if len(spectrum_variable) > 0:
-                self.spectra = spectrum_variable
+                self.spectra[variable] = spectrum_variable
 
             if self.waveforms_SP is not None:
                 spectrum_variable = dict()
@@ -330,11 +330,14 @@ class Event:
             if len(spectrum_variable) > 0:
                 self.spectra_SP[variable] = spectrum_variable
 
-        # try:
+        self.amplitudes = {'A0': None,
+                           'A_24': None,
+                           'f_24': None,
+                           'width_24': None}
         if 'noise' in self.spectra:
             f = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
-            for signal in ('S', 'P', 'all'):
+            for signal in ('S', 'all'):
                 amplitudes = None
                 if signal in self.spectra:
                     p_sig = self.spectra[signal]['p_Z']

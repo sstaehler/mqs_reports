@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-'''
+"""
 
 :copyright:
     Simon Stähler (mail@simonstaehler.com), 2019
 :license:
     None
-'''
+"""
 
 import numpy as np
 import obspy
 import plotly.graph_objects as go
 from obspy import UTCDateTime as utct
-from obspy.signal.filter import envelope
 from plotly.subplots import make_subplots
 
 from mqs_reports.magnitudes import lorenz
+from mqs_reports.utils import envelope_smooth
 
 
 def make_report(event, fnam_out, annotations):
@@ -28,7 +28,7 @@ def make_report(event, fnam_out, annotations):
                             "Event spectrum",
                             "Mb picks",
                             "M2.4 picks",
-                            "something small")
+                            "Broadband")
                         )
     pick_plot(event, fig, types=['mb_P', 'mb_S'], row=1, col=2,
               annotations=annotations
@@ -36,7 +36,8 @@ def make_report(event, fnam_out, annotations):
     pick_plot(event, fig, types=['m2.4'], row=2, col=2,
               annotations=annotations
               )
-    pick_plot(event, fig, types=['full'], row=3, col=2,
+    pick_plot(event, fig, types=['full', 'mb_P', 'mb_S'],
+              row=3, col=2,
               annotations=annotations
               )
     plot_spec(event, fig, row=1, col=1)
@@ -55,7 +56,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
               df_mute=1.07, **kwargs):
     colors = ['black', 'navy', 'coral', 'orange']
 
-    fmins = [0.1, 7.5]
+    fmins = [0.08, 7.5]
     fmaxs = [7.5, 50]
     specs = [event.spectra, event.spectra_SP]
     for spec, fmin, fmax in zip(specs, fmins, fmaxs):
@@ -79,6 +80,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                         row=row, col=col)
 
     amps = event.amplitudes
+    f = np.geomspace(0.1, 50.0, num=100)
     if 'A0' in amps:
         A0 = amps['A0']
         tstar = amps['tstar']
@@ -102,7 +104,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                            mode="lines+markers+text", **kwargs),
                 row=row, col=col)
 
-    if 'A_24' in amps:
+    if 'A_24' in amps and amps['A_24'] is not None:
         fig.add_trace(
             go.Scatter(x=f,
                        y=lorenz(f, A=amps['A_24'],
@@ -137,17 +139,13 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
     pick_name = {'mb_P': 'Peak_MbP',
                  'mb_S': 'Peak_MbS',
                  'm2.4': 'Peak_M2.4',
-                 'full': 'broad band'
+                 'full': 'Peak_MbP'
                  }
     freqs = {'mb_P': (1. / 6., 1. / 2.),
              'mb_S': (1. / 6., 1. / 2.),
              'm2.4': (2., 3.),
              'full': (1. / 15., 3.5)
              }
-    component = {'mb_P': 'vertical',
-                 'mb_S': 'horizontal',
-                 'm2.4': 'vertical',
-                 'full': 'vertical'}
 
     tr = event.waveforms_VBB.select(channel='??Z')[0].copy()
     tr.decimate(2)
@@ -157,7 +155,10 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
     tr.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
     tr.trim(starttime=utct(event.picks['start']) - 180.,
             endtime=utct(event.picks['end']) + 180.)
-    env = envelope(tr.data)
+    tr_env = envelope_smooth(envelope_window=60.,
+                             tr=tr)
+    tr_env.stats.starttime += 30.
+    tr_env.data *= 2.
     timevec = _create_timevector(tr)
     fig.add_trace(
         go.Scatter(x=timevec,
@@ -166,9 +167,10 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
                    line=go.scatter.Line(color="darkgrey"),
                    mode="lines", **kwargs),
         row=row, col=col)
+    timevec = _create_timevector(tr_env)
     fig.add_trace(
         go.Scatter(x=timevec,
-                   y=env,
+                   y=tr_env.data,
                    name='envelope %s' % types[0],
                    showlegend=False,
                    line=go.scatter.Line(color="darkgrey", dash='dot'),
@@ -212,7 +214,6 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
 
 
 def _create_timevector(tr):
-    strf = '%Y-%m-%d %H:%M:%S.%f'
     timevec = [utct(t +
                     float(tr.stats.starttime)).datetime
                for t in tr.times()]
@@ -227,5 +228,3 @@ if __name__ == '__main__':
     inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
     events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
     events.calc_spectra(winlen_sec=20.)
-    for name, event in events.events.items():
-        event.make_report(fnam_out='./reports/plotly_%s.html' % name)
