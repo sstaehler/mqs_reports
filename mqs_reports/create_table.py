@@ -76,8 +76,8 @@ def write_html(catalog, fnam_out):
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%3.1f',
                '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
                '%3.1f', '%3.1f', '%3.1f', '%3.1f')
-    ievent = len(catalog.events)
-    for event_name, event in catalog.events.items():
+    ievent = len(catalog)
+    for event in catalog:
         duration = utct(utct(event.picks['end']) -
                         utct(event.picks['start'])).strftime('%M:%S')
         utc_time = utct(event.picks['start']).strftime('%Y-%j %H:%M:%S')
@@ -117,7 +117,7 @@ def write_html(catalog, fnam_out):
 
         output += create_row(
             (ievent,
-             link_report % (event.fnam_report, event_name),
+             link_report % (event.fnam_report, event.name),
              event.mars_event_type_short,
              event.quality,
              utc_time,
@@ -139,10 +139,10 @@ def write_html(catalog, fnam_out):
              if event.amplitudes['A_24'] is not None else None,
              10 ** (event.amplitudes['A0'] / 20.)
              if event.amplitudes['A0'] is not None else None,
-             event.magnitude(type='mb_P', distance=30.),
-             event.magnitude(type='mb_S', distance=30.),
-             event.magnitude(type='m2.4', distance=20.),
-             event.magnitude(type='MFB', distance=20.)
+             event.magnitude(mag_type='mb_P', distance=30.),
+             event.magnitude(mag_type='mb_S', distance=30.),
+             event.magnitude(mag_type='m2.4', distance=20.),
+             event.magnitude(mag_type='MFB', distance=20.)
              ),
             extras=sortkey,
             fmts=formats)
@@ -211,6 +211,7 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
+    print(catalog)
     ann = Annotations(fnam_csv=args.input_csv)
     inv = obspy.read_inventory(args.inventory)
     with warnings.catch_warnings():

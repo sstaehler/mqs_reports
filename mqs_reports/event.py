@@ -82,6 +82,15 @@ class Event:
         self.spectra = None
         self.spectra_SP = None
 
+    def __str__(self):
+        if self.distance is not None:
+            string = "Event {name} ({mars_event_type_short}-{quality}), " \
+                     "distance: {distance:5.1f} degree ({distance_type})"
+        else:
+            string = "Event {name} ({mars_event_type_short}-{quality}), " \
+                     "unknown distance"
+        return string.format(**self.__dict__)
+
     def calc_distance(self,
                       vp: float = np.sqrt(3) * 2.0,
                       vs: float = 2.0) -> Union[float, None]:

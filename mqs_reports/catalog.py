@@ -16,17 +16,21 @@ from matplotlib import pyplot as plt
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
+from mqs_reports.event import Event
 from mqs_reports.scatter_annot import scatter_annot
 
 
 class Catalog:
     def __init__(self,
+                 events=None,
                  fnam_quakeml='catalog.xml',
                  quality=('A', 'B', 'C'),
                  type_select='all'):
         """
-        Class to hold catalog of multiple events. Initialized from QuakeML
-        with Mars extensions.
+        Class to hold catalog of multiple events. Initialized from
+        dictionary with Events or QuakeML with Mars extensions.
+        :param events: dictionary of events. If not set, the events are read
+                       from QuakeML file
         :param fnam_quakeml: Path to QuakeML file
         :param quality: Desired event quality
         :param type_select: Desired event types. Either direct type or
@@ -35,46 +39,82 @@ class Catalog:
                             "lower" for LF and BB
         """
         from mqs_reports.read_BED_Mars import read_QuakeML_BED
-
-        if type_select == 'all':
-            type_des = ['BROADBAND',
-                        'HIGH_FREQUENCY',
-                        'LOW_FREQUENCY',
-                        '2.4_HZ']
-        elif type_select == 'higher':
-            type_des = ['HIGH_FREQUENCY',
-                        'BROADBAND']
-        elif type_select == 'lower':
-            type_des = ['LOW_FREQUENCY',
-                        'BROADBAND']
-        else:
-            if len(type_select) == 1:
-                type_des = [type_select]
+        self.events = []
+        if events is None:
+            if type_select == 'all':
+                type_des = ['BROADBAND',
+                            'HIGH_FREQUENCY',
+                            'LOW_FREQUENCY',
+                            '2.4_HZ']
+            elif type_select == 'higher':
+                type_des = ['HIGH_FREQUENCY',
+                            'BROADBAND']
+            elif type_select == 'lower':
+                type_des = ['LOW_FREQUENCY',
+                            'BROADBAND']
             else:
-                type_des = type_select
-        self.types = type_des
-        self.events = read_QuakeML_BED(fnam=fnam_quakeml,
-                                       event_type=type_des,
-                                       quality=quality,
-                                       phase_list=['start', 'end',
-                                                   'P', 'S',
-                                                   'Pg', 'Sg',
-                                                   'Peak_M2.4',
-                                                   'Peak_MbP',
-                                                   'Peak_MbS',
-                                                   'noise_start', 'noise_end',
-                                                   'P_spectral_start',
-                                                   'P_spectral_end',
-                                                   'S_spectral_start',
-                                                   'S_spectral_end'])
+                if len(type_select) == 1:
+                    type_des = [type_select]
+                else:
+                    type_des = type_select
+            self.types = type_des
+            self.events.extend(read_QuakeML_BED(fnam=fnam_quakeml,
+                                                event_type=type_des,
+                                                quality=quality,
+                                                phase_list=['start', 'end',
+                                                            'P', 'S',
+                                                            'Pg', 'Sg',
+                                                            'Peak_M2.4',
+                                                            'Peak_MbP',
+                                                            'Peak_MbS',
+                                                            'noise_start',
+                                                            'noise_end',
+                                                            'P_spectral_start',
+                                                            'P_spectral_end',
+                                                            'S_spectral_start',
+                                                            'S_spectral_end']))
+        else:
+            if isinstance(events, Event):
+                events = [events]
+            if events:
+                self.events.extend(events)
+        pass
 
+    def __len__(self):
+        return len(self.events)
+
+    def __iter__(self):
+        return list(self.events).__iter__()
+
+    def __add__(self, other):
+        if isinstance(other, Event):
+            other = Catalog([other])
+        if not isinstance(other, Catalog):
+            raise TypeError
+        events = self.events + other.events
+        return self.__class__(events=events)
+
+    def __str__(self, extended=False):
+        # if self.events:
+        #     id_length = self and max(len(ev.id) for ev in self) or 0
+        # else:
+        #     id_length = 0
+        out = str(len(self.events)) + ' Events(s) in Catalog:\n'
+        if len(self.events) <= 20 or extended is True:
+            out = out + "\n".join([str(_i) for _i in self])
+        else:
+            out = out + "\n" + self.events[0].__str__() + "\n" + \
+                  '...\n(%i other traces)\n...\n' % (len(self.events) - 2) + \
+                  self.events[-1].__str__() + '\n\n[Use "print(' + \
+                  'Catalog.__str__(extended=True))" to print all Events]'
+        return out
 
     def calc_spectra(self, winlen_sec):
-        for event_name, event in tqdm(self.events.items()):
+        for event in tqdm(self):
             event.calc_spectra(winlen_sec=winlen_sec)
 
     def read_waveforms(self, inv, kind, sc3dir):
-        for event_name, event in tqdm(self.events.items()):
+        for event in tqdm(self):
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
 
 
@@ -83,19 +123,19 @@ class Catalog:
         times_X = []
         times_Y = []
         names = []
-        for name, event in self.events.items():
+        for event in self:
             try:
                 # Remove events that do not have all four picks
                 for pick in [pick1_X, pick1_Y, pick2_X, pick2_Y]:
                     assert not event.picks[pick] == ''
             except:
-                print('One or more picks missing for event %s' % (name))
+                print('One or more picks missing for event %s' % (event.name))
             else:
                 times_X.append(utct(event.picks[pick1_X]) -
                                utct(event.picks[pick2_X]))
                 times_Y.append(utct(event.picks[pick1_Y]) -
                                utct(event.picks[pick2_Y]))
-                names.append(name)
+                names.append(events.name)
 
         if fig is None:
             fig = plt.figure()
@@ -125,19 +165,19 @@ class Catalog:
         times_X = []
         times_Y = []
         names = []
-        for name, event in self.events.items():
+        for event in self:
             try:
                 # Remove events that do not have all four picks
                 for pick in [pick1_Y, pick2_Y, 'start']:
                     assert not event.picks[pick] == ''
             except:
-                print('One or more picks missing for event %s' % (name))
+                print('One or more picks missing for event %s' % (event.name))
             else:
                 times_X.append(float(solify(utct(event.picks['start']))) /
                                      86400.)
                 times_Y.append(utct(event.picks[pick1_Y]) -
                                utct(event.picks[pick2_Y]))
-                names.append(name)
+                names.append(event.name)
 
         if fig is None:
             fig = plt.figure()
@@ -158,17 +198,17 @@ class Catalog:
 
     def make_report(self, dir_out='reports', annotations=None):
         from os.path import exists as pexists
-        for name, event in tqdm(self.events.items()):
+        for event in tqdm(self):
             fnam_report = pjoin(dir_out,
                                 'mag_report_%s.html' %
-                                name)
+                                event.name)
             if not pexists(fnam_report):
                 event.make_report(fnam_out=fnam_report,
                                   annotations=annotations)
             else:
                 event.fnam_report = fnam_report
 
-    def plot_spectra(self, event_list='all', ymin=-240, ymax=-170,
+    def plot_spectra(self, ymin=-240, ymax=-170,
                      df_mute=1.07):
         nevents = len(self.events)
         nrows = max(2, (nevents + 1) // 2)

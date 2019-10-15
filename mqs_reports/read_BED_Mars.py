@@ -48,7 +48,7 @@ def qml_get_pick_time_for_phase(event_element, pref_ori_publicid, phase_name):
 def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
                                                 event_type,
                                                 phase_list=['start', 'end']):
-    event_info = {}
+    event_info = []
 
     for ev in xml_root.iter(
             "{}".format(
@@ -129,8 +129,9 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
             lxml_prefix_with_namespace(
                 "value", XMLNS_QUAKEML_BED))).text
 
+
         if not ev_name == 'S0085a':
-            event_info[ev_name] = Event(
+            event_info.append(Event(
                 name=ev_name,
                 publicid=ev_publicid,
                 origin_publicid=str(pref_ori.text).strip(),
@@ -138,7 +139,7 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
                 quality=str(lq.text).strip(),
                 latitude=float(latitude),
                 longitude=float(longitude),
-                mars_event_type=mars_event_type_str)
+                mars_event_type=mars_event_type_str))
 
     return event_info
 
@@ -146,12 +147,9 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
 def read_QuakeML_BED(fnam, event_type, phase_list,
                      quality=('A', 'B', 'C', 'D')):
     from lxml import etree
-    #    events_sorted = dict()
     with open(fnam) as fh:
         tree = etree.parse(fh)
         xml_root = tree.getroot()
-        #for LQ in quality:
-        #    events_sorted[LQ] = qml_get_event_info_for_event_waveform_files(
         events = qml_get_event_info_for_event_waveform_files(
                 xml_root, location_quality=quality,
                 event_type=event_type,
