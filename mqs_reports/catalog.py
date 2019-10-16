@@ -14,6 +14,7 @@ from typing import Union
 import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
@@ -359,8 +360,16 @@ class Catalog:
             plt.text(-pre_time, k + 0.5, event.name + ' ',
                      ha='right', va='center')
 
+        # time 0 line
         plt.axvline(0, color='C4')
 
+        # legend
+        llabels = ['HIGH_FREQUENCY', '2.4_HZ']
+        lcolors = [colors[l] for l in llabels]
+        llines = [Line2D([0], [0], color=c) for c in lcolors]
+        plt.legend(llines, llabels)
+
+        # lable, limit, ticks
         plt.xlabel('time after Pg / s')
         plt.xlim(-pre_time - 200, None)
         plt.yticks([], [])
