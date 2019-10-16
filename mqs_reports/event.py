@@ -8,8 +8,8 @@
     None
 """
 
-from glob import glob
 import inspect
+from glob import glob
 from os import makedirs
 from os.path import join as pjoin
 from typing import Union
@@ -353,7 +353,7 @@ class Event:
                     amplitudes = fit_spectra(f=f,
                                              p_sig=p_sig,
                                              p_noise=p_noise,
-                                             type=self.mars_event_type_short)
+                                             event_type=self.mars_event_type_short)
                 if amplitudes is not None:
                     break
             if amplitudes is not None:

@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 from obspy import UTCDateTime as utct
 from plotly.subplots import make_subplots
 
-from mqs_reports.magnitudes import lorenz
+from mqs_reports.magnitudes import lorenz, lorenz_att
 from mqs_reports.utils import envelope_smooth
 
 
@@ -87,11 +87,27 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
         if A0 is not None and tstar is not None:
             fig.add_trace(
                 go.Scatter(x=f,
-                           y=A0 + f * tstar,
-                           name='fit, %ddB, t*=%4.2f' % (A0, -tstar * 0.1),
+                           y=A0 - f * tstar * 10.,
+                           name='fit, %ddB, t*=%4.2f' % (A0, -tstar),
                            line=go.scatter.Line(color='blue', width=2),
                            mode="lines", **kwargs),
                 row=row, col=col)
+            # Fit Lorenz-Adapted tstar
+            if amps['ampfac'] is not None:
+                fig.add_trace(
+                    go.Scatter(x=f,
+                               y=lorenz_att(f, A0=amps['A0'],
+                                            x0=amps['f_24'],
+                                            tstar=amps['tstar'],
+                                            xw=amps['width_24'],
+                                            ampfac=amps['ampfac']),
+                               name='fit, %ddB, f=%4.2fHz, t*=%4.2f, df=%4.2f, '
+                                    'dA=%4.1f' %
+                                    (amps['A0'], amps['f_24'], amps['tstar'],
+                                     amps['width_24'], amps['ampfac']),
+                               line=go.scatter.Line(color='red', width=5),
+                               mode="lines", **kwargs),
+                    row=row, col=col)
             # Add text marker
             fig.add_trace(
                 go.Scatter(x=[0.05, 0.15],
