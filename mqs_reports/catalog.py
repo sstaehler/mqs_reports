@@ -9,6 +9,7 @@
 """
 
 from os.path import join as pjoin
+from typing import Union
 
 import numpy as np
 from mars_tools.insight_time import solify
@@ -106,6 +107,51 @@ class Catalog:
                   self.events[-1].__str__() + '\n\n[Use "print(' + \
                   'Catalog.__str__(extended=True))" to print all Events]'
         return out
+
+    def select(self,
+               name: Union[tuple, str] = None,
+               event_type: Union[tuple, str] = None,
+               quality: Union[tuple, str] = None
+               ):
+        """
+        Return new Catalog object only with the events that match the given
+        criteria (e.g. all with name=="S026?a").
+        Criteria can either be given as string with wildcards or as tuple of
+        allowed values.
+        :param name: Name of the event ("SXXXXy")
+        :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF
+        :param quality: A to D
+        :return:
+        """
+        from fnmatch import fnmatch
+        events = []
+        for event in self:
+            # skip event if any given criterion is not matched
+            if name is not None:
+                if type(name) in (tuple, list):
+                    if event.name not in name:
+                        continue
+                else:
+                    if not fnmatch(event.name, name):
+                        continue
+
+            if event_type is not None:
+                if type(event_type) in (tuple, list):
+                    if event.mars_event_type_short not in event_type:
+                        continue
+                else:
+                    if not fnmatch(event.mars_event_type_short, type):
+                        continue
+
+            if quality is not None:
+                if type(quality) in (tuple, list):
+                    if event.quality not in quality:
+                        continue
+                else:
+                    if not fnmatch(event.quality, quality):
+                        continue
+            events.append(event)
+        return self.__class__(events=events)
 
     def calc_spectra(self, winlen_sec: float) -> None:
         """
