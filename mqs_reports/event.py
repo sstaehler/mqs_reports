@@ -9,6 +9,7 @@
 """
 
 from glob import glob
+import inspect
 from os import makedirs
 from os.path import join as pjoin
 from typing import Union
@@ -23,6 +24,14 @@ from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 
 LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
+
+
+EVENT_TYPES_SHORT = {
+    'VERY_HIGH_FREQUENCY': 'VF',
+    'BROADBAND': 'BB',
+    'LOW_FREQUENCY': 'LF',
+    'HIGH_FREQUENCY': 'HF',
+    '2.4_HZ': '24'}
 
 
 class Event:
@@ -45,17 +54,6 @@ class Event:
                              utct(self.picks['start']))
         self.starttime = utct(utct(self.picks['start']))
 
-        # Set a short event type
-        if self.mars_event_type == 'HIGH_FREQUENCY':
-            self.mars_event_type_short = 'HF'
-        elif self.mars_event_type == 'VERY_HIGH_FREQUENCY':
-            self.mars_event_type_short = 'VF'
-        elif self.mars_event_type == 'BROADBAND':
-            self.mars_event_type_short = 'BB'
-        elif self.mars_event_type == 'LOW_FREQUENCY':
-            self.mars_event_type_short = 'LF'
-        elif self.mars_event_type == '2.4_HZ':
-            self.mars_event_type_short = '24'
         self.amplitudes = dict()
 
         # Set distance or calculate it for HF, VHF and 2.4 events
@@ -85,6 +83,10 @@ class Event:
         self.spectra = None
         self.spectra_SP = None
 
+    @property
+    def mars_event_type_short(self):
+        return EVENT_TYPES_SHORT[self.mars_event_type]
+
     def __str__(self):
         if self.distance is not None:
             string = "Event {name} ({mars_event_type_short}-{quality}), " \
@@ -92,7 +94,7 @@ class Event:
         else:
             string = "Event {name} ({mars_event_type_short}-{quality}), " \
                      "unknown distance"
-        return string.format(**self.__dict__)
+        return string.format(**dict(inspect.getmembers(self)))
 
     def calc_distance(self,
                       vp: float = np.sqrt(3) * 2.0,

@@ -19,7 +19,7 @@ from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event
+from mqs_reports.event import Event, EVENT_TYPES_SHORT
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth
 
@@ -100,11 +100,24 @@ class Catalog:
 
     def __str__(self, extended=False):
         out = str(len(self.events)) + ' Events(s) in Catalog:\n'
+
+        for event_type in EVENT_TYPES_SHORT.keys():
+            n = len([e for e in self if e.mars_event_type == event_type])
+            out += f'\n    {n:4d} {event_type} events:\n        '
+
+            for Q in 'ABCD':
+                nQ = len([e for e in self
+                          if (e.mars_event_type == event_type and
+                              e.quality == Q)])
+                out += f'{nQ:4d} {Q} '
+
+        out += '\n'
+
         if len(self.events) <= 20 or extended is True:
             out = out + "\n".join([str(_i) for _i in self])
         else:
             out = out + "\n" + self.events[0].__str__() + "\n" + \
-                  '...\n(%i other traces)\n...\n' % (len(self.events) - 2) + \
+                  '...\n(%i other events)\n...\n' % (len(self.events) - 2) + \
                   self.events[-1].__str__() + '\n\n[Use "print(' + \
                   'Catalog.__str__(extended=True))" to print all Events]'
         return out
