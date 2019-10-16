@@ -11,6 +11,7 @@
 from argparse import ArgumentParser
 
 import obspy
+from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 
 
@@ -83,7 +84,7 @@ def write_html(catalog, fnam_out):
     for event in catalog:
         duration = event.duration.strftime('%M:%S')
         utc_time = event.starttime.strftime('%Y-%j %H:%M:%S')
-        lmst_time = event.starttime.strftime('%H:%M:%S')
+        lmst_time = solify(event.starttime).strftime('%H:%M:%S')
         sortkey = (ievent,
                    None,
                    None,
@@ -214,7 +215,7 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
-    print(catalog)
+    # catalog.select(name='S0262b')
     ann = Annotations(fnam_csv=args.input_csv)
     inv = obspy.read_inventory(args.inventory)
     with warnings.catch_warnings():

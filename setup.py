@@ -20,4 +20,4 @@ setup(name='mqs_reports',
       license='None',
       packages=find_packages(),
       install_requires=['obspy', 'plotly', 'lxml', 'numpy', 'matplotlib',
-                        'tqdm'])
+                        'tqdm', 'scipy'])
