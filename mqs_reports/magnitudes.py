@@ -116,7 +116,7 @@ def fit_spectra(f, p_sig, p_noise, type,
                              10 * np.log10(p_sig[bol_1Hz_mask]),
                              deg=1)
 
-            plt.plot(f, 10 * np.log10(p_noise), 'k')
+            # plt.plot(f, 10 * np.log10(p_noise), 'k')
             A0 = res[1]
             tstar = res[0] / 10.  # Because dB
 

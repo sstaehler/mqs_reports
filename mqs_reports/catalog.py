@@ -15,6 +15,7 @@ import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
+from mpldatacursor import datacursor
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
@@ -110,7 +111,7 @@ class Catalog:
                               e.quality == Q)])
                 out += f'{nQ:4d} {Q} '
 
-        out += '\n'
+        out += '\n\n'
 
         if len(self.events) <= 20 or extended is True:
             out = out + "\n".join([str(_i) for _i in self])
@@ -119,6 +120,7 @@ class Catalog:
                   '...\n(%i other events)\n...\n' % (len(self.events) - 2) + \
                   self.events[-1].__str__() + '\n\n[Use "print(' + \
                   'Catalog.__str__(extended=True))" to print all Events]'
+        out += '\n'
         return out
 
     def select(self,
@@ -294,6 +296,8 @@ class Catalog:
                              utct(event.picks['Pg'])) for event in events])
         sorted_ids = np.argsort(tt_PgSg)
 
+        plt.figure()
+
         for k, i in enumerate(sorted_ids):
             event = events[i]
             tt = tt_PgSg[i]
@@ -385,6 +389,68 @@ class Catalog:
         plt.xlabel('time after Pg / s')
         plt.xlim(-pre_time - 200, None)
         plt.yticks([], [])
+
+        plt.show()
+
+    def plot_HF_spectra(self, SNR=2., plot_noise=False, delta_DB_S=None):
+
+        plt.figure()
+
+        class ContinueI(Exception):
+                pass
+
+        for event in self:
+
+            try:
+                for stype in ['P', 'S', 'noise']:
+                    if not stype in event.spectra:
+                        raise ContinueI(f'Missing spectral {stype} picks in event {event.name}')
+
+                    if len(event.spectra[stype]) == 0:
+                        raise ContinueI(f'Spectrum empty for {stype} in event {event.name}')
+            except ContinueI as e:
+                print(e)
+                continue
+
+            if plot_noise:
+                plt.plot(event.spectra['noise']['f'],
+                         10 * np.log10(event.spectra['noise']['p_Z']),
+                         color='C0')
+
+            if delta_DB_S is None:
+                if plot_noise:
+                    delta_DB_S = 0.
+                else:
+                    delta_DB_S = 10.
+
+            mask_P = event.spectra['P']['f'] < 1.3
+            mask_P += event.spectra['P']['f'] > 5.
+            peak = event.spectra['P']['p_Z'][np.logical_not(mask_P)].max()
+            mask_P += event.spectra['P']['p_Z'] < SNR * event.spectra['noise']['p_Z']
+            msP = np.ma.masked_where(mask_P, event.spectra['P']['p_Z'])
+            if not plot_noise:
+                msP /= peak
+            l1, = plt.plot(event.spectra['P']['f'], 10 * np.log10(msP),
+                           color='C1', alpha=1., label=f'{event.name}, P')
+
+            mask_S = event.spectra['S']['f'] < 1.3
+            mask_S += event.spectra['S']['f'] > 5.
+            peak = event.spectra['S']['p_Z'][np.logical_not(mask_S)].max()
+            mask_S += event.spectra['S']['p_Z'] < SNR * event.spectra['noise']['p_Z']
+            msS = np.ma.masked_where(mask_S, event.spectra['S']['p_Z'])
+            if not plot_noise:
+                msS /= peak
+            l2, = plt.plot(event.spectra['S']['f'],
+                           10 * np.log10(msS) - delta_DB_S,
+                           color='C2', alpha=1., label=f'{event.name}, S')
+
+        datacursor(formatter='{label}'.format)
+
+        plt.xlabel('frequency / Hz')
+        plt.ylabel('PSD relative to 2.4 peak amplitude')
+
+        llabels = ['P', 'S']
+        plt.legend([l1, l2], llabels)
 
         plt.show()
 
