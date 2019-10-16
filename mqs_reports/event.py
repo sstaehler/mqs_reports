@@ -33,6 +33,8 @@ EVENT_TYPES_SHORT = {
     'HIGH_FREQUENCY': 'HF',
     '2.4_HZ': '24'}
 
+EVENT_TYPES = EVENT_TYPES_SHORT.keys()
+
 
 class Event:
     def __init__(self,

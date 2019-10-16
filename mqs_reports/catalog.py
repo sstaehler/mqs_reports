@@ -19,7 +19,7 @@ from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES_SHORT
+from mqs_reports.event import Event, EVENT_TYPES
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth
 
@@ -46,10 +46,7 @@ class Catalog:
         self.events = []
         if events is None:
             if type_select == 'all':
-                type_des = ['BROADBAND',
-                            'HIGH_FREQUENCY',
-                            'LOW_FREQUENCY',
-                            '2.4_HZ']
+                type_des = EVENT_TYPES
             elif type_select == 'higher':
                 type_des = ['HIGH_FREQUENCY',
                             'BROADBAND']
@@ -61,6 +58,8 @@ class Catalog:
                     type_des = [type_select]
                 else:
                     type_des = type_select
+            if quality == 'all':
+                quality = ('A', 'B', 'C', 'D')
             self.types = type_des
             self.events.extend(read_QuakeML_BED(fnam=fnam_quakeml,
                                                 event_type=type_des,
@@ -101,7 +100,7 @@ class Catalog:
     def __str__(self, extended=False):
         out = str(len(self.events)) + ' Events(s) in Catalog:\n'
 
-        for event_type in EVENT_TYPES_SHORT.keys():
+        for event_type in EVENT_TYPES:
             n = len([e for e in self if e.mars_event_type == event_type])
             out += f'\n    {n:4d} {event_type} events:\n        '
 
