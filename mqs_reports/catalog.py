@@ -23,6 +23,7 @@ from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth
+from mqs_reports.magnitudes import M2_4
 
 
 class Catalog:
@@ -155,7 +156,8 @@ class Catalog:
                     if event.mars_event_type_short not in event_type:
                         continue
                 else:
-                    if not fnmatch(event.mars_event_type_short, type):
+                    if (not fnmatch(event.mars_event_type_short, event_type)
+                         and not fnmatch(event.mars_event_type, event_type)):
                         continue
 
             if quality is not None:
@@ -282,8 +284,12 @@ class Catalog:
                           linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}):
         events = []
         for event in self:
+            # filter for HF and 2.4 events
+            if event.type not in ['2.4_HZ', 'HIGH_FREQUENCY']:
+                continue
+
+            # Remove events that do not have all picks
             try:
-                # Remove events that do not have all picks
                 for pick in ['Pg', 'Sg', 'end', 'noise_start', 'noise_end']:
                     assert not event.picks[pick] == ''
             except:
@@ -400,7 +406,11 @@ class Catalog:
                 pass
 
         for event in self:
+            # filter for HF and 2.4 events
+            if event.type not in ['2.4_HZ', 'HIGH_FREQUENCY']:
+                continue
 
+            # Skip events that do not have all picks, but print message in case
             try:
                 for stype in ['P', 'S', 'noise']:
                     if not stype in event.spectra:
@@ -451,6 +461,57 @@ class Catalog:
 
         llabels = ['P', 'S']
         plt.legend([l1, l2], llabels)
+
+        plt.show()
+
+    def plot_magnitude_distance(
+            self, mag_type='m2.4',
+            colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+            markersize={'A': 100, 'B': 50, 'C': 25, 'D': 10},
+            markerfill={'A': True, 'B': True, 'C': False, 'D': False}):
+
+        fig = plt.figure()
+
+        legend_elements = []
+
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY']:
+            for quality in 'ABCD':
+                cat = self.select(quality=quality, event_type=event_type)
+
+                if len(cat) == 0:
+                    continue
+
+                # collect properties for plotting
+                M, dist = np.array([
+                    (event.magnitude(mag_type=mag_type, distance=event.distance),
+                     event.distance) for event in cat]).T.astype(float)
+
+                S = np.array([markersize[event.quality] for event in cat])
+                names = np.array([event.name for event in cat])
+
+                mask = np.logical_not(np.isnan(M))
+                M = M[mask]
+                dist = dist[mask]
+                S = S[mask]
+                names = names[mask]
+
+                if markerfill[quality]:
+                    colorargs = {'c': colors[event_type]}
+                else:
+                    colorargs = {'edgecolors': colors[event_type],
+                                 'facecolor': 'none'}
+
+                scatter_annot(dist, M, s=S, fig=fig, names=names,
+                              label=f'{event_type}, {quality}',
+                              **colorargs)
+
+        dist = np.linspace(5, 40)
+        mag = M2_4(-219, dist)
+        plt.plot(dist, mag, label='M2.4(-219 dB)', color='C3')
+
+        plt.xlabel('distance / degree')
+        plt.ylabel('M2.4')
+        plt.legend()
 
         plt.show()
 
