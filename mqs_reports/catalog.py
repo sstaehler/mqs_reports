@@ -506,8 +506,10 @@ class Catalog:
                               **colorargs)
 
         dist = np.linspace(5, 40)
-        mag = M2_4(-219, dist)
-        plt.plot(dist, mag, label='M2.4(-219 dB)', color='C3')
+        magc_24 = M2_4(-219, dist)
+        magc_HF = M2_4(-214, dist)
+        plt.plot(dist, magc_24, label='M2.4(-219 dB)', color='C3')
+        plt.plot(dist, magc_HF, label='M2.4(-214 dB)', color='C3', ls='--')
 
         plt.xlabel('distance / degree')
         plt.ylabel('M2.4')
