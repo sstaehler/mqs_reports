@@ -33,8 +33,9 @@ def M2_4(amplitude, distance):
         # mag = np.log10(amplitude) - np.log10(4.78e-11) + \
         #       (np.log10(distance) - np.log10(30.)) * 1.2 + 3.
         amp_true = 10 ** (amplitude / 20.)
-        mag = (2. / 3.) * (np.log10(amp_true) +
-                           1.0 * np.log10(distance) + 9.8) + 1.8
+        A0_est = 10 ** (0.7 * np.log10(amp_true)-3.)
+        mag = (2. / 3.) * (np.log10(A0_est) +
+                           1.5 * np.log10(distance) + 9.4) + 1.9
         return mag
 
 
@@ -45,7 +46,7 @@ def MFB(amplitude, distance):
         # A0 is given in dB
         amp_true = 10 ** (amplitude / 20.)
         mag = (2. / 3.) * (np.log10(amp_true) +
-                           1.1 * np.log10(distance) + 9.8) + 1.9
+                           1.5 * np.log10(distance) + 9.4) + 1.9
         return mag
 
 
