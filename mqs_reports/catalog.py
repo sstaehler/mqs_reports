@@ -168,6 +168,10 @@ class Catalog:
             events.append(event)
         return self.__class__(events=events)
 
+    def load_distances(self, fnam_csv):
+        for event in self:
+            event.load_distance_manual(fnam_csv)
+
     def calc_spectra(self, winlen_sec: float) -> None:
         """
         Add spectra to each Event object in Catalog.
@@ -431,7 +435,7 @@ class Catalog:
             if not plot_noise:
                 msP /= peak
             l1, = plt.plot(event.spectra['P']['f'], 10 * np.log10(msP),
-                           color='C1', alpha=1., label=f'{event.name}, P')
+                           color=color, alpha=1., label=f'{event.name}, P')
 
             mask_S = event.spectra['S']['f'] < 1.3
             mask_S += event.spectra['S']['f'] > 5.

@@ -98,6 +98,22 @@ class Event:
                      "unknown distance"
         return string.format(**dict(inspect.getmembers(self)))
 
+    def load_distance_manual(self,
+                             fnam_csv: str) -> None:
+        """
+        Load distance of event from CSV file. Can be used for "aligned"
+        distances that are not in the database
+        :param: fnam_csv: path to CSV file with distances
+        """
+        from csv import DictReader
+        with open(fnam_csv, 'r') as csv_file:
+            csv_reader = DictReader(csv_file)
+            for row in csv_reader:
+                if self.distance is None:
+                    if self.name == row['name']:
+                        self.distance = float(row['distance'])
+                        self.distance_type = 'aligned'
+
     def calc_distance(self,
                       vp: float = np.sqrt(3) * 2.0,
                       vs: float = 2.0) -> Union[float, None]:

@@ -79,6 +79,7 @@ def write_html(catalog, fnam_out):
                '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f')
     dist_string = {'GUI': '%5.1f',
                    'PgSg': '%5.1f*',
+                   'aligned': '%5.1f&dagger;',
                    'unknown': '%s'}
     ievent = len(catalog)
     for event in catalog:
@@ -189,6 +190,9 @@ def define_arguments():
     helptext = 'Input annotation file'
     parser.add_argument('input_csv', help=helptext)
 
+    helptext = 'Input manual distance file'
+    parser.add_argument('input_dist', help=helptext)
+
     helptext = 'Inventory file'
     parser.add_argument('inventory', help=helptext)
 
@@ -217,6 +221,8 @@ if __name__ == '__main__':
                       type_select=args.types, quality=args.quality)
     # catalog.select(name='S0262b')
     ann = Annotations(fnam_csv=args.input_csv)
+    # load manual (aligned) distances
+    catalog.load_distances(fnam_csv=args.input_dist)
     inv = obspy.read_inventory(args.inventory)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
