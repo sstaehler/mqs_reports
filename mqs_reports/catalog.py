@@ -15,6 +15,7 @@ import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
+import matplotlib.ticker
 from mpldatacursor import datacursor
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
@@ -23,6 +24,7 @@ from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth
+from mqs_reports.magnitudes import M2_4, lorenz_att
 
 
 class Catalog:
@@ -152,10 +154,12 @@ class Catalog:
 
             if event_type is not None:
                 if type(event_type) in (tuple, list):
-                    if event.mars_event_type_short not in event_type:
+                    if (event.mars_event_type_short not in event_type and
+                         event.mars_event_type not in event_type):
                         continue
                 else:
-                    if not fnmatch(event.mars_event_type_short, event_type):
+                    if (not fnmatch(event.mars_event_type_short, event_type)
+                         and not fnmatch(event.mars_event_type, event_type)):
                         continue
 
             if quality is not None:
@@ -211,7 +215,7 @@ class Catalog:
                 # Remove events that do not have all four picks
                 for pick in [pick1_X, pick1_Y, pick2_X, pick2_Y]:
                     assert not event.picks[pick] == ''
-            except KeyError:
+            except AssertionError:
                 print('One or more picks missing for event %s' % event.name)
             else:
                 times_X.append(utct(event.picks[pick1_X]) -
@@ -253,7 +257,7 @@ class Catalog:
                 # Remove events that do not have all four picks
                 for pick in [pick1_Y, pick2_Y, 'start']:
                     assert not event.picks[pick] == ''
-            except KeyError:
+            except AssertionError:
                 print('One or more picks missing for event %s' % event.name)
             else:
                 times_X.append(float(solify(utct(event.picks['start']))) /
@@ -276,18 +280,24 @@ class Catalog:
             ax.set_ylabel('$T_{%s} - T_{%s}$' % (pick1_Y, pick2_Y))
         else:
             ax.set_ylabel('distance / km (from %s-%s)' % (pick1_Y, pick2_Y))
-        if fig is None:
+
+        if show:
             plt.show()
 
-    def plot_24_alignment(self, show=True, pre_time=120., post_time=120.,
-                          fmax_filt=2.7, fmin_filt=2.1, envelope_window=100.,
-                          amp_fac=2., show_picks=True,
-                          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
-                          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}):
+    def plot_24_alignment(
+         self, pre_time=120., post_time=120., fmax_filt=2.7, fmin_filt=2.1,
+         envelope_window=100., amp_fac=2., show_picks=True,
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+         linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, show=True):
+
         events = []
         for event in self:
+            # filter for HF and 2.4 events
+            if event.mars_event_type not in ['2.4_HZ', 'HIGH_FREQUENCY']:
+                continue
+
+            # Remove events that do not have all picks
             try:
-                # Remove events that do not have all picks
                 for pick in ['Pg', 'Sg', 'end', 'noise_start', 'noise_end']:
                     assert not event.picks[pick] == ''
             except:
@@ -300,7 +310,7 @@ class Catalog:
                              utct(event.picks['Pg'])) for event in events])
         sorted_ids = np.argsort(tt_PgSg)
 
-        plt.figure()
+        fig = plt.figure()
 
         for k, i in enumerate(sorted_ids):
             event = events[i]
@@ -359,19 +369,20 @@ class Catalog:
             Y = Y[::10]
 
             plt.plot(X, Y, color=colors[event.mars_event_type],
-                     ls=linestyle[event.quality])
+                     ls=linestyle[event.quality], zorder=1000-k)
 
             # fill between noise amplitude estimate and envelope
             plt.fill_between(X, Y0, Y,  where=((Y>=Y0) * (X>0) * (X<duration)),
-                             color='lightgray', alpha=1., zorder=-20)
+                             color=colors[event.mars_event_type], alpha=0.4,
+                             zorder=-20)
 
             if show_picks:
-                plt.plot([tt, tt], [k, k+0.8], color='C8')
+                plt.plot([tt, tt], [k, k+0.3*amp_fac], color='C8')
                 plt.plot([duration, duration], [k, k+0.8], color='C9')
 
             # plot noise
             X = trZ_noise_env.times()
-            X = X - pre_time - 200 - X[-1]
+            X = X - pre_time - 400 - X[-1]
             Y = trZ_noise_env.data * amp_fac + k
             X = X[::10]
             Y = Y[::10]
@@ -391,20 +402,26 @@ class Catalog:
 
         # lable, limit, ticks
         plt.xlabel('time after Pg / s')
-        plt.xlim(-pre_time - 200, None)
+        plt.xlim(-pre_time - 300, None)
         plt.yticks([], [])
 
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            return fig
 
-    def plot_HF_spectra(self, SNR=2., plot_noise=False, delta_DB_S=None):
+    def plot_HF_spectra(self, SNR=2., tooltip=False, show=True):
 
-        plt.figure()
+        fig = plt.figure()
+
+        cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY'])
 
         class ContinueI(Exception):
                 pass
 
-        for event in self:
+        for event in cat:
 
+            # Skip events that do not have all picks, but print message in case
             try:
                 for stype in ['P', 'S', 'noise']:
                     if not stype in event.spectra:
@@ -416,47 +433,176 @@ class Catalog:
                 print(e)
                 continue
 
-            if plot_noise:
-                plt.plot(event.spectra['noise']['f'],
-                         10 * np.log10(event.spectra['noise']['p_Z']),
-                         color='C0')
+            lw = 1.
 
-            if delta_DB_S is None:
-                if plot_noise:
-                    delta_DB_S = 0.
-                else:
-                    delta_DB_S = 10.
+            mask_P_1Hz = (event.spectra['P']['f'] > 0.86) * (event.spectra['P']['f'] < 1.14)
 
             mask_P = event.spectra['P']['f'] < 1.3
-            mask_P += event.spectra['P']['f'] > 5.
+            mask_P += event.spectra['P']['f'] > 7.
             peak = event.spectra['P']['p_Z'][np.logical_not(mask_P)].max()
+            mask_P = event.spectra['P']['f'] < 0.7
+            mask_P += event.spectra['P']['f'] > 7.
+            mask_P += mask_P_1Hz
             mask_P += event.spectra['P']['p_Z'] < SNR * event.spectra['noise']['p_Z']
             msP = np.ma.masked_where(mask_P, event.spectra['P']['p_Z'])
-            if not plot_noise:
-                msP /= peak
+            msPN = np.ma.masked_where(mask_P_1Hz, event.spectra['P']['p_Z'])
+
+            msP /= peak
+            msPN /= peak
+
             l1, = plt.plot(event.spectra['P']['f'], 10 * np.log10(msP),
-                           color=color, alpha=1., label=f'{event.name}, P')
+                           color='C0', alpha=1., label=f'{event.name}, P',
+                           lw=lw)
+            plt.plot(event.spectra['P']['f'], 10 * np.log10(msPN),
+                     color='lightgray', zorder=-10, lw=lw,
+                     label=f'{event.name}, P noise')
+
+            mask_S_1Hz = (event.spectra['S']['f'] > 0.86) * (event.spectra['S']['f'] < 1.14)
 
             mask_S = event.spectra['S']['f'] < 1.3
-            mask_S += event.spectra['S']['f'] > 5.
+            mask_S += event.spectra['S']['f'] > 7.
             peak = event.spectra['S']['p_Z'][np.logical_not(mask_S)].max()
+            mask_S = event.spectra['S']['f'] < 0.7
+            mask_S += event.spectra['S']['f'] > 7.
+            mask_S += mask_S_1Hz
             mask_S += event.spectra['S']['p_Z'] < SNR * event.spectra['noise']['p_Z']
             msS = np.ma.masked_where(mask_S, event.spectra['S']['p_Z'])
-            if not plot_noise:
-                msS /= peak
-            l2, = plt.plot(event.spectra['S']['f'],
-                           10 * np.log10(msS) - delta_DB_S,
-                           color='C2', alpha=1., label=f'{event.name}, S')
+            msSN = np.ma.masked_where(mask_S_1Hz, event.spectra['S']['p_Z'])
 
-        datacursor(formatter='{label}'.format)
+            msS /= peak
+            msSN /= peak
 
+            l2, = plt.plot(event.spectra['S']['f'], 10 * np.log10(msS),
+                           color='C1', alpha=1., label=f'{event.name}, S',
+                           lw=lw)
+            plt.plot(event.spectra['S']['f'], 10 * np.log10(msSN),
+                     color='lightgray', zorder=-10, lw=lw, label=f'{event.name}, S noise')
+
+        if tooltip:
+            datacursor(formatter='{label}'.format)
+
+        # plot lorenz with attenuation
+        f = np.linspace(0.01, 10., 1000)
+        spec1 = lorenz_att(f, A0=-7, x0=2.4, tstar=0.1, xw=0.3, ampfac=15.)
+        spec2 = lorenz_att(f, A0=-5, x0=2.4, tstar=0.2, xw=0.3, ampfac=15.)
+        spec3 = lorenz_att(f, A0=-8, x0=2.4, tstar=0.05, xw=0.3, ampfac=15.)
+        spec4 = lorenz_att(f, A0=-3, x0=2.4, tstar=0.3, xw=0.3, ampfac=15.)
+        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
+        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
+        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
+        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.3')
+
+        llabels = ['P', 'S'] + [l.get_label() for l in [l3, l4, l5, l6]]
+        plt.legend([l1, l2, l3, l4, l5, l6], llabels)
         plt.xlabel('frequency / Hz')
         plt.ylabel('PSD relative to 2.4 peak amplitude')
 
-        llabels = ['P', 'S']
-        plt.legend([l1, l2], llabels)
+        ax = plt.gca()
+        ax.set_xscale('log')
+        xmajor_locator = matplotlib.ticker.LogLocator(
+            base=10.0, subs=(1.0, 2.0, 3.0, 5.0, 7.0), numdecs=4, numticks=None)
+        ax.get_xaxis().set_major_locator(xmajor_locator)
+        ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
-        plt.show()
+        plt.xlim(0.3, 8.)
+        plt.ylim(-30., 7.)
+
+        plt.title(f'Spectra for {len(cat)} events')
+
+        if show:
+            plt.show()
+        else:
+            return fig
+
+    def plot_magnitude_distance(
+         self, mag_type='m2.4',
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+         show=True):
+
+        fig = plt.figure()
+
+        legend_elements = []
+
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY']:
+            for quality in 'ABCD':
+                cat = self.select(quality=quality, event_type=event_type)
+
+                if len(cat) == 0:
+                    continue
+
+                # collect properties for plotting
+                M, dist = np.array([
+                    (event.magnitude(mag_type=mag_type, distance=event.distance),
+                     event.distance) for event in cat]).T.astype(float)
+
+                S = np.array([markersize[event.quality] for event in cat])
+                names = np.array([f'{event.name} {event.duration_s:.0f}' for event in cat])
+
+                mask = np.logical_not(np.isnan(M))
+                M = M[mask]
+                dist = dist[mask]
+                S = S[mask]
+                names = names[mask]
+
+                if markerfill[quality]:
+                    colorargs = {'c': colors[event_type]}
+                else:
+                    colorargs = {'edgecolors': colors[event_type],
+                                 'facecolor': 'none'}
+
+                scatter_annot(dist, M, s=S, fig=fig, names=names,
+                              label=f'{event_type}, {quality}',
+                              **colorargs)
+
+        dist = np.linspace(3, 40)
+        magc_24 = M2_4(-219, dist)
+        magc_HF = M2_4(-212.5, dist)
+        plt.plot(dist, magc_24, label='M2.4(-219.0 dB)', color='C3')
+        plt.plot(dist, magc_HF, label='M2.4(-212.5 dB)', color='C3', ls='--')
+
+        plt.xlabel('distance / degree')
+        plt.ylabel('M2.4')
+        plt.legend()
+
+        if show:
+            plt.show()
+        else:
+            return fig
+
+    def plot_distance_hist(self, show=True):
+
+        fig = plt.figure()
+
+        bins = np.linspace(5 ** 2, 40 ** 2, 10) ** 0.5
+        dists_all = [event.distance for event in self]
+        dists_ABC = [event.distance for event in
+                     self.select(quality=('A', 'B', 'C'))]
+        dists_AB = [event.distance for event in
+                     self.select(quality=('A', 'B'))]
+
+        hist_all = np.histogram(dists_all, bins=bins)[0]
+        hist_ABC = np.histogram(dists_ABC, bins=bins)[0]
+        hist_AB = np.histogram(dists_AB, bins=bins)[0]
+
+        for b1, b2, h1, h2, h3 in zip(bins[:-1], bins[1:], hist_all, hist_ABC,
+                                      hist_AB):
+            plt.plot([b1, b2], [h3, h3], color='C0', lw=1., marker='|')
+            plt.plot([b1, b2], [h2, h2], color='C1', lw=1., marker='|')
+            plt.plot([b1, b2], [h1, h1], color='C2', lw=1., marker='|')
+            l3, = plt.plot([(b1+b2)/2], [h3], color='C0', marker='o', ms=8)
+            l2, = plt.plot([(b1+b2)/2], [h2], color='C1', marker='o', ms=8)
+            l1, = plt.plot([(b1+b2)/2], [h1], color='C2', marker='o', ms=8)
+
+        plt.legend([l3, l2, l1], ['Quality B', 'Quality BC', 'Quality BCD'])
+        plt.xlabel('distance / degree')
+        plt.ylabel('# events per area')
+
+        if show:
+            plt.show()
+        else:
+            return fig
 
     def make_report(self,
                     dir_out: str = 'reports',
