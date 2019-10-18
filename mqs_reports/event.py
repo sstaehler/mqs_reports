@@ -54,6 +54,7 @@ class Event:
         self.mars_event_type = mars_event_type.split('#')[-1]
         self.duration = utct(utct(self.picks['end']) -
                              utct(self.picks['start']))
+        self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
         self.starttime = utct(utct(self.picks['start']))
 
         self.amplitudes = dict()
@@ -113,7 +114,15 @@ class Event:
             distance_km = deltat / (1. / vs - 1. / vp)
             return kilometers2degrees(distance_km, radius=2789)
         else:
-            return None
+            # TODO: replace to use the velocities from the arguments
+            t0 = 600.
+            d0 = 8.
+            t1 = 1200
+            d1 = 35.
+            # fudge factor to compensate observation bias (low SNR events are
+            # observed shorter)
+            distance = (d1 - d0) / (t1 - t0) * (self.duration_s * 1. - t0) + d0
+            return distance
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
@@ -346,7 +355,7 @@ class Event:
         if 'noise' in self.spectra:
             f = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
-            for signal in ('S', 'all'):
+            for signal in ['S', 'P']:
                 amplitudes = None
                 if signal in self.spectra:
                     p_sig = self.spectra[signal]['p_Z']
