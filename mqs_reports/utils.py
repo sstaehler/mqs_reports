@@ -123,6 +123,8 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     if len(st_seis) == 0:
         st_rot = obspy.Stream()
     else:
+        
+        st_seis.merge(method=1)
         st_seis.detrend(type='demean')
         st_seis.taper(0.1)
         st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)
@@ -135,7 +137,6 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
                                pre_filt=(fmin / 2., fmin, fmax, fmax * 1.2),
                                output=kind)
 
-        st_seis.merge(method=1)
         correct_subsample_shift(st_seis)
 
         st_rot = create_ZNE_HG(st_seis, inv=inv)
