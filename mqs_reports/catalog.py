@@ -365,14 +365,15 @@ class Catalog:
             Y = Y[::10]
 
             plt.plot(X, Y, color=colors[event.mars_event_type],
-                     ls=linestyle[event.quality])
+                     ls=linestyle[event.quality], zorder=1000-k)
 
             # fill between noise amplitude estimate and envelope
             plt.fill_between(X, Y0, Y,  where=((Y>=Y0) * (X>0) * (X<duration)),
-                             color='lightgray', alpha=1., zorder=-20)
+                             color=colors[event.mars_event_type], alpha=0.4,
+                             zorder=-20)
 
             if show_picks:
-                plt.plot([tt, tt], [k, k+0.8], color='C8')
+                plt.plot([tt, tt], [k, k+0.3*amp_fac], color='C8')
                 plt.plot([duration, duration], [k, k+0.8], color='C9')
 
             # plot noise
@@ -446,7 +447,7 @@ class Catalog:
             msPN /= peak
 
             l1, = plt.plot(event.spectra['P']['f'], 10 * np.log10(msP),
-                           color='C1', alpha=1., label=f'{event.name}, P',
+                           color='C0', alpha=1., label=f'{event.name}, P',
                            lw=lw)
             plt.plot(event.spectra['P']['f'], 10 * np.log10(msPN),
                      color='lightgray', zorder=-10, lw=lw,
@@ -468,7 +469,7 @@ class Catalog:
             msSN /= peak
 
             l2, = plt.plot(event.spectra['S']['f'], 10 * np.log10(msS),
-                           color='C2', alpha=1., label=f'{event.name}, S',
+                           color='C1', alpha=1., label=f'{event.name}, S',
                            lw=lw)
             plt.plot(event.spectra['S']['f'], 10 * np.log10(msSN),
                      color='lightgray', zorder=-10, lw=lw, label=f'{event.name}, S noise')
@@ -482,10 +483,10 @@ class Catalog:
         spec2 = lorenz_att(f, A0=-5, x0=2.4, tstar=0.2, xw=0.3, ampfac=15.)
         spec3 = lorenz_att(f, A0=-8, x0=2.4, tstar=0.05, xw=0.3, ampfac=15.)
         spec4 = lorenz_att(f, A0=-3, x0=2.4, tstar=0.3, xw=0.3, ampfac=15.)
-        l3, = plt.plot(f, spec1, color='r', label='t* = 0.1')
-        l4, = plt.plot(f, spec2, color='r', ls='--', label='t* = 0.2')
-        l5, = plt.plot(f, spec3, color='r', ls='-.', label='t* = 0.05')
-        l6, = plt.plot(f, spec4, color='r', ls=':', label='t* = 0.3')
+        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
+        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
+        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
+        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.3')
 
         llabels = ['P', 'S'] + [l.get_label() for l in [l3, l4, l5, l6]]
         plt.legend([l1, l2, l3, l4, l5, l6], llabels)
