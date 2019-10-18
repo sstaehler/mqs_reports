@@ -155,7 +155,7 @@ class Catalog:
                     if event.mars_event_type_short not in event_type:
                         continue
                 else:
-                    if not fnmatch(event.mars_event_type_short, type):
+                    if not fnmatch(event.mars_event_type_short, event_type):
                         continue
 
             if quality is not None:
