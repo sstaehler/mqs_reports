@@ -26,7 +26,8 @@ def create_fnam_event(
     return fnam_inst
 
 
-def create_ZNE_HG(st, inv=None):
+def create_ZNE_HG(st: obspy.Stream,
+                  inv: obspy.Inventory = None):
     # dip_u, dip_v, dip_w, = -35.3, -35.3, -35.3
     # azimuth_u, azimuth_v, azimuth_w = 0., 120., 240.
 
@@ -78,7 +79,8 @@ def create_ZNE_HG(st, inv=None):
         try:
             for tr_1 in st:
                 for tr_2 in st:
-                    assert tr_1.stats.starttime == tr_2.stats.starttime
+                    # assert tr_1.stats.starttime == tr_2.stats.starttime
+                    assert tr_1.stats.npts == tr_2.stats.npts
 
         except:
             print('Problem with rotating to ZNE:')
