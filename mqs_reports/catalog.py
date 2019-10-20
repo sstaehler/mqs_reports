@@ -205,35 +205,57 @@ class Catalog:
         for event in tqdm(self):
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
 
-    def plot_pickdiffs(self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None,
-                       vY=None, fig=None, show=True, **kwargs):
-        times_X = []
-        times_Y = []
-        names = []
-        for event in self:
-            try:
-                # Remove events that do not have all four picks
-                for pick in [pick1_X, pick1_Y, pick2_X, pick2_Y]:
-                    assert not event.picks[pick] == ''
-            except AssertionError:
-                print('One or more picks missing for event %s' % event.name)
-            else:
-                times_X.append(utct(event.picks[pick1_X]) -
-                               utct(event.picks[pick2_X]))
-                times_Y.append(utct(event.picks[pick1_Y]) -
-                               utct(event.picks[pick2_Y]))
-                names.append(event.name)
+    def plot_pickdiffs(
+         self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None, vY=None, fig=None,
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+         show=True):
 
         if fig is None:
             fig = plt.figure()
-        if vX is not None:
-            times_X = np.asarray(times_X) * vX
-        if vY is not None:
-            times_Y = np.asarray(times_Y) * vY
 
-        fig, ax = scatter_annot(times_X, times_Y, fig=fig,
-                                names=names,
-                                **kwargs)
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY']:
+            for quality in 'ABCD':
+                cat = self.select(quality=quality, event_type=event_type)
+                times_X = []
+                times_Y = []
+                names = []
+                S = []
+
+                for event in cat:
+                    try:
+                        # Remove events that do not have all four picks
+                        for pick in [pick1_X, pick1_Y, pick2_X, pick2_Y]:
+                            assert not event.picks[pick] == ''
+                    except AssertionError:
+                        print('One or more picks missing for event %s' % event.name)
+                    else:
+                        times_X.append(utct(event.picks[pick1_X]) -
+                                       utct(event.picks[pick2_X]))
+                        times_Y.append(utct(event.picks[pick1_Y]) -
+                                       utct(event.picks[pick2_Y]))
+                        names.append(event.name)
+                        S.append(markersize[event.quality])
+
+                if len(names) == 0:
+                    continue
+
+                if vX is not None:
+                    times_X = np.asarray(times_X) * vX
+                if vY is not None:
+                    times_Y = np.asarray(times_Y) * vY
+
+                if markerfill[quality]:
+                    colorargs = {'c': colors[event_type]}
+                else:
+                    colorargs = {'edgecolors': colors[event_type],
+                                 'facecolor': 'none'}
+
+                fig, ax = scatter_annot(times_X, times_Y, s=S, fig=fig,
+                                        names=names,
+                                        label=f'{event_type}, {quality}',
+                                        **colorargs)
         if vX is None:
             ax.set_xlabel('$T_{%s} - T_{%s}$' % (pick1_X, pick2_X))
         else:
@@ -247,33 +269,54 @@ class Catalog:
             plt.show()
 
 
-    def plot_pickdiff_over_time(self, pick1_Y, pick2_Y, vY=None,
-                                fig=None, show=True, **kwargs):
-        times_X = []
-        times_Y = []
-        names = []
-        for event in self:
-            try:
-                # Remove events that do not have all four picks
-                for pick in [pick1_Y, pick2_Y, 'start']:
-                    assert not event.picks[pick] == ''
-            except AssertionError:
-                print('One or more picks missing for event %s' % event.name)
-            else:
-                times_X.append(float(solify(utct(event.picks['start']))) /
-                               86400.)
-                times_Y.append(utct(event.picks[pick1_Y]) -
-                               utct(event.picks[pick2_Y]))
-                names.append(event.name)
+    def plot_pickdiff_over_time(
+         self, pick1_Y, pick2_Y, vY=None, fig=None,
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+         show=True):
 
         if fig is None:
             fig = plt.figure()
 
-        if vY is not None:
-            times_Y = np.asarray(times_Y) * vY
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY']:
+            for quality in 'ABCD':
+                cat = self.select(quality=quality, event_type=event_type)
+                times_X = []
+                times_Y = []
+                names = []
+                S = []
+                for event in cat:
+                    try:
+                        # Remove events that do not have all four picks
+                        for pick in [pick1_Y, pick2_Y, 'start']:
+                            assert not event.picks[pick] == ''
+                    except AssertionError:
+                        print('One or more picks missing for event %s' % event.name)
+                    else:
+                        times_X.append(float(solify(utct(event.picks['start']))) /
+                                       86400.)
+                        times_Y.append(utct(event.picks[pick1_Y]) -
+                                       utct(event.picks[pick2_Y]))
+                        names.append(event.name)
+                        S.append(markersize[event.quality])
 
-        fig, ax = scatter_annot(times_X, times_Y, fig=fig,
-                                names=names, **kwargs)
+                if len(names) == 0:
+                    continue
+
+                if vY is not None:
+                    times_Y = np.asarray(times_Y) * vY
+
+                if markerfill[quality]:
+                    colorargs = {'c': colors[event_type]}
+                else:
+                    colorargs = {'edgecolors': colors[event_type],
+                                 'facecolor': 'none'}
+
+                fig, ax = scatter_annot(times_X, times_Y, s=S, fig=fig,
+                                        names=names,
+                                        label=f'{event_type}, {quality}',
+                                        **colorargs)
 
         ax.set_xlabel('Sol')
         if vY is None:
@@ -288,7 +331,8 @@ class Catalog:
          self, pre_time=120., post_time=120., fmax_filt=2.7, fmin_filt=2.1,
          envelope_window=100., amp_fac=2., show_picks=True,
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
-         linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, show=True):
+         linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
+         show=True):
 
         events = []
         for event in self:
@@ -394,11 +438,12 @@ class Catalog:
         # time 0 line
         plt.axvline(0, color='C4')
 
-        # legend
-        llabels = ['HIGH_FREQUENCY', '2.4_HZ']
-        lcolors = [colors[l] for l in llabels]
-        llines = [Line2D([0], [0], color=c) for c in lcolors]
-        plt.legend(llines, llabels)
+        if legend:
+            # legend
+            llabels = ['HIGH_FREQUENCY', '2.4_HZ']
+            lcolors = [colors[l] for l in llabels]
+            llines = [Line2D([0], [0], color=c) for c in lcolors]
+            plt.legend(llines, llabels)
 
         # lable, limit, ticks
         plt.xlabel('time after Pg / s')

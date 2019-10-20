@@ -131,14 +131,21 @@ class Event:
             return kilometers2degrees(distance_km, radius=2789)
         else:
             # TODO: replace to use the velocities from the arguments
-            t0 = 600.
-            d0 = 8.
-            t1 = 1200
-            d1 = 35.
-            # fudge factor to compensate observation bias (low SNR events are
-            # observed shorter)
-            distance = (d1 - d0) / (t1 - t0) * (self.duration_s * 1. - t0) + d0
-            return distance
+            # t0 = 600.
+            # d0 = 8.
+            # t1 = 1200
+            # d1 = 35.
+            # # fudge factor to compensate observation bias (low SNR events are
+            # # observed shorter)
+            # distance = (d1 - d0) / (t1 - t0) * (self.duration_s * 1. - t0) + d0
+            # return distance
+
+            deltat = float(utct(self.picks['end']) - utct(self.picks['start']))
+
+            # map duration to Ts - Tp
+            deltat /= 3.
+            distance_km = deltat / (1. / vs - 1. / vp)
+            return kilometers2degrees(distance_km, radius=2789)
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
