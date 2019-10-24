@@ -11,42 +11,45 @@
 import numpy as np
 
 
-def mb_P(amplitude, distance):
-    mag = (np.log10(amplitude) + 1.4 * np.log10(distance) + 9.5) + 0.1 + \
-          1. / 3. * max(0, 4.5 - (np.log10(amplitude)
-                                  + 1.4 * np.log10(distance) + 9.5))
+def mb_P(amplitude_dB, distance_degree):
+    amplitude_dB = 10 ** (amplitude_dB / 20.)
+    mbP_tmp = np.log10(amplitude_dB) + 1.4 * np.log10(distance_degree) + 9.5
+    mag = (mbP_tmp) + 0.1 + \
+          1. / 3. * np.max((np.zeros_like(amplitude_dB),
+                            4.5 - mbP_tmp),
+                           axis=0)
 
     return mag
 
 
-def mb_S(amplitude, distance):
-    mag = (np.log10(amplitude) + 2.2 * np.log10(distance) + 8.4) + 0.1 + \
-          1. / 3. * max(0, 4.5 - (np.log10(amplitude)
-                                  + 2.2 * np.log10(distance) + 8.4))
+def mb_S(amplitude_dB, distance_degree):
+    mag = (np.log10(amplitude_dB) + 2.2 * np.log10(distance_degree) + 8.4) + 0.1 + \
+          1. / 3. * max(0, 4.5 - (np.log10(amplitude_dB)
+                                  + 2.2 * np.log10(distance_degree) + 8.4))
     return mag
 
 
-def M2_4(amplitude, distance):
-    if amplitude is None:
+def M2_4(amplitude_dB, distance_degree):
+    if amplitude_dB is None:
         return None
     else:
         # mag = np.log10(amplitude) - np.log10(4.78e-11) + \
         #       (np.log10(distance) - np.log10(30.)) * 1.2 + 3.
-        amp_true = 10 ** (amplitude / 20.)
+        amp_true = 10 ** (amplitude_dB / 20.)
         A0_est = 10 ** (0.7 * np.log10(amp_true)-3.)
         mag = (2. / 3.) * (np.log10(A0_est) +
-                           1.5 * np.log10(distance) + 9.4) + 1.9
+                           1.5 * np.log10(distance_degree) + 9.4) + 1.9
         return mag
 
 
-def MFB(amplitude, distance):
-    if amplitude is None:
+def MFB(amplitude_dB, distance_degree):
+    if amplitude_dB is None:
         return None
     else:
         # A0 is given in dB
-        amp_true = 10 ** (amplitude / 20.)
+        amp_true = 10 ** (amplitude_dB / 20.)
         mag = (2. / 3.) * (np.log10(amp_true) +
-                           1.5 * np.log10(distance) + 9.4) + 1.9
+                           1.1 * np.log10(distance_degree) + 9.8) + 1.9
         return mag
 
 
@@ -146,10 +149,12 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
     if event_type is not '24':
         if sum(bol_1Hz_mask) > 5:
             if event_type in ['HF', 'VF']:
-
-                A0, f_24, tstar, width_24, ampfac = fit_peak_att(
-                    f[bol_1Hz_mask],
-                    p_sig[bol_1Hz_mask])
+                try:
+                    A0, f_24, tstar, width_24, ampfac = fit_peak_att(
+                        f[bol_1Hz_mask],
+                        p_sig[bol_1Hz_mask])
+                except RuntimeError:
+                    pass
                 # plt.plot(f, 10 * np.log10(p_noise), 'k')
             else:
                 res = np.polyfit(f[bol_1Hz_mask],

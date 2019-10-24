@@ -143,6 +143,7 @@ class Event:
     def read_waveforms(self,
                        inv: obspy.Inventory,
                        sc3dir: str,
+                       event_tmp_dir='./events',
                        kind: str = 'DISP') -> None:
         """
         Wrapper to check whether local copy of corrected waveform exists and
@@ -152,9 +153,9 @@ class Event:
         :param kind: 'DISP', 'VEL' or 'ACC'. Note that many other functions
                      expect the data to be in displacement
         """
-        if not self.read_data_local():
+        if not self.read_data_local(dir_cache=event_tmp_dir):
             self.read_data_from_sc3dir(inv, sc3dir, kind)
-            self.write_data_local()
+            self.write_data_local(dir_cache=event_tmp_dir)
         self._waveforms_read = True
         self.kind = 'DISP'
 
@@ -371,7 +372,7 @@ class Event:
         if 'noise' in self.spectra:
             f = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
-            for signal in ['S', 'P']:
+            for signal in ['S', 'P', 'all']:
                 amplitudes = None
                 if signal in self.spectra:
                     p_sig = self.spectra[signal]['p_Z']
@@ -508,6 +509,7 @@ class Event:
                                             fmax=freqs[mag_type][1],
                                             instrument=instrument
                                             )
+            amplitude = 20 * np.log10(amplitude)
         elif mag_type == 'MFB':
             amplitude = self.amplitudes['A0'] \
                 if 'A0' in self.amplitudes else None
@@ -521,8 +523,8 @@ class Event:
         if amplitude is None:
             return None
         else:
-            return funcs[mag_type](amplitude=amplitude,
-                                   distance=distance)
+            return funcs[mag_type](amplitude_dB=amplitude,
+                                   distance_degree=distance)
 
     def make_report(self, fnam_out, annotations=None):
         from mqs_reports.report import make_report
