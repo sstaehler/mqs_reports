@@ -47,11 +47,17 @@ class Noise():
                            endtime=endtime,
                            inv=inv)
         else:
-            self.stds_HF = data['stds_HF']
-            self.stds_LF = data['stds_LF']
-            self.times = data['times']
-            self.times_LMST = data['times_LMST']
-            self.sol = data['sol']
+            self.stds_HF = np.asarray(data['stds_HF'])
+            self.stds_LF = np.asarray(data['stds_LF'])
+            self.times = np.asarray(data['times'])
+            self.times_LMST = np.asarray(data['times_LMST'])
+            self.sol = np.asarray(data['sol'])
+
+
+    def __str__(self):
+        fmt = 'Noise from %s to %s, time windows: %d(HF), %d(LF)'
+        return fmt % (self.times[0].date, self.times[-1].date,
+                      len(self.stds_LF), len(self.stds_HF))
 
     def _add_data(self,
                   starttime: obspy.UTCDateTime,
@@ -137,6 +143,72 @@ class Noise():
                  sol=self.sol,
                  winlen_sec=self.winlen_sec)
 
+
+    def plot_noise_stats(self, sol_start=80, sol_end=None,
+                         ax=None, show=True):
+        power_bins, p_HF, p_LF = self.calc_noise_stats(sol_end,
+                                                 sol_start)
+
+        if ax is None:
+            fig, ax = plt.subplots(1, 1)
+
+        ax.plot(power_bins, p_LF,
+                label='LF, 1.5 - 6 seconds')
+        ax.plot(power_bins, p_HF,
+                label='HF, 2 - 3 Hz')
+        plt.legend()
+
+        if show:
+            plt.show()
+
+    def calc_noise_stats(self, sol_end=None, sol_start=80):
+        if sol_end is None:
+            # Now
+            sol_end = float(solify(utct())) // 86400
+        binwidth = 2.
+        bins = np.arange(-260, -120, binwidth)
+        bol_LF = np.array([np.isfinite(self.stds_LF),
+                           self.sol > sol_start,
+                           self.sol < sol_end]).all(axis=0)
+        power_LF, bins_tmp = np.histogram(
+            20 * np.log10(self.stds_LF[bol_LF]),
+            bins=bins, density=True)
+        bol_HF = np.array([np.isfinite(self.stds_HF),
+                           self.sol > sol_start,
+                           self.sol < sol_end]).all(axis=0)
+        power_HF, bins_tmp = np.histogram(
+            20 * np.log10(self.stds_HF[bol_HF]),
+            bins=bins, density=True)
+        bins = bins[0:-1] + binwidth / 2.
+        p_LF = np.cumsum(power_LF) * binwidth
+        p_HF = np.cumsum(power_HF) * binwidth
+        return bins, p_LF, p_HF
+
+    def calc_noise_quantiles(self, qs,
+                             sol_start=80, sol_end=None):
+        if sol_end is None:
+            # Now
+            sol_end = float(solify(utct())) // 86400
+
+        quantiles_HF = []
+        quantiles_LF = []
+        for q in qs:
+            bol_LF = np.array([np.isfinite(self.stds_LF),
+                               self.sol > sol_start,
+                               self.sol < sol_end]).all(axis=0)
+            quantiles_LF.append(
+                np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
+                )
+            bol_HF = np.array([np.isfinite(self.stds_HF),
+                               self.sol > sol_start,
+                               self.sol < sol_end]).all(axis=0)
+            quantiles_HF.append(
+                np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
+                )
+
+        return quantiles_LF, quantiles_HF
+
+
     def plot_daystats(self,
                       cat: mqs_reports.catalog.Catalog = None,
                       sol_start: int = 80,
@@ -185,8 +257,8 @@ class Noise():
         verts_LF = []
         verts_HF = []
 
-        quantiles_LF = np.ma.masked_less(quantiles_LF, value=1e-25)
-        quantiles_HF = np.ma.masked_less(quantiles_HF, value=1e-25)
+        # quantiles_LF = np.ma.masked_less(quantiles_LF, value=1e-25)
+        # quantiles_HF = np.ma.masked_less(quantiles_HF, value=1e-25)
 
         for i, isol in enumerate(sols):
             if quantiles_LF[i, 0] > 0:
@@ -233,22 +305,26 @@ class Noise():
         HF_times = []
         HF_amps = []
         HF_dists = []
+        LF_times = []
+        LF_amps = []
+        LF_dists = []
         if cat is not None:
             cmap = plt.cm.get_cmap('plasma_r')
             cmap.set_over('royalblue')
             for event in cat.select(event_type=['HF', '24']):
                 if event.distance is None:
                     HF_dists.append(50.)
-                    zorder = 1
                 else:
                     HF_dists.append(event.distance)
-                    zorder = 50
                 HF_times.append(solify(event.starttime).julday +
                                 solify(event.starttime).hour / 60.)
-                HF_amps.append(event.amplitudes['A_24'] - 3)
+                HF_amps.append(event.amplitudes['A_24'])
 
             for event in cat.select(event_type=['LF', 'BB']):
-                print(event.name)
+                if event.distance is None:
+                    LF_dists.append(120.)
+                else:
+                    LF_dists.append(event.distance)
                 amp_P = event.pick_amplitude(
                     pick='Peak_MbP',
                     comp='vertical',
@@ -265,22 +341,30 @@ class Noise():
                     )
                 amp = max((amp_P, amp_S))
                 if amp_P is not None:
-                    ax_LF.plot(solify(event.starttime).julday,
-                               20 * np.log10(amp), 'ks',
-                               label=f'{event.name}, P')
+                    LF_times.append(solify(event.starttime).julday +
+                                    solify(event.starttime).hour / 60.)
+                    LF_amps.append(20 * np.log10(amp))
+                    # ax_LF.plot(solify(event.starttime).julday,
+                    #            20 * np.log10(amp), 'ks',
+                    #            label=f'{event.name}, P')
                 # if amp_S is not None:
                 #    print(event.name, 'S')
                 #    ax[0].plot(solify(event.starttime).julday ,
                 #               20*np.log10(amp_S), 'ks',
                 #               label=f'{event.name}, S')
 
-            sc = ax_HF.scatter(HF_times,
-                               HF_amps,
+            sc = ax_LF.scatter(LF_times, LF_amps,
+                               c=LF_dists, vmin=25., vmax=100., cmap=cmap,
+                               s=80., marker='.')
+            cax = plt.colorbar(sc, ax=ax_LF, use_gridspec=True)
+            cax.ax.set_ylabel('distance / degree', rotation=270.,
+                              labelpad=4.45)
+            sc = ax_HF.scatter(HF_times, HF_amps,
                                c=HF_dists, vmin=5., vmax=30., cmap=cmap,
-                               s=80., zorder=zorder,
-                               marker='.')
-            cax = plt.colorbar(sc, ax=[ax_LF, ax_HF], use_gridspec=True)
-            cax.ax.set_ylabel('distance / degree', rotation=270.)
+                               s=80., marker='.')
+            cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True)
+            cax.ax.set_ylabel('distance / degree', rotation=270.,
+                              labelpad=12.45)
 
         ax_LF.set_ylim(-210., -170.)
         ax_LF.set_title('Noise 2-8 seconds and LF/BB events')
@@ -291,7 +375,46 @@ class Noise():
             a.grid('on')
         plt.legend(loc='lower left')
         # datacursor(formatter='{label}'.format)
+        plt.savefig('noise_vs_eventamplitudes.pdf')
         plt.show()
+
+    def compare_events(self,
+                       catalog = None,
+                       threshold_dB: float = 3.):
+        ratios = []
+        for event in tqdm(catalog.select(event_type=['24', 'HF'])):
+            nwins_below = sum(event.amplitudes['A_24'] >
+                              threshold_dB + 20 * np.log10(self.stds_HF))
+            event.ratio = nwins_below / len(self.stds_HF)
+            ratios.append(event.ratio)
+
+        for event in tqdm(catalog.select(event_type=['LF', 'BB'])):
+            amp_P = event.pick_amplitude(
+                pick='Peak_MbP',
+                comp='vertical',
+                fmin=1. / 6.,
+                fmax=1. / 1.5,
+                instrument='VBB'
+                )
+            amp_S = event.pick_amplitude(
+                pick='Peak_MbS',
+                comp='vertical',
+                fmin=1. / 6.,
+                fmax=1. / 1.5,
+                instrument='VBB'
+                )
+            amp = max((amp_P, amp_S))
+            if amp is not None:
+                nwins_below = sum(20 * np.log10(amp) >
+                    threshold_dB + 20 * np.log10(self.stds_LF))
+                event.ratio = nwins_below / len(self.stds_LF)
+            else:
+                event.ratio = None
+            ratios.append(event.ratio)
+        # import matplotlib.pyplot as plt
+
+        # plt.hist(ratios, bins=20)
+        # plt.show()
 
 
 def read_noise(fnam):
@@ -308,19 +431,19 @@ if __name__ == '__main__':
     inv = obspy.read_inventory('mqs_reports/data/inventory_VBB.xml')
     # noise = Noise(sc3dir=sc3_path,
     #               starttime=utct('20190202'),
-    #               endtime=utct('20191020'),
+    #               endtime=utct('20191024'),
     #               inv=inv,
     #               winlen_sec=120.
     #               )
-    # noise.save('noise_0301_1020.npz')
-    noise = read_noise('noise_0301_1020.npz')
+    # noise.save('noise_0301_1024.npz')
+    noise = read_noise('noise_0301_1024.npz')
+    noise.plot_noise_stats()
 
-    cat = Catalog(fnam_quakeml='mqs_reports/data/catalog_20191007.xml',
+    cat = Catalog(fnam_quakeml='mqs_reports/data/catalog_20191024.xml',
                   quality=['A', 'B', 'C', 'D'])
 
-    inv = obspy.read_inventory('mqs_reports/data/inventory.xml')
-    sc3_path = '/mnt/mnt_sc3data'
+    cat.load_distances(fnam_csv='./mqs_reports/data/manual_distances.csv')
     cat.read_waveforms(inv=inv, sc3dir=sc3_path)
     cat.calc_spectra(winlen_sec=10.)
-
+    noise.compare_events(cat)
     noise.plot_daystats(cat)
