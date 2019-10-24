@@ -160,7 +160,7 @@ def write_html(catalog, fnam_out):
             fmts=formats)
         ievent -= 1
     output += 4 * ' ' + '</tbody>\n'
-    footer = 2 * ' ' + '</table>\n</body>\n</html>\n'
+    footer = 2 * ' ' + '</table>\n</article>\n</body>\n</html>\n'
     output += footer
     with open(fnam_out, 'w') as f:
         f.write(output)
@@ -169,9 +169,13 @@ def write_html(catalog, fnam_out):
 
 def create_header(column_names):
     header = '<!DOCTYPE html>\n' + \
-             '<html>\n' + \
+             '<html lang="en-US">\n' + \
              '<head>\n' + \
-             '  <script src="sorttable.js"></script>' + \
+             '  <script src="sorttable.js"></script>\n' + \
+             '  <title>MQS events until %s</title>\n' % utct().date + \
+             '  <meta charset="UTF-8">\n' + \
+             '  <meta name="description" content="InSight marsquakes">\n' + \
+             '  <meta name="author" content="Marsquake Service" >\n' + \
              '  <link rel="stylesheet" type="text/css" href="./table.css">\n' + \
              '</head>\n' + \
              '<body>\n'
