@@ -509,7 +509,9 @@ class Event:
                                             fmax=freqs[mag_type][1],
                                             instrument=instrument
                                             )
-            amplitude = 20 * np.log10(amplitude)
+            if amplitude is not None:
+                amplitude = 20 * np.log10(amplitude)
+
         elif mag_type == 'MFB':
             amplitude = self.amplitudes['A0'] \
                 if 'A0' in self.amplitudes else None

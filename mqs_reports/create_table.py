@@ -28,30 +28,32 @@ def create_row(list, fmts=None, extras=None):
         fmts = []
         for i in range(len(list)):
             fmts.append('%s')
-    row = '    <tr>\n'
+    row = 4 * ' ' +'<tr>\n'
+    ind_string = 6 * ' '
     if extras is None:
         for li, fmt in zip(list, fmts):
             if li is None:
-                row += '<td>' + str(li) + '</td>\n'
+                row += ind_string + '<td>' + str(li) + '</td>\n'
             else:
-                row += '<td>' + fmt % (li) + '</td>\n'
+                row += ind_string + '<td>' + fmt % (li) + '</td>\n'
     else:
         for li, fmt, extra in zip(list, fmts, extras):
             if li is None:
-                row += '<td>' + str(li) + '</td>\n'
+                row += ind_string + '<td>' + str(li) + '</td>\n'
             else:
                 if extra is None:
-                    row += '<td>' + fmt % (li) + \
+                    row += ind_string + '<td>' + fmt % (li) + \
                            '</td>\n'
                 else:
                     try:
-                        row += 8 * ' ' + '<td sorttable_customkey="%d">' % extra \
+                        row += ind_string \
+                               + '<td sorttable_customkey="%d">' % extra \
                                + fmt % (li) + '</td>\n'
                     except(ValueError):
-                        row += 8 * ' ' + '<td sorttable_customkey=0>' + \
+                        row += ind_string + '<td sorttable_customkey=0>' + \
                                fmt % (li) + '</td>\n'
 
-    row += '</tr>\n'
+    row += 4 * ' ' + '</tr>\n'
     return row
 
 
@@ -81,6 +83,11 @@ def write_html(catalog, fnam_out):
                    'PgSg': '%5.1f*',
                    'aligned': '%5.1f&dagger;',
                    'unknown': '%s'}
+    event_type_idx = {'LF': 1,
+                      'BB': 2,
+                      'HF': 3,
+                      '24': 4,
+                      'VF': 5}
     ievent = len(catalog)
     for event in catalog:
         duration = event.duration.strftime('%M:%S')
@@ -88,7 +95,7 @@ def write_html(catalog, fnam_out):
         lmst_time = solify(event.starttime).strftime('%H:%M:%S')
         sortkey = (ievent,
                    None,
-                   None,
+                   event_type_idx[event.mars_event_type_short],
                    None,
                    float(utct(event.picks['start'])),
                    None,
@@ -152,8 +159,8 @@ def write_html(catalog, fnam_out):
             extras=sortkey,
             fmts=formats)
         ievent -= 1
-    output += '</tbody>'
-    footer = '        </table>\n    </body>\n</html>\n'
+    output += 4 * ' ' + '</tbody>\n'
+    footer = 2 * ' ' + '</table>\n</body>\n</html>\n'
     output += footer
     with open(fnam_out, 'w') as f:
         f.write(output)
@@ -165,18 +172,20 @@ def create_header(column_names):
              '<html>\n' + \
              '<head>\n' + \
              '  <script src="sorttable.js"></script>' + \
-             '  <link rel="stylesheet" type="text/css" href="./table.css">' + \
+             '  <link rel="stylesheet" type="text/css" href="./table.css">\n' + \
              '</head>\n' + \
-             '  <body>\n'
+             '<body>\n'
     output = header
-    output += '<h1>MQS events until %s</h1>' % obspy.UTCDateTime()
+    output += '<article>\n'
+    output += '  <header>\n'
+    output += '    <h1>MQS events until %s</h1>\n' % obspy.UTCDateTime()
+    output += '  </header>\n'
     table_head = '  <table class="sortable" id="events">\n' + \
-                 '    <thead>\n' + \
-                 create_row(
-                     column_names) + \
-                 '    </thead>'
+                 '  <thead>\n' + \
+                 create_row(column_names) + \
+                 '  </thead>\n'
     output += table_head
-    output += '  <tbody>'
+    output += '  <tbody>\n'
     return output
 
 
