@@ -362,7 +362,7 @@ class Noise():
         i = 0
         print('Calculating LF noise quantiles')
         for isol in tqdm(self.sols_quant):
-            bol_sol = self.sol == isol
+            bol_sol = self.sol == isol - 1
             if sum(bol_sol) > 1:
                 values = np.quantile(
                     a=np.ma.masked_less_equal(
@@ -375,7 +375,7 @@ class Noise():
         i = 0
         print('Calculating HF noise quantiles')
         for isol in tqdm(self.sols_quant):
-            bol_sol = self.sol == isol
+            bol_sol = self.sol == isol - 1
             if sum(bol_sol) > 1:
                 values = np.quantile(
                     a=np.ma.masked_less_equal(x=self.stds_HF[bol_sol],
