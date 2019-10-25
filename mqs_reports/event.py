@@ -128,7 +128,7 @@ class Event:
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
             distance_km = deltat / (1. / vs - 1. / vp)
-            return kilometers2degrees(distance_km, radius=2789)
+            distance_deg = kilometers2degrees(distance_km, radius=2889)
         else:
             # TODO: replace to use the velocities from the arguments
             t0 = 600.
@@ -137,8 +137,11 @@ class Event:
             d1 = 35.
             # fudge factor to compensate observation bias (low SNR events are
             # observed shorter)
-            distance = (d1 - d0) / (t1 - t0) * (self.duration_s * 1. - t0) + d0
-            return distance
+            distance_deg = (d1 - d0) / (t1 - t0) * (self.duration_s * 1. - t0) \
+                         + d0
+            if distance_deg < 0:
+                distance_deg = None
+        return distance_deg
 
     def read_waveforms(self,
                        inv: obspy.Inventory,

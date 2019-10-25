@@ -6,6 +6,11 @@ table.sortable thead {
     cursor: default;
 }
 
+/* Show sort labels at first load */
+table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after {
+    content: " \25B4\25BE"
+}
+
 #events {
   font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
   border-collapse: collapse;
