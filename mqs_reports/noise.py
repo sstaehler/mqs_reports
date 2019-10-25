@@ -8,7 +8,6 @@
     None
 '''
 
-import os
 from os.path import join as pjoin
 
 import matplotlib.pyplot as plt
@@ -27,14 +26,15 @@ from mqs_reports.utils import create_ZNE_HG
 class Noise():
     def __init__(self,
                  data: dict = None,
-                 sc3dir: str = None,
+                 sc3_dir: str = None,
                  starttime: obspy.UTCDateTime = None,
                  endtime: obspy.UTCDateTime = None,
                  inv: obspy.Inventory = None,
                  winlen_sec: float = None,
                  ):
+        self.sols_quant = None
         if data is None:
-            self.sc3dir = sc3dir
+            self.sc3_dir = sc3_dir
             self.winlen_sec = winlen_sec
 
             self.stds_HF = list()
@@ -42,10 +42,10 @@ class Noise():
             self.times = list()
             self.times_LMST = list()
             self.sol = list()
-
             self._add_data(starttime=starttime,
                            endtime=endtime,
                            inv=inv)
+
         else:
             self.stds_HF = np.asarray(data['stds_HF'])
             self.stds_LF = np.asarray(data['stds_LF'])
@@ -64,7 +64,7 @@ class Noise():
                   endtime: obspy.UTCDateTime,
                   inv: obspy.Inventory):
 
-        dirnam = pjoin(self.sc3dir, 'op/data/waveform/%d/XB/ELYSE/BH?.D')
+        dirnam = pjoin(self.sc3_dir, 'op/data/waveform/%d/XB/ELYSE/BH?.D')
         filenam_VBB_HG = 'XB.ELYSE.0[23].BH?.D.%d.%03d'
 
         jday_start = starttime.julday
@@ -76,7 +76,7 @@ class Noise():
         times = list()
         times_LMST = list()
         sol = list()
-
+        print('reading seismic data from %s' % self.sc3_dir)
         for jday in tqdm(range(jday_start, jday_end)):
             try:
                 fnam = pjoin(dirnam % year,
@@ -146,8 +146,8 @@ class Noise():
 
     def plot_noise_stats(self, sol_start=80, sol_end=None,
                          ax=None, show=True):
-        power_bins, p_HF, p_LF = self.calc_noise_stats(sol_end,
-                                                 sol_start)
+        power_bins, p_LF, p_HF = self.calc_noise_stats(sol_end,
+                                                       sol_start)
 
         if ax is None:
             fig, ax = plt.subplots(1, 1)
@@ -184,29 +184,29 @@ class Noise():
         p_HF = np.cumsum(power_HF) * binwidth
         return bins, p_LF, p_HF
 
-    def calc_noise_quantiles(self, qs,
-                             sol_start=80, sol_end=None):
-        if sol_end is None:
-            # Now
-            sol_end = float(solify(utct())) // 86400
+    # def calc_noise_quantiles(self, qs,
+    #                          sol_start=80, sol_end=None):
+    #     if sol_end is None:
+    #         # Now
+    #         sol_end = float(solify(utct())) // 86400
 
-        quantiles_HF = []
-        quantiles_LF = []
-        for q in qs:
-            bol_LF = np.array([np.isfinite(self.stds_LF),
-                               self.sol > sol_start,
-                               self.sol < sol_end]).all(axis=0)
-            quantiles_LF.append(
-                np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
-                )
-            bol_HF = np.array([np.isfinite(self.stds_HF),
-                               self.sol > sol_start,
-                               self.sol < sol_end]).all(axis=0)
-            quantiles_HF.append(
-                np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
-                )
+    #     quantiles_HF = []
+    #     quantiles_LF = []
+    #     for q in qs:
+    #         bol_LF = np.array([np.isfinite(self.stds_LF),
+    #                            self.sol > sol_start,
+    #                            self.sol < sol_end]).all(axis=0)
+    #         quantiles_LF.append(
+    #             np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
+    #             )
+    #         bol_HF = np.array([np.isfinite(self.stds_HF),
+    #                            self.sol > sol_start,
+    #                            self.sol < sol_end]).all(axis=0)
+    #         quantiles_HF.append(
+    #             np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
+    #             )
 
-        return quantiles_LF, quantiles_HF
+    #     return quantiles_LF, quantiles_HF
 
 
     def plot_daystats(self,
@@ -214,70 +214,26 @@ class Noise():
                       sol_start: int = 80,
                       sol_end: int = 400):
         qs = [0.1, 0.25, 0.5, 0.9]
-        sols = np.arange(sol_start, sol_end + 1)
-
-        fnam = 'quantiles.npz'
-        if os.path.exists(fnam):
-            data = np.load(fnam)
-            quantiles_HF = data['quantiles_HF']
-            quantiles_LF = data['quantiles_LF']
-            sols = data['sols']
-
-        else:
-            quantiles_LF = np.zeros((sol_end - sol_start + 1, len(qs)))
-            i = 0
-            for isol in tqdm(sols):
-                bol_sol = self.sol == isol
-                if sum(bol_sol) > 1:
-                    values = np.quantile(
-                        a=np.ma.masked_less_equal(
-                            x=self.stds_LF[bol_sol], value=0.0) ** 2. / (
-                                  1. / 1.5 - 1. / 6), q=qs)
-                    quantiles_LF[i, :] = values
-                    if np.isfinite(values).all():
-                        quantiles_LF[i, :] = values
-                i += 1
-
-            quantiles_HF = np.zeros((sol_end - sol_start + 1, len(qs)))
-            i = 0
-            for isol in tqdm(sols):
-                bol_sol = self.sol == isol
-                if sum(bol_sol) > 1:
-                    values = np.quantile(
-                        a=np.ma.masked_less_equal(x=self.stds_HF[bol_sol],
-                                                  value=0.0) ** 2. / 0.4, q=qs)
-                    if np.isfinite(values).all():
-                        quantiles_HF[i, :] = values
-                i += 1
-            np.savez(file=fnam,
-                     quantiles_HF=quantiles_HF,
-                     quantiles_LF=quantiles_LF,
-                     sols=sols)
+        if self.sols_quant is None:
+            self.calc_quantiles(sol_end, sol_start, qs=qs)
+            self.save_quantiles(fnam='noise_quantiles.npz')
 
         verts_LF = []
         verts_HF = []
 
-        # quantiles_LF = np.ma.masked_less(quantiles_LF, value=1e-25)
-        # quantiles_HF = np.ma.masked_less(quantiles_HF, value=1e-25)
+        for i, isol in enumerate(self.sols_quant):
+            if self.quantiles_LF[i, 0] > 0:
+                verts_LF.append([isol, 10 * np.log10(self.quantiles_LF[i, 0])])
+            if self.quantiles_HF[i, 0] > 0:
+                verts_HF.append([isol, 10 * np.log10(self.quantiles_HF[i, 0])])
+        verts_LF.append([verts_LF[-1][0], -300])
+        verts_HF.append([verts_HF[-1][0], -300])
+        verts_HF.append([self.sols_quant[0], -300])
+        verts_LF.append([self.sols_quant[0], -300])
 
-        for i, isol in enumerate(sols):
-            if quantiles_LF[i, 0] > 0:
-                verts_LF.append([isol, 10 * np.log10(quantiles_LF[i, 0])])
-            if quantiles_HF[i, 0] > 0:
-                verts_HF.append([isol, 10 * np.log10(quantiles_HF[i, 0])])
-        verts_LF.append([sols[-1], -300])
-        verts_HF.append([sols[-1], -300])
-        verts_HF.append([sols[0], -300])
-        verts_LF.append([sols[0], -300])
-
-        # fig: plt.Figure = plt.figure(figsize=(10, 6)) #
-        fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex='all')
+        fig, ax = plt.subplots(2, 1, figsize=(16, 9), sharex='all')
         ax_HF = ax[1]
         ax_LF = ax[0]
-        # ax_LF = fig.add_axes((0.05, 0.05, 0.8, 0.4), label='LF')
-        # ax_HF = fig.add_axes((0.05, 0.55, 0.8, 0.4), sharex=ax_LF,
-        #                      label='HF')
-        # ax_cb = fig.add_axes(rect=(0.05, 0.9, 0.1, 0.9), label='colorbar')
 
         poly = Polygon(verts_LF, facecolor='0.9', edgecolor='0.5')
         ax_LF.add_patch(poly)
@@ -293,11 +249,11 @@ class Noise():
         cols = ['black', 'darkgrey', 'grey', 'darkgrey']
         ls = ['dashed', 'dashed', 'dashed', 'dashed']
         for i, q in enumerate(qs):
-            ax_LF.plot(sols, 10 * np.log10(quantiles_LF[:, i]),
+            ax_LF.plot(self.sols_quant, 10 * np.log10(self.quantiles_LF[:, i]),
                        label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
 
         for i, q in enumerate(qs):
-            ax_HF.plot(sols, 10 * np.log10(quantiles_HF[:, i]),
+            ax_HF.plot(self.sols_quant, 10 * np.log10(self.quantiles_HF[:, i]),
                        label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
         ax_HF.set_xlabel('Sol number')
         ax_LF.set_ylabel('PSD, displ. 2-6 sec. [dB]')
@@ -355,28 +311,85 @@ class Noise():
 
             sc = ax_LF.scatter(LF_times, LF_amps,
                                c=LF_dists, vmin=25., vmax=100., cmap=cmap,
-                               s=80., marker='.')
+                               edgecolors='k', linewidths=0.5,
+                               s=80., marker='.', zorder=100)
             cax = plt.colorbar(sc, ax=ax_LF, use_gridspec=True)
             cax.ax.set_ylabel('distance / degree', rotation=270.,
                               labelpad=4.45)
             sc = ax_HF.scatter(HF_times, HF_amps,
                                c=HF_dists, vmin=5., vmax=30., cmap=cmap,
-                               s=80., marker='.')
+                               edgecolors='k', linewidths=0.5,
+                               s=80., marker='.', zorder=100)
             cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True)
             cax.ax.set_ylabel('distance / degree', rotation=270.,
                               labelpad=12.45)
 
+        sc = ax_HF.scatter(0, -300, label='Marsquake',
+                           edgecolors='k', linewidths=0.5,
+                           c='royalblue', s=80., marker='.')
         ax_LF.set_ylim(-210., -170.)
         ax_LF.set_title('Noise 2-8 seconds and LF/BB events')
         ax_HF.set_title('Noise 2-3 Hz and HF/2.4 Hz events')
-        ax_HF.set_ylim(-230., -190.)
-        ax_LF.set_xlim(80, solify(utct()).julday - 1)
+        ax_HF.set_ylim(-225., -185.)
+        ax_LF.set_xlim(sol_start, sol_end)
         for a in [ax_HF, ax_LF]:
             a.grid('on')
         plt.legend(loc='lower left')
-        # datacursor(formatter='{label}'.format)
-        plt.savefig('noise_vs_eventamplitudes.pdf')
+        plt.tight_layout()
+        # plt.savefig('noise_vs_eventamplitudes.pdf')
+        plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
         plt.show()
+
+    def read_quantiles(self, fnam):
+        data = np.load(fnam)
+        self.quantiles_HF = data['quantiles_HF']
+        self.quantiles_LF = data['quantiles_LF']
+        self.sols_quant = data['sols']
+
+    def save_quantiles(self, fnam):
+        np.savez(file=fnam,
+                 quantiles_HF=self.quantiles_HF,
+                 quantiles_LF=self.quantiles_LF,
+                 sols=self.sols_quant)
+
+    def calc_quantiles(self, sol_end, sol_start,
+                       qs):
+
+        self.sols_quant = np.arange(sol_start, sol_end + 1)
+        self.quantiles_LF = np.zeros((sol_end - sol_start + 1, len(qs)))
+        self.quantiles_HF = np.zeros((sol_end - sol_start + 1, len(qs)))
+
+        i = 0
+        print('Calculating LF noise quantiles')
+        for isol in tqdm(self.sols_quant):
+            bol_sol = self.sol == isol
+            if sum(bol_sol) > 1:
+                values = np.quantile(
+                    a=np.ma.masked_less_equal(
+                        x=self.stds_LF[bol_sol], value=0.0) ** 2. / (
+                              1. / 1.5 - 1. / 6), q=qs)
+                if np.isfinite(values).all():
+                    self.quantiles_LF[i, :] = values
+            i += 1
+
+        i = 0
+        print('Calculating HF noise quantiles')
+        for isol in tqdm(self.sols_quant):
+            bol_sol = self.sol == isol
+            if sum(bol_sol) > 1:
+                values = np.quantile(
+                    a=np.ma.masked_less_equal(x=self.stds_HF[bol_sol],
+                                              value=0.0) ** 2. / 0.4, q=qs)
+                if np.isfinite(values).all():
+                    self.quantiles_HF[i, :] = values
+            i += 1
+
+        # Mask outliers
+        self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-25)
+        self.quantiles_HF = np.ma.masked_less(self.quantiles_HF, value=1e-25)
+        self.quantiles_LF = np.ma.masked_greater(self.quantiles_LF, value=1e-8)
+        self.quantiles_HF = np.ma.masked_greater(self.quantiles_HF, value=1e-8)
+
 
     def compare_events(self,
                        catalog = None,
@@ -431,12 +444,12 @@ if __name__ == '__main__':
     inv = obspy.read_inventory('mqs_reports/data/inventory_VBB.xml')
     # noise = Noise(sc3dir=sc3_path,
     #               starttime=utct('20190202'),
-    #               endtime=utct('20191024'),
+    #               endtime=utct('20191026'),
     #               inv=inv,
     #               winlen_sec=120.
     #               )
-    # noise.save('noise_0301_1024.npz')
-    noise = read_noise('noise_0301_1024.npz')
+    # noise.save('noise_0301_1025.npz')
+    noise = read_noise('noise_0301_1025.npz')
     noise.plot_noise_stats()
 
     cat = Catalog(fnam_quakeml='mqs_reports/data/catalog_20191024.xml',
@@ -445,5 +458,5 @@ if __name__ == '__main__':
     cat.load_distances(fnam_csv='./mqs_reports/data/manual_distances.csv')
     cat.read_waveforms(inv=inv, sc3dir=sc3_path)
     cat.calc_spectra(winlen_sec=10.)
-    noise.compare_events(cat)
+    # noise.compare_events(cat)
     noise.plot_daystats(cat)
