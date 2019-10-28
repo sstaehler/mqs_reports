@@ -76,10 +76,14 @@ def write_html(catalog, fnam_out):
                       'MbS',
                       'M2.4',
                       'MFB',
-                      'tstar'))
+                      'tstar',
+                      'VBB',
+                      '100sps<br> SP1',
+                      '100sps<br> SPH'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
-               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f')
+               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
+               '%s', '%s', '%s')
     dist_string = {'GUI': '%.3g',
                    'PgSg': '%.3g*',
                    'aligned': '%.3g&dagger;',
@@ -122,6 +126,9 @@ def write_html(catalog, fnam_out):
                    None,
                    None,
                    None,
+                   None,
+                   None,
+                   None,
                    None
                    )
 
@@ -155,7 +162,10 @@ def write_html(catalog, fnam_out):
              event.magnitude(mag_type='mb_S', distance=30.),
              event.magnitude(mag_type='m2.4', distance=20.),
              event.magnitude(mag_type='MFB', distance=20.),
-             event.amplitudes['tstar']
+             event.amplitudes['tstar'],
+             event.available_sampling_rates()['VBB_Z'],
+             _fmt_bool(event.available_sampling_rates()['SP_Z'] == 100.),
+             _fmt_bool(event.available_sampling_rates()['SP_N'] == 100.),
              ),
             extras=sortkey,
             fmts=formats)
@@ -166,6 +176,12 @@ def write_html(catalog, fnam_out):
     with open(fnam_out, 'w') as f:
         f.write(output)
 
+
+def _fmt_bool(bool):
+    if bool:
+        return '&#9745;'
+    else:
+        return ' '
 
 
 def create_header(column_names):

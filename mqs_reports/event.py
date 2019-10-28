@@ -16,11 +16,10 @@ from typing import Union
 
 import numpy as np
 import obspy
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import locations2degrees, kilometers2degrees
-
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import locations2degrees, kilometers2degrees
 
 LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
@@ -286,6 +285,32 @@ class Event:
 
         if not success_VBB:
             self.waveforms_VBB = None
+
+    def available_sampling_rates(self):
+        available = dict()
+        channels = {'VBB_Z': 'BHZ',
+                    'VBB_N': 'BHN',
+                    'VBB_E': 'BHN'}
+        for chan, seed in channels.items():
+            available[chan] = self.waveforms_VBB.select(
+                channel=seed)[0].stats.sampling_rate
+
+        channels = {'SP_Z': 'EHZ',
+                    'SP_N': 'EHN',
+                    'SP_E': 'EHE'}
+
+        for chan, seed in channels.items():
+            if self.waveforms_SP is None:
+                available[chan] = None
+            else:
+                st = self.waveforms_SP.select(channel=seed)
+                if len(st) > 0:
+                    available[chan] = st[0].stats.sampling_rate
+                else:
+                    available[chan] = None
+        return available
+
+
 
     def calc_spectra(self, winlen_sec):
         """
