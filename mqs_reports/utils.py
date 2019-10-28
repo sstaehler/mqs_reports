@@ -158,8 +158,8 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     if len(st_seis) == 0:
         st_rot = obspy.Stream()
     else:
-        
-        st_seis.merge(method=1)
+
+        st_seis.merge(method=1, fill_value='interpolate')
         st_seis.detrend(type='demean')
         st_seis.taper(0.1)
         st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)
