@@ -15,17 +15,18 @@ def mb_P(amplitude_dB, distance_degree):
     amplitude_dB = 10 ** (amplitude_dB / 20.)
     mbP_tmp = np.log10(amplitude_dB) + 1.4 * np.log10(distance_degree) + 9.5
     mag = (mbP_tmp) + 0.1 + \
-          1. / 3. * np.max((np.zeros_like(amplitude_dB),
-                            4.5 - mbP_tmp),
+          1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - mbP_tmp),
                            axis=0)
 
     return mag
 
 
 def mb_S(amplitude_dB, distance_degree):
-    mag = (np.log10(amplitude_dB) + 2.2 * np.log10(distance_degree) + 8.4) + 0.1 + \
-          1. / 3. * max(0, 4.5 - (np.log10(amplitude_dB)
-                                  + 2.2 * np.log10(distance_degree) + 8.4))
+    amplitude_dB = 10 ** (amplitude_dB / 20.)
+    mb_S_tmp = np.log10(amplitude_dB) + 2.2 * np.log10(distance_degree) + 8.4
+    mag = (mb_S_tmp) + 0.1 + \
+          1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - (mb_S_tmp)),
+                           axis=0)
     return mag
 
 
