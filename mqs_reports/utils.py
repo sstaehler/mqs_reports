@@ -26,6 +26,39 @@ def create_fnam_event(
     return fnam_inst
 
 
+def f_c(M0, vs, ds):
+    # Calculate corner frequency for event with M0,
+    # assuming a stress drop ds
+    return 4.9e-1 * vs * (ds / M0) ** (1 / 3)
+
+
+def M0(Mw):
+    return 10 ** (Mw * 1.5 + 9.1)
+
+
+def attenuation_term(freqs, Qm, Qk=5e4, x=1e6, phase='S', exp=0.0, f0=1,
+                     vp=7.5e3, vs=4.1e3):
+    if phase == 'P':
+        vel = vp
+        L = 4 / 3 * (vs / vp) ** 2
+        Q = 1 / (L / Qm + (1 - L) / Qk)
+    else:
+        vel = vs
+        Q = Qm
+    Q = Q * (freqs / f0) ** exp
+    Qscat = 300
+    Q = 1. / (1. / Q + 1 / Qscat)
+    return np.exp(-np.pi * x / vel * freqs / Q)
+
+
+def pred_spec(freqs, ds, Qm, amp, dist, mag, phase='S', vp=7.5e3, vs=4.2e3):
+    stf_amp = 1 / (1 + (freqs / f_c(M0=M0(mag),
+                                    vs=2.8e3, ds=ds)
+                        ) ** 2)
+    A = attenuation_term(freqs, Qm=Qm, x=dist, phase=phase, vp=vp, vs=vs)
+    return 20 * np.log10(A * stf_amp) + amp
+
+
 def create_ZNE_HG(st: obspy.Stream,
                   inv: obspy.Inventory = None):
     # dip_u, dip_v, dip_w, = -35.3, -35.3, -35.3
@@ -125,8 +158,8 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     if len(st_seis) == 0:
         st_rot = obspy.Stream()
     else:
-        
-        st_seis.merge(method=1)
+
+        st_seis.merge(method=1, fill_value='interpolate')
         st_seis.detrend(type='demean')
         st_seis.taper(0.1)
         st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)

@@ -28,59 +28,71 @@ def create_row(list, fmts=None, extras=None):
         fmts = []
         for i in range(len(list)):
             fmts.append('%s')
-    row = '    <tr>\n'
+    row = 4 * ' ' +'<tr>\n'
+    ind_string = 6 * ' '
     if extras is None:
         for li, fmt in zip(list, fmts):
             if li is None:
-                row += '<td>' + str(li) + '</td>\n'
+                row += ind_string + '<td>' + str(li) + '</td>\n'
             else:
-                row += '<td>' + fmt % (li) + '</td>\n'
+                row += ind_string + '<td>' + fmt % (li) + '</td>\n'
     else:
         for li, fmt, extra in zip(list, fmts, extras):
             if li is None:
-                row += '<td>' + str(li) + '</td>\n'
+                row += ind_string + '<td>' + str(li) + '</td>\n'
             else:
                 if extra is None:
-                    row += '<td>' + fmt % (li) + \
+                    row += ind_string + '<td>' + fmt % (li) + \
                            '</td>\n'
                 else:
                     try:
-                        row += 8 * ' ' + '<td sorttable_customkey="%d">' % extra \
+                        row += ind_string \
+                               + '<td sorttable_customkey="%d">' % extra \
                                + fmt % (li) + '</td>\n'
                     except(ValueError):
-                        row += 8 * ' ' + '<td sorttable_customkey=0>' + \
+                        row += ind_string + '<td sorttable_customkey=0>' + \
                                fmt % (li) + '</td>\n'
 
-    row += '</tr>\n'
+    row += 4 * ' ' + '</tr>\n'
     return row
 
 
 def write_html(catalog, fnam_out):
-    output = create_header((' ',
-                            'name',
-                            'type',
-                            'LQ',
-                            'Time (UTC)',
-                            'Time (LMST)',
-                            'duration',
-                            'distance',
-                            'P-amplitude',
-                            'S-amplitude',
-                            '2.4 Hz pick',
-                            '2.4 Hz fit',
-                            'A0',
-                            'MbP',
-                            'MbS',
-                            'M2.4',
-                            'MFB',
-                            'tstar'))
+    output = create_header(
+        column_names=(' ',
+                      'name',
+                      'type',
+                      'LQ',
+                      'Time (UTC)',
+                      'Time (LMST)',
+                      'duration',
+                      'distance',
+                      'P-amplitude',
+                      'S-amplitude',
+                      '2.4 Hz pick',
+                      '2.4 Hz fit',
+                      'A0',
+                      'MbP',
+                      'MbS',
+                      'M2.4',
+                      'MFB',
+                      'tstar',
+                      'VBB',
+                      '100sps<br> SP1',
+                      '100sps<br> SPH'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
-               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f')
-    dist_string = {'GUI': '%5.1f',
-                   'PgSg': '%5.1f*',
-                   'aligned': '%5.1f&dagger;',
+               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
+               '%s', '%s', '%s')
+    dist_string = {'GUI': '%.3g',
+                   'PgSg': '%.3g*',
+                   'aligned': '%.3g&dagger;',
                    'unknown': '%s'}
+    event_type_idx = {'LF': 1,
+                      'BB': 2,
+                      'HF': 3,
+                      '24': 4,
+                      'VF': 5}
     ievent = len(catalog)
     for event in catalog:
         duration = event.duration.strftime('%M:%S')
@@ -88,7 +100,7 @@ def write_html(catalog, fnam_out):
         lmst_time = solify(event.starttime).strftime('%H:%M:%S')
         sortkey = (ievent,
                    None,
-                   None,
+                   event_type_idx[event.mars_event_type_short],
                    None,
                    float(utct(event.picks['start'])),
                    None,
@@ -110,6 +122,9 @@ def write_html(catalog, fnam_out):
                                         unit='fm'),
                    event.amplitudes['A_24'],
                    event.amplitudes['A0'],
+                   None,
+                   None,
+                   None,
                    None,
                    None,
                    None,
@@ -147,36 +162,51 @@ def write_html(catalog, fnam_out):
              event.magnitude(mag_type='mb_S', distance=30.),
              event.magnitude(mag_type='m2.4', distance=20.),
              event.magnitude(mag_type='MFB', distance=20.),
-             event.amplitudes['tstar']
+             event.amplitudes['tstar'],
+             event.available_sampling_rates()['VBB_Z'],
+             _fmt_bool(event.available_sampling_rates()['SP_Z'] == 100.),
+             _fmt_bool(event.available_sampling_rates()['SP_N'] == 100.),
              ),
             extras=sortkey,
             fmts=formats)
         ievent -= 1
-    output += '</tbody>'
-    footer = '        </table>\n    </body>\n</html>\n'
+    output += 4 * ' ' + '</tbody>\n'
+    footer = 2 * ' ' + '</table>\n</article>\n</body>\n</html>\n'
     output += footer
     with open(fnam_out, 'w') as f:
         f.write(output)
 
 
+def _fmt_bool(bool):
+    if bool:
+        return '&#9745;'
+    else:
+        return ' '
+
 
 def create_header(column_names):
     header = '<!DOCTYPE html>\n' + \
-             '<html>\n' + \
+             '<html lang="en-US">\n' + \
              '<head>\n' + \
-             '  <script src="sorttable.js"></script>' + \
-             '  <link rel="stylesheet" type="text/css" href="./table.css">' + \
+             '  <script src="sorttable.js"></script>\n' + \
+             '  <title>MQS events until %s</title>\n' % utct().date + \
+             '  <meta charset="UTF-8">\n' + \
+             '  <meta name="description" content="InSight marsquakes">\n' + \
+             '  <meta name="author" content="Marsquake Service" >\n' + \
+             '  <link rel="stylesheet" type="text/css" href="./table.css">\n' + \
              '</head>\n' + \
-             '  <body>\n'
+             '<body>\n'
     output = header
-    output += '<h1>MQS events until %s</h1>' % obspy.UTCDateTime()
+    output += '<article>\n'
+    output += '  <header>\n'
+    output += '    <h1>MQS events until %s</h1>\n' % obspy.UTCDateTime()
+    output += '  </header>\n'
     table_head = '  <table class="sortable" id="events">\n' + \
-                 '    <thead>\n' + \
-                 create_row(
-                     column_names) + \
-                 '    </thead>'
+                 '  <thead>\n' + \
+                 create_row(column_names) + \
+                 '  </thead>\n'
     output += table_head
-    output += '  <tbody>'
+    output += '  <tbody>\n'
     return output
 
 

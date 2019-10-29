@@ -11,20 +11,20 @@
 from os.path import join as pjoin
 from typing import Union
 
+import matplotlib.ticker
 import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
-import matplotlib.ticker
 from mpldatacursor import datacursor
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES
-from mqs_reports.scatter_annot import scatter_annot
-from mqs_reports.utils import plot_spectrum, envelope_smooth
 from mqs_reports.magnitudes import M2_4, lorenz_att
+from mqs_reports.scatter_annot import scatter_annot
+from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
 
 
 class Catalog:
@@ -38,6 +38,7 @@ class Catalog:
         dictionary with Events or QuakeML with Mars extensions.
         :param events: dictionary of events. If not set, the events are read
                        from QuakeML file
+        :param event_tmp_dir: temporary directory for waveform files
         :param fnam_quakeml: Path to QuakeML file
         :param quality: Desired event quality
         :param type_select: Desired event types. Either direct type or
@@ -126,9 +127,9 @@ class Catalog:
         return out
 
     def select(self,
-               name: Union[tuple, str] = None,
-               event_type: Union[tuple, str] = None,
-               quality: Union[tuple, str] = None
+               name: Union[tuple, list, str] = None,
+               event_type: Union[tuple, list, str] = None,
+               quality: Union[tuple, list, str] = None
                ):
         """
         Return new Catalog object only with the events that match the given
@@ -193,6 +194,7 @@ class Catalog:
     def read_waveforms(self,
                        inv,
                        sc3dir: str,
+                       event_tmp_dir='./events',
                        kind: str = 'DISP') -> None:
         """
         Wrapper to check whether local copy of corrected waveform exists and
@@ -203,7 +205,8 @@ class Catalog:
                      expect the data to be in displacement
         """
         for event in tqdm(self):
-            event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir)
+            event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir,
+                                 event_tmp_dir=event_tmp_dir)
 
     def plot_pickdiffs(
          self, pick1_X, pick2_X, pick1_Y, pick2_Y, vX=None, vY=None, fig=None,
@@ -672,6 +675,7 @@ class Catalog:
     def plot_spectra(self,
                      ymin: float = -240.,
                      ymax: float = -170.,
+                     fits: dict = None,
                      df_mute: object = 1.07) -> None:
         """
         Create big 6xnevent overview plot of all spectra.
@@ -744,6 +748,18 @@ class Catalog:
                 if len(spectrum) > 0 and not bodywave:
                     plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
                                   fmin=7., color='r')  # , label='total')
+
+                if fits is not None:
+                    f = np.geomspace(0.01, 20., 100)
+                    Mw = event.magnitude(mag_type='MFB')
+                    p_pred = pred_spec(freqs=f,
+                                       ds=1e6,
+                                       mag=Mw,
+                                       amp=fits[event.name]['A0'],
+                                       Qm=fits[event.name]['Qm'],
+                                       dist=event.distance * 55e3)
+                    ax[iax, ichan].plot(f, p_pred)
+
 
             ax[iax, ichan + 2].legend()
             ax[iax, ichan].text(x=0.55, y=0.75, s=event.name,
