@@ -173,10 +173,10 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
                     p_sig[np.array((f > 1.1, f < 1.8)).all(axis=0)])) + 6.
                 # tstar must be so large than event is below noise
                 if max(f[bol_1Hz_mask]) < 4:
-                    ifreq = np.array((f > 5.0, f < 6.0)).all(axis=0)
+                    ifreq = np.array((f > 6.0, f < 7.0)).all(axis=0)
                     tstar_min = (np.log(10 ** (A0_max / 10)) -
                                  np.log(np.mean(p_sig[ifreq]))) \
-                                / (np.pi * 5.5)
+                                / (np.pi * 6.5)
                 else:
                     tstar_min = 0.05
                 try:
