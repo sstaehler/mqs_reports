@@ -63,26 +63,27 @@ def write_html(catalog, fnam_out):
                       'name',
                       'type',
                       'LQ',
-                      'Time (UTC)',
-                      'Time (LMST)',
+                      'Time<br>(UTC)',
+                      'Time<br>(LMST)',
                       'duration',
                       'distance',
                       'P-amplitude',
                       'S-amplitude',
-                      '2.4 Hz pick',
-                      '2.4 Hz fit',
+                      '2.4 Hz<br>pick',
+                      '2.4 Hz<br>fit',
                       'A0',
                       'MbP',
                       'MbS',
                       'M2.4',
                       'MFB',
+                      'f_c',
                       'tstar',
                       'VBB',
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%8.3E', '%8.3E', '%8.3E', '%8.3E', '%8.3E',
-               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
+               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
                '%s', '%s', '%s')
     dist_string = {'GUI': '%.3g',
                    'PgSg': '%.3g*',
@@ -129,6 +130,7 @@ def write_html(catalog, fnam_out):
                    None,
                    None,
                    None,
+                   None,
                    None
                    )
 
@@ -158,10 +160,11 @@ def write_html(catalog, fnam_out):
              if event.amplitudes['A_24'] is not None else 0.,
              10 ** (event.amplitudes['A0'] / 20.)
              if event.amplitudes['A0'] is not None else 0.,
-             event.magnitude(mag_type='mb_P', distance=30.),
-             event.magnitude(mag_type='mb_S', distance=30.),
-             event.magnitude(mag_type='m2.4', distance=20.),
-             event.magnitude(mag_type='MFB', distance=20.),
+             event.magnitude(mag_type='mb_P'),
+             event.magnitude(mag_type='mb_S'),
+             event.magnitude(mag_type='m2.4'),
+             event.magnitude(mag_type='MFB'),
+             event.amplitudes['f_c'],
              event.amplitudes['tstar'],
              event.available_sampling_rates()['VBB_Z'],
              _fmt_bool(event.available_sampling_rates()['SP_Z'] == 100.),
@@ -170,11 +173,16 @@ def write_html(catalog, fnam_out):
             extras=sortkey,
             fmts=formats)
         ievent -= 1
-    output += 4 * ' ' + '</tbody>\n'
-    footer = 2 * ' ' + '</table>\n</article>\n</body>\n</html>\n'
+    footer = create_footer()
     output += footer
     with open(fnam_out, 'w') as f:
         f.write(output)
+
+
+def create_footer():
+    footer = 4 * ' ' + '</tbody>\n'
+    footer += 2 * ' ' + '</table>\n</article>\n</body>\n</html>\n'
+    return footer
 
 
 def _fmt_bool(bool):

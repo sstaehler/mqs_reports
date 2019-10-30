@@ -11,11 +11,10 @@
 import numpy as np
 import obspy
 import plotly.graph_objects as go
-from obspy import UTCDateTime as utct
-from plotly.subplots import make_subplots
-
 from mqs_reports.magnitudes import lorenz, lorenz_att
 from mqs_reports.utils import envelope_smooth
+from obspy import UTCDateTime as utct
+from plotly.subplots import make_subplots
 
 
 def make_report(event, fnam_out, annotations):
@@ -80,15 +79,19 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                         row=row, col=col)
 
     amps = event.amplitudes
-    f = np.geomspace(0.1, 50.0, num=100)
+    f = np.geomspace(0.1, 50.0, num=400)
+    f_c = 3.
     if 'A0' in amps:
         A0 = amps['A0']
         tstar = amps['tstar']
+        f_c = amps['f_c'] if amps['f_c'] is not None else 3.
         if A0 is not None and tstar is not None:
+            stf_amp = 1 / (1 + (f / f_c) ** 2)
             fig.add_trace(
                 go.Scatter(x=f,
-                           y=A0 - f * tstar * 10.,
-                           name='fit, %ddB, t*=%4.2f' % (A0, -tstar),
+                           y=A0 - f * tstar * 10. * np.pi / np.log(10)
+                             + 10 * np.log10(stf_amp),
+                           name='fit, source\nand att.',
                            line=go.scatter.Line(color='blue', width=2),
                            mode="lines", **kwargs),
                 row=row, col=col)
@@ -97,14 +100,18 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                 fig.add_trace(
                     go.Scatter(x=f,
                                y=lorenz_att(f, A0=amps['A0'],
-                                            x0=amps['f_24'],
+                                            f0=amps['f_24'],
+                                            f_c=amps['f_c'],
                                             tstar=amps['tstar'],
-                                            xw=amps['width_24'],
+                                            fw=amps['width_24'],
                                             ampfac=amps['ampfac']),
-                               name='fit, %ddB, f=%4.2fHz, t*=%4.2f, df=%4.2f, '
-                                    'dA=%4.1f' %
-                                    (amps['A0'], amps['f_24'], amps['tstar'],
-                                     amps['width_24'], amps['ampfac']),
+                               name='fit, src, att, amp<br>'
+                                    '%ddB, f=%4.2fHz, f_c=%4.2fHz<br>'
+                                    't*=%4.2f, df=%4.2f, dA=%4.1fdB' %
+                                    (amps['A0'], amps['f_24'], amps['f_c'],
+                                     amps['tstar'],
+                                     amps['width_24'],
+                                     10 * np.log10(amps['ampfac'])),
                                line=go.scatter.Line(color='red', width=5),
                                mode="lines", **kwargs),
                     row=row, col=col)
@@ -126,7 +133,8 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                        y=lorenz(f, A=amps['A_24'],
                                 x0=amps['f_24'],
                                 xw=amps['width_24']),
-                       name='fit, %ddB, f0*=%4.2fHz' %
+                       name='fit, peak only<br>'
+                            '%ddB, f0*=%4.2fHz' %
                             (amps['A_24'], amps['f_24']),
                        line=go.scatter.Line(color='darkblue', width=2),
                        mode="lines", **kwargs),

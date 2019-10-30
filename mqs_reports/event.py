@@ -55,6 +55,7 @@ class Event:
                              utct(self.picks['start']))
         self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
         self.starttime = utct(utct(self.picks['start']))
+        self.endtime = utct(utct(self.picks['end']))
 
         self.amplitudes = dict()
 
