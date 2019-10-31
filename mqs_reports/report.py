@@ -23,11 +23,13 @@ def make_report(event, fnam_out, annotations):
                         specs=[[{"rowspan": 3}, {}],
                                [None, {}],
                                [None, {}]],
+                        horizontal_spacing=0.05,
+                        vertical_spacing=0.05,
                         subplot_titles=(
-                            "Event spectrum",
-                            "Mb picks",
-                            "M2.4 picks",
-                            "Broadband")
+                            "<b>Event spectrum, vertical</b>",
+                            "<b>Mb picks 1.5-6 sec</b>",
+                            "<b>M2.4 picks 2-3 Hz</b>",
+                            "<b>Acceleration spectrogram</b>")
                         )
     pick_plot(event, fig, types=['mb_P', 'mb_S'], row=1, col=2,
               annotations=annotations
@@ -54,16 +56,13 @@ def make_report(event, fnam_out, annotations):
     event.fnam_report = fnam_out
 
 
-def plot_specgram(event, fig, row, col):
+def plot_specgram(event, fig, row, col, fmin=0.05, fmax=10.0):
     tr = event.waveforms_VBB.select(channel='??Z')[0].copy()
     tr.trim(starttime=utct(event.picks['start']) - 180.,
             endtime=utct(event.picks['end']) + 180.)
 
     tr.differentiate()
     tr.differentiate()
-    tr.decimate(2)
-    fmin = 0.1
-    fmax = 5.0
     z, f, t = _calc_cwf(tr, fmin=fmin, fmax=fmax)
     z = 10 * np.log10(z)
     z[z < -220] = -220.
@@ -72,6 +71,28 @@ def plot_specgram(event, fig, row, col):
                              x=t[::4], y=f[::4],
                              colorscale='plasma'),
                   row=row, col=col)
+
+    for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
+        if event.picks[pick] is not '':
+            time_pick = utct(event.picks[pick]).datetime
+            if pick not in ['start', 'end']:
+                text = pick
+                color = 'black'
+            else:
+                text = ''
+                color = 'darkgreen'
+            fig.add_trace(go.Scatter(x=[time_pick, time_pick],
+                                     y=[-fmin, fmax],
+                                     text=['', text],
+                                     showlegend=False,
+                                     textfont={'size': 20},
+                                     textposition='bottom right',
+                                     name=pick,
+                                     mode="lines+text",
+                                     line=go.scatter.Line(color=color,
+                                                          width=0.5),
+                                     ),
+                          row=row, col=col)
     fig.update_yaxes(range=[np.log10(fmin), np.log10(fmax)],
                      type='log',
                      title_text='frequency / Hz',
@@ -201,10 +222,10 @@ def plot_spec(event: mqs_reports.event.Event,
         fig.add_trace(
             go.Scatter(x=[2.3, 2.5],
                        y=[amps['A_24'], amps['A_24']],
+                       line=go.scatter.Line(color='blue', width=2),
                        showlegend=False,
                        text=['', 'A_24=%d dB' % amps['A_24']],
                        textfont={'size': 20},
-                       line=go.scatter.Line(color='blue', width=2),
                        textposition='bottom right',
                        mode="lines+markers+text", **kwargs),
             row=row, col=col)
@@ -293,21 +314,32 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
                                      **kwargs),
                           row=row, col=col)
 
-    for pick in ['start', 'end']:
-        time_pick = utct(event.picks[pick]).datetime
-        ymax = np.max(abs(tr.data))
-        fig.add_trace(go.Scatter(x=[time_pick, time_pick],
-                                 y=[-ymax, ymax],
-                                 name=pick,
-                                 mode="lines",
-                                 line=go.scatter.Line(color="black"),
-                                 **kwargs),
-                      row=row, col=col)
+    for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
+        if event.picks[pick] is not '':
+            time_pick = utct(event.picks[pick]).datetime
+            ymax = np.max(abs(tr.data))
+            if pick not in ['start', 'end']:
+                text = pick
+                color = 'black'
+            else:
+                text = ''
+                color = 'darkgreen'
+            fig.add_trace(go.Scatter(x=[time_pick, time_pick],
+                                     y=[-ymax, ymax],
+                                     text=['', text],
+                                     showlegend=False,
+                                     textfont={'size': 20},
+                                     textposition='bottom right',
+                                     name=pick,
+                                     mode="lines+text",
+                                     line=go.scatter.Line(color=color),
+                                     **kwargs),
+                          row=row, col=col)
 
     fig.update_yaxes(title_text='displacement', row=row, col=col)
 
 
-def _calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=8):
+def _calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
     from obspy.signal.tf_misfit import cwt
     npts = tr.stats.npts
     dt = tr.stats.delta
