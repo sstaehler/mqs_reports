@@ -7,7 +7,7 @@
 :license:
     None
 """
-
+import mqs_reports
 import numpy as np
 import obspy
 import plotly.graph_objects as go
@@ -35,10 +35,13 @@ def make_report(event, fnam_out, annotations):
     pick_plot(event, fig, types=['m2.4'], row=2, col=2,
               annotations=annotations
               )
-    pick_plot(event, fig, types=['full', 'mb_P', 'mb_S'],
-              row=3, col=2,
-              annotations=annotations
-              )
+    # pick_plot(event, fig, types=['full', 'mb_P', 'mb_S'],
+    #           row=3, col=2,
+    #           annotations=annotations
+    #           )
+
+    plot_specgram(event, fig, row=3, col=2)
+
     plot_spec(event, fig, row=1, col=1)
 
     fig.update_layout({"title": {"text": "Event %s overview" % event.name,
@@ -51,12 +54,38 @@ def make_report(event, fnam_out, annotations):
     event.fnam_report = fnam_out
 
 
-def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
-              df_mute=1.07, **kwargs):
+def plot_specgram(event, fig, row, col):
+    tr = event.waveforms_VBB.select(channel='??Z')[0].copy()
+    tr.trim(starttime=utct(event.picks['start']) - 180.,
+            endtime=utct(event.picks['end']) + 180.)
+
+    tr.differentiate()
+    tr.differentiate()
+    tr.decimate(2)
+    fmin = 0.1
+    fmax = 5.0
+    z, f, t = _calc_cwf(tr, fmin=fmin, fmax=fmax)
+    z = 10 * np.log10(z)
+    z[z < -220] = -220.
+    z[z > -160] = -160.
+    fig.add_trace(go.Heatmap(z=z[::4, ::4],
+                             x=t[::4], y=f[::4],
+                             colorscale='plasma'),
+                  row=row, col=col)
+    fig.update_yaxes(range=[np.log10(fmin), np.log10(fmax)],
+                     type='log',
+                     title_text='frequency / Hz',
+                     row=row, col=col)
+
+
+def plot_spec(event: mqs_reports.event.Event,
+              fig, row, col, ymin=-250,
+              ymax=-170,
+              df_mute=1.07, f_VBB_SP_transition=7.5, **kwargs):
     colors = ['black', 'navy', 'coral', 'orange']
 
-    fmins = [0.08, 7.5]
-    fmaxs = [7.5, 50]
+    fmins = [0.08, f_VBB_SP_transition]
+    fmaxs = [f_VBB_SP_transition, 50]
     specs = [event.spectra, event.spectra_SP]
     for spec, fmin, fmax in zip(specs, fmins, fmaxs):
         if len(spec) > 0:
@@ -78,9 +107,38 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                                    mode="lines", **kwargs),
                         row=row, col=col)
 
+    if event.waveforms_SP is not None:
+        # Add marker for SP/VBB transition
+        fig.add_trace(
+            go.Scatter(x=[f_VBB_SP_transition,
+                          f_VBB_SP_transition,
+                          f_VBB_SP_transition],
+                       y=[-250, -180, -100],
+                       showlegend=False,
+                       text=['', 'VBB  SP1', ''],
+                       textfont={'size': 30},
+                       line=go.scatter.Line(color='LightSeaGreen',
+                                            dash='dashdot',
+                                            width=2),
+                       textposition='bottom center',
+                       mode="lines+text", **kwargs),
+            row=row, col=col)
+    else:
+        # Add only VBBZ text
+        fig.add_trace(
+            go.Scatter(x=[f_VBB_SP_transition,
+                          f_VBB_SP_transition,
+                          f_VBB_SP_transition],
+                       y=[-250, -180, -100],
+                       showlegend=False,
+                       text=['', 'VBBZ', ''],
+                       textfont={'size': 30},
+                       textposition='bottom center',
+                       mode="text", **kwargs),
+            row=row, col=col)
+
     amps = event.amplitudes
     f = np.geomspace(0.1, 50.0, num=400)
-    f_c = 3.
     if 'A0' in amps:
         A0 = amps['A0']
         tstar = amps['tstar']
@@ -91,7 +149,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                 go.Scatter(x=f,
                            y=A0 - f * tstar * 10. * np.pi / np.log(10)
                              + 10 * np.log10(stf_amp),
-                           name='fit, source\nand att.',
+                           name='fit: source, att.',
                            line=go.scatter.Line(color='blue', width=2),
                            mode="lines", **kwargs),
                 row=row, col=col)
@@ -105,7 +163,7 @@ def plot_spec(event, fig, row, col, ymin=-250, ymax=-170,
                                             tstar=amps['tstar'],
                                             fw=amps['width_24'],
                                             ampfac=amps['ampfac']),
-                               name='fit, src, att, amp<br>'
+                               name='fit: src, att, amplific.<br>'
                                     '%ddB, f=%4.2fHz, f_c=%4.2fHz<br>'
                                     't*=%4.2f, df=%4.2f, dA=%4.1fdB' %
                                     (amps['A0'], amps['f_24'], amps['f_c'],
@@ -215,7 +273,8 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
                                          y=tr_pick.data,
                                          showlegend=False,
                                          mode="lines",
-                                         line=go.scatter.Line(color="cyan"),
+                                         line=go.scatter.Line(
+                                             color="lightgrey"),
                                          **kwargs),
                               row=row, col=col)
 
@@ -234,8 +293,33 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
                                      **kwargs),
                           row=row, col=col)
 
+    for pick in ['start', 'end']:
+        time_pick = utct(event.picks[pick]).datetime
+        ymax = np.max(abs(tr.data))
+        fig.add_trace(go.Scatter(x=[time_pick, time_pick],
+                                 y=[-ymax, ymax],
+                                 name=pick,
+                                 mode="lines",
+                                 line=go.scatter.Line(color="black"),
+                                 **kwargs),
+                      row=row, col=col)
+
     fig.update_yaxes(title_text='displacement', row=row, col=col)
 
+
+def _calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=8):
+    from obspy.signal.tf_misfit import cwt
+    npts = tr.stats.npts
+    dt = tr.stats.delta
+
+    scalogram = abs(cwt(tr.data, dt, w0=w0, nf=200,
+                        fmin=fmin, fmax=fmax))
+
+    t = _create_timevector(tr)  # np.linspace(0, dt * npts, npts)
+    f = np.logspace(np.log10(fmin),
+                    np.log10(fmax),
+                    scalogram.shape[0])
+    return scalogram ** 2, f, t
 
 def _create_timevector(tr):
     timevec = [utct(t +
