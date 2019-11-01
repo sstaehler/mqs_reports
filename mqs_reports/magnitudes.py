@@ -37,7 +37,7 @@ def M2_4(amplitude_dB, distance_degree):
         # mag = np.log10(amplitude) - np.log10(4.78e-11) + \
         #       (np.log10(distance) - np.log10(30.)) * 1.2 + 3.
         amp_true = 10 ** (amplitude_dB / 20.)
-        A0_est = 10 ** (0.7 * np.log10(amp_true)-3.)
+        A0_est = 10 ** (0.7 * np.log10(amp_true) - 3.)
         mag = (2. / 3.) * (np.log10(A0_est) +
                            1.5 * np.log10(distance_degree) + 9.4) + 1.9
         return mag
@@ -59,14 +59,30 @@ def lorenz(x, A, x0, xw):
     return 10 * np.log10(1 / (1 + w ** 2)) + A
 
 
-def lorenz_att(x, A0, x0, tstar, xw, ampfac):
-    w = (x - x0) / (xw / 2.)
-    stf_amp = 1 / (1 + (x / 3.) ** 2)
-    # return 10 * np.log10(1 + ampfac / (1 + w ** 2) * stf_amp) \
-    #        + A0 - tstar * x * np.pi / np.log(10.) * 10.
+def lorenz_att(f: np.array,
+               A0: float,
+               f0: float,
+               f_c: float,
+               tstar: float,
+               fw: float,
+               ampfac: float):
+    """
+    Attenuation spectrum, combined with Lorenz peak and source spectrum
+    :param f: Frequency array (in Hz)
+    :param A0: Long-period amplitude in flat part of spectrum (in dB)
+    :param f0: Center frequency of the Lorenz peak (aka 2.4 Hz)
+    :param f_c: Corner frequency of the Source (Hz)
+    :param tstar: T* value from attenuation
+    :param fw: Width of Lorenz peak
+    :param ampfac: Amplification factor of Lorenz peak
+    :return:
+    """
+    w = (f - f0) / (fw / 2.)
+    stf_amp = 1 / (1 + (f / f_c) ** 2)
     return A0 + 10 * np.log10(
-        (1 + ampfac / (1 + w ** 2)) * stf_amp
-        * np.exp(- tstar * x * np.pi))
+        (1 + ampfac / (1 + w ** 2))
+        * stf_amp
+        * np.exp(- tstar * f * np.pi))
 
 
 def _remove_singles(array):
@@ -75,14 +91,14 @@ def _remove_singles(array):
             array[ix] = False
 
 
-def fit_peak_att(f, p):
+def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
     from scipy.optimize import curve_fit
     # noinspection PyTypeChecker
     popt, pcov = curve_fit(lorenz_att, f, 10. * np.log10(p),
-                           bounds=((-230, 2.25, 0.1, 0.05, 4.),
-                                   (-160, 2.5, 10.0, 0.4, 100.)),
+                           bounds=((-240, 2.25, 0.8, tstar_min, 0.05, 10.),
+                                   (A0_max, 2.5, 10.0, 10.0, 0.4, 30.)),
                            sigma=f * 10.,
-                           p0=(-210, 2.4, 2., 0.25, 10.))
+                           p0=(A0_max - 5, 2.4, 3., 2., 0.25, 10.))
     return popt
 
 
@@ -137,7 +153,7 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
                    f > df_mute)).any(axis=0),
          # np.array((f < mute_24[0],
          #           f > mute_24[1])).any(axis=0),
-         np.array(p_sig > p_noise * 4.)
+         np.array(p_sig > p_noise * 2.)
          )
         ).all(axis=0)
     _remove_singles(bol_1Hz_mask)
@@ -146,14 +162,28 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
     ampfac = None
     width_24 = None
     f_24 = None
+    f_c = None
     A_24 = None
     if event_type is not '24':
         if sum(bol_1Hz_mask) > 5:
+
             if event_type in ['HF', 'VF']:
+                # A0 should not be larger than peak between 1.1 and 1.8 Hz
+                A0_max = np.max(10 * np.log10(
+                    p_sig[np.array((f > 1.1, f < 1.8)).all(axis=0)])) + 6.
+                # tstar must be so large than event is below noise
+                if max(f[bol_1Hz_mask]) < 4:
+                    ifreq = np.array((f > 6.0, f < 7.0)).all(axis=0)
+                    tstar_min = (np.log(10 ** (A0_max / 10)) -
+                                 np.log(np.mean(p_sig[ifreq]))) \
+                                / (np.pi * 6.5)
+                else:
+                    tstar_min = 0.05
                 try:
-                    A0, f_24, tstar, width_24, ampfac = fit_peak_att(
+                    A0, f_24, f_c, tstar, width_24, ampfac = fit_peak_att(
                         f[bol_1Hz_mask],
-                        p_sig[bol_1Hz_mask])
+                        p_sig[bol_1Hz_mask],
+                        A0_max, tstar_min)
                 except RuntimeError:
                     pass
                 # plt.plot(f, 10 * np.log10(p_noise), 'k')
@@ -176,6 +206,7 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
     amps['tstar'] = tstar
     amps['A_24'] = A_24
     amps['f_24'] = f_24
+    amps['f_c'] = f_c
     amps['width_24'] = width_24
     amps['ampfac'] = ampfac
     return amps

@@ -17,14 +17,13 @@ from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from mpldatacursor import datacursor
-from obspy import UTCDateTime as utct
-from tqdm import tqdm
-
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
+from obspy import UTCDateTime as utct
+from tqdm import tqdm
 
 
 class Catalog:
@@ -531,10 +530,10 @@ class Catalog:
 
         # plot lorenz with attenuation
         f = np.linspace(0.01, 10., 1000)
-        spec1 = lorenz_att(f, A0=-7, x0=2.4, tstar=0.1, xw=0.3, ampfac=15.)
-        spec2 = lorenz_att(f, A0=-5, x0=2.4, tstar=0.2, xw=0.3, ampfac=15.)
-        spec3 = lorenz_att(f, A0=-8, x0=2.4, tstar=0.05, xw=0.3, ampfac=15.)
-        spec4 = lorenz_att(f, A0=-3, x0=2.4, tstar=0.3, xw=0.3, ampfac=15.)
+        spec1 = lorenz_att(f, A0=-7, f0=2.4, tstar=0.1, fw=0.3, ampfac=15.)
+        spec2 = lorenz_att(f, A0=-5, f0=2.4, tstar=0.2, fw=0.3, ampfac=15.)
+        spec3 = lorenz_att(f, A0=-8, f0=2.4, tstar=0.05, fw=0.3, ampfac=15.)
+        spec4 = lorenz_att(f, A0=-3, f0=2.4, tstar=0.3, fw=0.3, ampfac=15.)
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
         l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')

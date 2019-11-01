@@ -19,8 +19,9 @@ import obspy
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 from obspy import UTCDateTime as utct
-from obspy.geodetics.base import locations2degrees, kilometers2degrees
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
+RADIUS_MARS = 2889.
 LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
@@ -55,6 +56,7 @@ class Event:
                              utct(self.picks['start']))
         self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
         self.starttime = utct(utct(self.picks['start']))
+        self.endtime = utct(utct(self.picks['end']))
 
         self.amplitudes = dict()
 
@@ -64,10 +66,14 @@ class Event:
         self.distance_type = 'unknown'
         if (abs(self.latitude - LANDER_LAT) > 1e-3 and
                 abs(self.longitude - LANDER_LON) > 1e-3):
-            self.distance = locations2degrees(lat1=self.latitude,
-                                              long1=self.longitude,
-                                              lat2=LANDER_LAT,
-                                              long2=LANDER_LON)
+            dist_km, az, baz = gps2dist_azimuth(lat1=self.latitude,
+                                                lon1=self.longitude,
+                                                lat2=LANDER_LAT,
+                                                lon2=LANDER_LON,
+                                                a=RADIUS_MARS)
+            self.distance = kilometers2degrees(dist_km,
+                                               radius=RADIUS_MARS)
+            self.baz = baz
             self.distance_type = 'GUI'
         elif self.mars_event_type_short in ['HF', 'VF', '24']:
             self.distance = self.calc_distance()
@@ -127,7 +133,7 @@ class Event:
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
             distance_km = deltat / (1. / vs - 1. / vp)
-            return kilometers2degrees(distance_km, radius=2789)
+            return kilometers2degrees(distance_km, radius=RADIUS_MARS)
         else:
             # TODO: replace to use the velocities from the arguments
             # t0 = 600.
@@ -144,7 +150,7 @@ class Event:
             # map duration to Ts - Tp
             deltat /= 3.
             distance_km = deltat / (1. / vs - 1. / vp)
-            return kilometers2degrees(distance_km, radius=2789)
+            return kilometers2degrees(distance_km, radius=RADIUS_MARS)
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
@@ -563,3 +569,21 @@ class Event:
     def make_report(self, fnam_out, annotations=None):
         from mqs_reports.report import make_report
         make_report(self, fnam_out, annotations)
+
+    def write_locator_yaml(self, fnam_out, dt=2.):
+        with open(fnam_out, 'w') as f:
+            if self.distance_type == 'GUI':
+                f.write('velocity_model: MQS_Ops.2019-01-03_250\n')
+                f.write('velocity_model_uncertainty: 1.5\n')
+                f.write('backazimuth:\n')
+                f.write(f'    value: {self.baz}\n')
+                f.write('phases:\n')
+                for pick, pick_time in self.picks.items():
+                    if pick in ('P', 'S', 'PP', 'SS', 'pP', 'sS', 'ScS'):
+                        f.write(' -\n')
+                        f.write(f'    code: {pick}\n')
+                        f.write(f'    datetime: {pick_time}\n')
+                        f.write(f'    uncertainty_lower: {dt}\n')
+                        f.write(f'    uncertainty_upper: {dt}\n')
+                        f.write(f'    uncertainty_model: uniform\n')
+                        f.write('\n')
