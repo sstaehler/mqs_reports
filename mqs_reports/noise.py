@@ -11,16 +11,15 @@
 from os.path import join as pjoin
 
 import matplotlib.pyplot as plt
+import mqs_reports
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
 from matplotlib.patches import Polygon, Rectangle
-from obspy import UTCDateTime as utct
-from tqdm import tqdm
-
-import mqs_reports
 from mqs_reports.catalog import Catalog
 from mqs_reports.utils import create_ZNE_HG
+from obspy import UTCDateTime as utct
+from tqdm import tqdm
 
 
 class Noise():
@@ -295,19 +294,10 @@ class Noise():
                     fmax=1. / 1.5,
                     instrument='VBB'
                     )
-                amp = max((amp_P, amp_S))
-                if amp_P is not None:
-                    LF_times.append(solify(event.starttime).julday +
-                                    solify(event.starttime).hour / 60.)
-                    LF_amps.append(20 * np.log10(amp))
-                    # ax_LF.plot(solify(event.starttime).julday,
-                    #            20 * np.log10(amp), 'ks',
-                    #            label=f'{event.name}, P')
-                # if amp_S is not None:
-                #    print(event.name, 'S')
-                #    ax[0].plot(solify(event.starttime).julday ,
-                #               20*np.log10(amp_S), 'ks',
-                #               label=f'{event.name}, S')
+                amp = max(i for i in (amp_P, amp_S) if i is not None)
+                LF_times.append(solify(event.starttime).julday +
+                                solify(event.starttime).hour / 60.)
+                LF_amps.append(20 * np.log10(amp))
 
             sc = ax_LF.scatter(LF_times, LF_amps,
                                c=LF_dists, vmin=25., vmax=100., cmap=cmap,
