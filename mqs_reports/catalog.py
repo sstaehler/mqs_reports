@@ -811,3 +811,24 @@ class Catalog:
         from mqs_reports.create_table import write_html
 
         write_html(self, fnam_out=fnam_out)
+
+    def get_event_count_table(self) -> None:
+        """
+        Create HTML event count table for catalog
+        """
+
+        import pandas as pd
+
+        data = np.zeros((len(EVENT_TYPES), 5), dtype=int)
+
+        for ie, event_type in enumerate(EVENT_TYPES):
+            data[ie, 0] = len([e for e in self if e.mars_event_type == event_type])
+            for iq, Q in enumerate('ABCD'):
+                data[ie, iq+1] = len(
+                    [e for e in self if (e.mars_event_type == event_type and
+                                         e.quality == Q)])
+
+        df = pd.DataFrame(data=data, columns=['total', 'A', 'B', 'C', 'D'])
+        df.insert(loc=0, column='event type', value=EVENT_TYPES)
+
+        return(df.to_html(index=False, col_space=40))
