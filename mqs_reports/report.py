@@ -67,8 +67,10 @@ def plot_specgram(event, fig, row, col, fmin=0.05, fmax=10.0):
     z = 10 * np.log10(z)
     z[z < -220] = -220.
     z[z > -160] = -160.
-    fig.add_trace(go.Heatmap(z=z[::4, ::4],
-                             x=t[::4], y=f[::4],
+    df = 2
+    dt = 4
+    fig.add_trace(go.Heatmap(z=z[::df, ::dt],
+                             x=t[::dt], y=f[::df],
                              colorscale='plasma'),
                   row=row, col=col)
 
