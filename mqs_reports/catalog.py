@@ -128,7 +128,9 @@ class Catalog:
     def select(self,
                name: Union[tuple, list, str] = None,
                event_type: Union[tuple, list, str] = None,
-               quality: Union[tuple, list, str] = None
+               quality: Union[tuple, list, str] = None,
+               starttime: utct = None,
+               endtime: utct = None,
                ):
         """
         Return new Catalog object only with the events that match the given
@@ -169,6 +171,15 @@ class Catalog:
                 else:
                     if not fnmatch(event.quality, quality):
                         continue
+
+            if starttime is not None:
+                if event.starttime < starttime:
+                    continue
+
+            if endtime is not None:
+                if event.starttime > endtime:
+                    continue
+
             events.append(event)
         return self.__class__(events=events)
 
