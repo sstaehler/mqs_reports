@@ -128,7 +128,9 @@ class Catalog:
     def select(self,
                name: Union[tuple, list, str] = None,
                event_type: Union[tuple, list, str] = None,
-               quality: Union[tuple, list, str] = None
+               quality: Union[tuple, list, str] = None,
+               starttime: utct = None,
+               endtime: utct = None,
                ):
         """
         Return new Catalog object only with the events that match the given
@@ -169,6 +171,15 @@ class Catalog:
                 else:
                     if not fnmatch(event.quality, quality):
                         continue
+
+            if starttime is not None:
+                if event.starttime < starttime:
+                    continue
+
+            if endtime is not None:
+                if event.starttime > endtime:
+                    continue
+
             events.append(event)
         return self.__class__(events=events)
 
@@ -810,3 +821,24 @@ class Catalog:
         from mqs_reports.create_table import write_html
 
         write_html(self, fnam_out=fnam_out)
+
+    def get_event_count_table(self) -> None:
+        """
+        Create HTML event count table for catalog
+        """
+
+        import pandas as pd
+
+        data = np.zeros((len(EVENT_TYPES), 5), dtype=int)
+
+        for ie, event_type in enumerate(EVENT_TYPES):
+            data[ie, 0] = len([e for e in self if e.mars_event_type == event_type])
+            for iq, Q in enumerate('ABCD'):
+                data[ie, iq+1] = len(
+                    [e for e in self if (e.mars_event_type == event_type and
+                                         e.quality == Q)])
+
+        df = pd.DataFrame(data=data, columns=['total', 'A', 'B', 'C', 'D'])
+        df.insert(loc=0, column='event type', value=EVENT_TYPES)
+
+        return(df.to_html(index=False, col_space=40))
