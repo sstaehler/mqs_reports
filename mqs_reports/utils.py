@@ -1,5 +1,6 @@
 from os.path import join as pjoin
 
+import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from matplotlib import mlab as mlab
@@ -7,6 +8,8 @@ from obspy import UTCDateTime as utct
 from obspy.signal.filter import envelope
 from obspy.signal.rotate import rotate2zne
 from obspy.signal.util import next_pow_2
+from scipy.fftpack import fft, ifft
+from scipy.signal import hilbert
 
 
 def create_fnam_event(
@@ -346,3 +349,115 @@ def envelope_smooth(envelope_window, tr):
     tr_env.data = np.convolve(tr_env.data, w, 'valid')
 
     return tr_env
+
+
+# Autocorrelation stuff
+
+# def norm_hilbert(x, Fs):
+#     x_white = whiten(x)
+#     x_filt = filt(x_white, Fs=Fs, freqs=(1.5, 4.))
+#     Z = hilbert(x_filt)
+#     return Z / np.abs(Z)
+
+
+def whiten(x):
+    fx = fft(x, n=next_pow_2(len(x)))
+    fx /= np.abs(fx)
+    return ifft(fx, n=next_pow_2(len(x))).real[0:len(x)]
+
+
+def inst_phase(x):
+    Z = hilbert(x)
+    return np.angle(Z)
+
+
+def filt(x, Fs, freqs):
+    from scipy.signal import filtfilt, butter
+
+    b, a = butter(N=8, Wn=freqs[0] / (Fs / 2), btype='high')
+    y = filtfilt(b, a, x)
+    b, a = butter(N=8, Wn=freqs[1] / (Fs / 2), btype='low')
+    y = filtfilt(b, a, y)
+    return y
+
+
+def phase_ac(x, Fs, maxlag_sec=8., nu=2.5):
+    # Phase cross-correlation as defined in
+    # Schimmel, M.(1999), Phase cross-correlations: design, comparisons and
+    # applications, Bull.Seismol.Soc.Am., 89, 1366 - -1378.
+    # This function implements eq. 4
+    maxlag = int(maxlag_sec * Fs)
+    ac = np.zeros(maxlag)
+    i = 0
+    for ilag in range(1, maxlag):  # -maxlag//2, maxlag//2):
+        # plusterm = np.abs(norm_hilbert(x[0:-ilag], Fs)
+        #                   + norm_hilbert(x[ilag:], Fs))
+        # minusterm = np.abs(norm_hilbert(x[0:-ilag], Fs)
+        #                    - norm_hilbert(x[ilag:], Fs))
+
+        A = np.exp(1.j * inst_phase(x[0:-ilag]))
+        B = np.exp(1.j * inst_phase(x[ilag:]))
+        plusterm = np.abs(A + B)
+        minusterm = np.abs(A - B)
+
+        ac[i] = 1. / (2 * len(x)) * np.sum(plusterm ** nu - minusterm ** nu)
+        i += 1
+    return ac
+
+
+def autocorrelation(st, starttime, endtime, max_lag_sec=40):
+    st.decimate(2)
+    fmin = 1.2
+    st.filter('highpass', freq=fmin, zerophase=True)
+    fmax = 3.5
+    st.filter('lowpass', freq=fmax, zerophase=True)
+    st.trim(starttime=starttime,
+            endtime=endtime)
+    st.taper(max_percentage=0.05)
+    Fs = int(st[0].stats.sampling_rate)
+    max_lag = max_lag_sec * Fs
+    acsum = np.zeros(max_lag)
+    acsum2 = np.zeros(st[0].stats.npts)
+
+    fig, ax = plt.subplots(nrows=2, ncols=1, sharex='all', figsize=(15, 8))
+
+    for tr in st:  # .select(channel='BHZ'):
+        data = whiten(tr.data)
+        data = filt(data, Fs=tr.stats.sampling_rate,
+                    freqs=(fmin, fmax))
+        ac = phase_ac(data,
+                      Fs=tr.stats.sampling_rate,
+                      maxlag_sec=max_lag_sec)
+        ax[0].plot(np.arange(0, len(ac)) / Fs,
+                   filt(ac, Fs=tr.stats.sampling_rate,
+                        freqs=(fmin, fmax)),
+                   lw=2, label=tr.stats.channel)
+        acsum += ac
+
+        ac = np.correlate(tr.data, tr.data, mode='same') \
+             / (np.sum(tr.data * tr.data))
+        ax[1].plot(np.arange(-len(ac) / 2, len(ac) / 2) / Fs,
+                   ac, lw=2, label=tr.stats.channel)
+        acsum2 += ac
+    ax[0].plot(np.arange(0, len(acsum)) / Fs, acsum, lw=2, c='k',
+               label='Sum')
+    # ax[0].plot(np.arange(0, len(acsum)) / Fs, abs(hilbert(acsum)),
+    #            label='Env. of Sum',
+    #            lw=2, c='r')
+    ax[0].legend()
+    ax[1].plot(np.arange(-len(acsum2) / 2, len(acsum2) / 2) / Fs,
+               acsum2, lw=2, c='k')
+    ax[1].plot(np.arange(-len(acsum2) / 2, len(acsum2) / 2) / Fs,
+               abs(hilbert(acsum2)), lw=2, c='r')
+    ax[1].set_xlabel('seconds')
+    ax[0].set_ylim(-0.8, 0.8)
+    ax[1].set_ylim(-0.8, 0.8)
+    ax[0].set_xlim((0, 30))
+    for a in ax:
+        a.set_xticks(np.arange(0, 30), minor=True)
+        a.grid('on', which='major')
+        a.grid('on', which='minor', ls='dashed', color='grey')
+
+    ax[0].set_title('Phase autocorrelation')
+    ax[1].set_title('CC autocorrelation')
+    return fig
