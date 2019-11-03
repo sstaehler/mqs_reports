@@ -386,6 +386,11 @@ def phase_ac(x, Fs, maxlag_sec=8., nu=2.5):
     # Schimmel, M.(1999), Phase cross-correlations: design, comparisons and
     # applications, Bull.Seismol.Soc.Am., 89, 1366 - -1378.
     # This function implements eq. 4
+    # Parameter nu was introduced later, e.g. eq. 2 in:
+    # Schimmel, M., E. Stutzmann, and J. Gallart (2011), Using instantaneous
+    # phase coherence for signal extraction from ambient noise data at a
+    # local to a global scale,
+    # Geophys. J. Int., 184, 494–506, doi:10.1111/j.1365-246X.2010.04861.x.
     maxlag = int(maxlag_sec * Fs)
     ac = np.zeros(maxlag)
     i = 0
