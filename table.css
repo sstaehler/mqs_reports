@@ -6,6 +6,14 @@ table.sortable thead {
     cursor: default;
 }
 
+/* Sortable tables */
+table.dataframe thead {
+    background-color:#eee;
+    color:#666666;
+    font-weight: bold;
+    cursor: default;
+}
+
 /* Show sort labels at first load */
 table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after {
     content: " \25B4\25BE"
@@ -26,7 +34,24 @@ table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sor
 
 #events tr:hover {background-color: #ddd;}
 
+
+#events_all {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  border-collapse: collapse;
+  width: 30%;
+}
+
+#events_all td, #events_all th {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+#events_all tr:nth-child(even){background-color: #f2f2f2;}
+
+#events_all tr:hover {background-color: #ddd;}
+
 h1 {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
   color: navy;
   margin-left: 20px;
 }

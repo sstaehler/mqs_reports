@@ -822,7 +822,7 @@ class Catalog:
 
         write_html(self, fnam_out=fnam_out)
 
-    def get_event_count_table(self) -> None:
+    def get_event_count_table(self) -> str:
         """
         Create HTML event count table for catalog
         """
@@ -841,4 +841,6 @@ class Catalog:
         df = pd.DataFrame(data=data, columns=['total', 'A', 'B', 'C', 'D'])
         df.insert(loc=0, column='event type', value=EVENT_TYPES)
 
-        return(df.to_html(index=False, col_space=40))
+        return ('<H1>MQS events until %s</H1><br>' %
+                utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
+                df.to_html(index=False, table_id='events_all', col_space=40))

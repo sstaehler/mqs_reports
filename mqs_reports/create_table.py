@@ -12,6 +12,7 @@ from argparse import ArgumentParser
 
 import obspy
 from mars_tools.insight_time import solify
+from mqs_reports.snr import calc_SNR
 from obspy import UTCDateTime as utct
 
 
@@ -58,7 +59,9 @@ def create_row(list, fmts=None, extras=None):
 
 
 def write_html(catalog, fnam_out):
-    output = create_header(
+    output = create_html_header()
+    output += catalog.get_event_count_table()
+    output += create_table_head(
         column_names=(' ',
                       'name',
                       'type',
@@ -108,8 +111,8 @@ def write_html(catalog, fnam_out):
                    None,
                    None,
                    None,
-                   calc_SNR(event, fmin=2.1, fmax=2.7) \
-                       if event.mars_event_type_short in ('HF', '24') \
+                   calc_SNR(event, fmin=2.1, fmax=2.7)
+                   if event.mars_event_type_short in ('HF', '24')
                        else calc_SNR(event, fmin=0.2, fmax=0.5),
                    event.pick_amplitude('Peak_MbP',
                                         comp='vertical',
@@ -201,8 +204,7 @@ def _fmt_bool(bool):
         return ' '
 
 
-
-def create_header(column_names):
+def create_html_header():
     header = '<!DOCTYPE html>\n' + \
              '<html lang="en-US">\n' + \
              '<head>\n' + \
@@ -215,9 +217,14 @@ def create_header(column_names):
              '</head>\n' + \
              '<body>\n'
     output = header
+    return output
+
+
+def create_table_head(column_names):
+    output = ''
     output += '<article>\n'
     output += '  <header>\n'
-    output += '    <h1>MQS events until %s</h1>\n' % obspy.UTCDateTime()
+    output += '    <h1>Event table</h1>\n'
     output += '  </header>\n'
     table_head = '  <table class="sortable" id="events">\n' + \
                  '  <thead>\n' + \
@@ -276,7 +283,6 @@ if __name__ == '__main__':
         warnings.simplefilter("ignore")
         catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
     catalog.calc_spectra(winlen_sec=20.)
-    from mqs_reports.snr import calc_SNR
 
     catalog.make_report(dir_out='reports', annotations=ann)
     catalog.write_table(fnam_out='./overview.html')
