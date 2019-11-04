@@ -67,6 +67,7 @@ def write_html(catalog, fnam_out):
                       'Time<br>(LMST)',
                       'duration<br>[minutes]',
                       'distance<br>[degree]',
+                      'SNR',
                       'P-amp<br>[m]',
                       'S-amp<br>[m]',
                       '2.4 Hz<br>pick [m]',
@@ -82,7 +83,7 @@ def write_html(catalog, fnam_out):
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-               '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
+               '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
                '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
                '%s', '%s', '%s')
     dist_string = {'GUI': '%.3g',
@@ -107,6 +108,9 @@ def write_html(catalog, fnam_out):
                    None,
                    None,
                    None,
+                   calc_SNR(event, fmin=2.1, fmax=2.7) \
+                       if event.mars_event_type_short in ('HF', '24') \
+                       else calc_SNR(event, fmin=0.2, fmax=0.5),
                    event.pick_amplitude('Peak_MbP',
                                         comp='vertical',
                                         fmin=1. / 6.,
@@ -136,6 +140,10 @@ def write_html(catalog, fnam_out):
 
         link_report = \
             '<a href="%s" target="_blank">%s</a>'
+        snr_string = '%.1f (2.4 Hz)' % calc_SNR(event, fmin=2.1, fmax=2.7) \
+            if event.mars_event_type_short in ('HF', '24') \
+            else '%.1f (2-5s)' % calc_SNR(event, fmin=0.2, fmax=0.5)
+
         output += create_row(
             (ievent,
              link_report % (event.fnam_report, event.name),
@@ -145,6 +153,7 @@ def write_html(catalog, fnam_out):
              lmst_time,
              duration,
              dist_string[event.distance_type] % event.distance,
+             snr_string,
              event.pick_amplitude('Peak_MbP',
                                   comp='vertical',
                                   fmin=1. / 6.,
@@ -190,6 +199,7 @@ def _fmt_bool(bool):
         return '&#9745;'
     else:
         return ' '
+
 
 
 def create_header(column_names):
@@ -257,8 +267,8 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
-    # catalog.select(name='S0262b')
     ann = Annotations(fnam_csv=args.input_csv)
+
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)
     inv = obspy.read_inventory(args.inventory)
@@ -266,5 +276,7 @@ if __name__ == '__main__':
         warnings.simplefilter("ignore")
         catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
     catalog.calc_spectra(winlen_sec=20.)
+    from mqs_reports.snr import calc_SNR
+
     catalog.make_report(dir_out='reports', annotations=ann)
     catalog.write_table(fnam_out='./overview.html')
