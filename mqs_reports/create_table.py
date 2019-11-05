@@ -12,8 +12,9 @@ from argparse import ArgumentParser
 
 import obspy
 from mars_tools.insight_time import solify
-from mqs_reports.snr import calc_SNR
+from mqs_reports.snr import calc_SNR, calc_stalta
 from obspy import UTCDateTime as utct
+from tqdm import tqdm
 
 
 def create_row_header(list):
@@ -97,9 +98,11 @@ def write_html(catalog, fnam_out):
                       'BB': 2,
                       'HF': 3,
                       '24': 4,
-                      'VF': 5}
+                      'VF': 5,
+                      'UF': 6}
     ievent = len(catalog)
-    for event in catalog:
+    print('Filling HTML table with event entries')
+    for event in tqdm(catalog):
         utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
         lmst_time = solify(event.starttime).strftime('%H:%M:%S')
         duration = event.duration.strftime('%M:%S')
