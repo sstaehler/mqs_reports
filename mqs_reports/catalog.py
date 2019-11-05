@@ -138,7 +138,7 @@ class Catalog:
         Criteria can either be given as string with wildcards or as tuple of
         allowed values.
         :param name: Name of the event ("SXXXXy")
-        :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF
+        :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF, "UF"
         :param quality: A to D
         :return:
         """
