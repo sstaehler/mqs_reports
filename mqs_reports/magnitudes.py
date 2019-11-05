@@ -167,7 +167,7 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
     if event_type is not '24':
         if sum(bol_1Hz_mask) > 5:
 
-            if event_type in ['HF', 'VF']:
+            if event_type in ['HF', 'VF', 'UF']:
                 # A0 should not be larger than peak between 1.1 and 1.8 Hz
                 A0_max = np.max(10 * np.log10(
                     p_sig[np.array((f > 1.1, f < 1.8)).all(axis=0)])) + 6.

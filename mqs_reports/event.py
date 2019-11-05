@@ -27,6 +27,7 @@ LANDER_LON = 135.6234
 
 
 EVENT_TYPES_SHORT = {
+    'ULTRA_HIGH_FREQUENCY': 'UF',
     'VERY_HIGH_FREQUENCY': 'VF',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
@@ -75,7 +76,7 @@ class Event:
                                                radius=RADIUS_MARS)
             self.baz = baz
             self.distance_type = 'GUI'
-        elif self.mars_event_type_short in ['HF', 'VF', '24']:
+        elif self.mars_event_type_short in ['HF', 'UF', 'VF', '24']:
             self.distance = self.calc_distance()
             if self.distance is not None:
                 self.distance_type = 'PgSg'
@@ -225,7 +226,7 @@ class Event:
                               sc3dir: str,
                               kind: str,
                               tpre_SP: float = 100,
-                              tpre_VBB: float = 900.) -> None:
+                              tpre_VBB: float = 1200.) -> None:
         """
         Read waveform data into event object
         :param inv: obspy.Inventory object to use for instrument correction
