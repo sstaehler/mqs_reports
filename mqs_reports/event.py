@@ -572,18 +572,18 @@ class Event:
 
     def write_locator_yaml(self, fnam_out, dt=2.):
         with open(fnam_out, 'w') as f:
+            f.write('velocity_model: MQS_Ops.2019-01-03_250\n')
+            f.write('velocity_model_uncertainty: 1.5\n')
             if self.distance_type == 'GUI':
-                f.write('velocity_model: MQS_Ops.2019-01-03_250\n')
-                f.write('velocity_model_uncertainty: 1.5\n')
                 f.write('backazimuth:\n')
                 f.write(f'    value: {self.baz}\n')
-                f.write('phases:\n')
-                for pick, pick_time in self.picks.items():
-                    if pick in ('P', 'S', 'PP', 'SS', 'pP', 'sS', 'ScS'):
-                        f.write(' -\n')
-                        f.write(f'    code: {pick}\n')
-                        f.write(f'    datetime: {pick_time}\n')
-                        f.write(f'    uncertainty_lower: {dt}\n')
-                        f.write(f'    uncertainty_upper: {dt}\n')
-                        f.write(f'    uncertainty_model: uniform\n')
-                        f.write('\n')
+            f.write('phases:\n')
+            for pick, pick_time in self.picks.items():
+                if pick in ('P', 'S', 'PP', 'SS', 'pP', 'sS', 'ScS'):
+                    f.write(' -\n')
+                    f.write(f'    code: {pick}\n')
+                    f.write(f'    datetime: {pick_time}\n')
+                    f.write(f'    uncertainty_lower: {dt}\n')
+                    f.write(f'    uncertainty_upper: {dt}\n')
+                    f.write(f'    uncertainty_model: uniform\n')
+                    f.write('\n')
