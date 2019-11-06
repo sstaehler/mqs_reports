@@ -165,7 +165,7 @@ def plot_spec(event: mqs_reports.event.Event,
     if 'A0' in amps:
         A0 = amps['A0']
         tstar = amps['tstar']
-        f_c = amps['f_c'] if amps['f_c'] is not None else 3.
+        f_c = amps['f_c'] if 'f_c' in amps and amps['f_c'] is not None else 3.
         if A0 is not None and tstar is not None:
             stf_amp = 1 / (1 + (f / f_c) ** 2)
             fig.add_trace(
