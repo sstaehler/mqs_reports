@@ -294,7 +294,7 @@ class Noise():
                     fmax=1. / 1.5,
                     instrument='VBB'
                     )
-                amp = max(i for i in (amp_P, amp_S) if i is not None)
+                amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
                 LF_times.append(solify(event.starttime).julday +
                                 solify(event.starttime).hour / 60.)
                 LF_amps.append(20 * np.log10(amp))
