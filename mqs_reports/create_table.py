@@ -146,9 +146,15 @@ def write_html(catalog, fnam_out):
 
         link_report = \
             '<a href="%s" target="_blank">%s</a>'
-        snr_string = '%.1f (2.4 Hz)' % calc_SNR(event, fmin=2.1, fmax=2.7) \
-            if event.mars_event_type_short in ('HF', '24') \
-            else '%.1f (2-5s)' % calc_SNR(event, fmin=0.2, fmax=0.5)
+        # snr_string = '%.1f (2.4 Hz)' % calc_SNR(event, fmin=2.1, fmax=2.7) \
+        if event.mars_event_type_short in ('HF', '24'):
+            snr_string = '%.1f (2.4Hz)' % calc_stalta(event,
+                                                      fmin=2.2, fmax=2.8)
+        elif event.mars_event_type_short == ('VF'):
+            '%.1f (8-12Hz)' % calc_SNR(event, fmin=8.0, fmax=12., SP=True,
+                                       hor=True)
+        else:
+            '%.1f (2-5s)' % calc_SNR(event, fmin=0.2, fmax=0.5)
 
         output += create_row(
             (ievent,
