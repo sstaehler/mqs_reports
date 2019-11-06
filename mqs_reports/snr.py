@@ -12,19 +12,28 @@ import numpy as np
 from mqs_reports.event import Event
 
 
-def calc_SNR(event: Event, fmin: float, fmax: float) -> float:
-    p_noise = event.spectra['noise']['p_Z']
-    df_noise = event.spectra['noise']['f'][1]
-    f_bool = np.array((event.spectra['noise']['f'] > fmin,
-                       event.spectra['noise']['f'] < fmax)).all(axis=0)
+def calc_SNR(event: Event, fmin: float, fmax: float,
+             hor=False, SP=False) -> float:
+    if SP:
+        spectra = event.spectra_SP
+    else:
+        spectra = event.spectra
+    if hor:
+        comp = 'E'
+    else:
+        comp = 'Z'
+    p_noise = spectra['noise']['p_' + comp]
+    df_noise = spectra['noise']['f'][1]
+    f_bool = np.array((spectra['noise']['f'] > fmin,
+                       spectra['noise']['f'] < fmax)).all(axis=0)
     power_noise = np.trapz(p_noise[f_bool], dx=df_noise)
 
     for type in ['S', 'P', 'all']:
-        if type in event.spectra:
-            p_signal = event.spectra[type]['p_Z']
-            df_signal = event.spectra[type]['f'][1]
-            f_bool = np.array((event.spectra[type]['f'] > fmin,
-                               event.spectra[type]['f'] < fmax)).all(axis=0)
+        if type in spectra:
+            p_signal = spectra[type]['p_' + comp]
+            df_signal = spectra[type]['f'][1]
+            f_bool = np.array((spectra[type]['f'] > fmin,
+                               spectra[type]['f'] < fmax)).all(axis=0)
             continue
 
     power_signal = np.trapz(p_signal[f_bool], dx=df_signal)
