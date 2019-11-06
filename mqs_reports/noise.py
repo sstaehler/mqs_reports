@@ -266,7 +266,7 @@ class Noise():
         if cat is not None:
             cmap = plt.cm.get_cmap('plasma_r')
             cmap.set_over('royalblue')
-            for event in cat.select(event_type=['HF', '24']):
+            for event in cat.select(event_type=['HF', 'VF', '24']):
                 if event.distance is None:
                     HF_dists.append(50.)
                 else:
