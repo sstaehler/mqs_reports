@@ -54,13 +54,13 @@ def calc_stalta(event: Event,
     chf = classic_sta_lta(tr_stalta, nlta=nlta, nsta=nsta)
     tr_stalta.data = chf
 
-    plt.plot(tr_stalta.times() + float(tr_stalta.stats.starttime),
-             tr_stalta.data)
+    #plt.plot(tr_stalta.times() + float(tr_stalta.stats.starttime),
+    #         tr_stalta.data)
     tr_stalta.trim(starttime=event.starttime,
                    endtime=event.endtime)
-    plt.plot(tr_stalta.times() + float(tr_stalta.stats.starttime),
-             tr_stalta.data, 'r')
-    plt.savefig('./tmp/stalta_%s.png' % event.name)
-    plt.close('all')
+    #plt.plot(tr_stalta.times() + float(tr_stalta.stats.starttime),
+    #         tr_stalta.data, 'r')
+    #plt.savefig('./tmp/stalta_%s.png' % event.name)
+    #plt.close('all')
 
     return np.max(tr_stalta.data)
