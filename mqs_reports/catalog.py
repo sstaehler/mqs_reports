@@ -126,6 +126,16 @@ class Catalog:
         out += '\n'
         return out
 
+    def origin_vs_start_time(self):
+        dt = [(ev.name, utct(ev.picks['start']) - ev.origin_time)
+              for ev in self]
+
+        dt = sorted(dt, key=lambda x: x[1], reverse=True)
+
+        for item in dt:
+            print(item[0], item[1])
+
+
     def select(self,
                name: Union[tuple, list, str] = None,
                event_type: Union[tuple, list, str] = None,

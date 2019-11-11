@@ -46,13 +46,16 @@ class Event:
                  quality: str,
                  latitude: float,
                  longitude: float,
-                 mars_event_type: str):
+                 mars_event_type: str,
+                 origin_time: float):
         self.name = name.strip()
         self.publicid = publicid
         self.origin_publicid = origin_publicid
         self.picks = picks
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
+        self.origin_time = origin_time
+
         self.duration = utct(utct(self.picks['end']) -
                              utct(self.picks['start']))
         self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
