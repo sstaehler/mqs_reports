@@ -9,6 +9,9 @@ XMLNS_QUAKEML_BED_MARS = "http://quakeml.org/xmlns/bed/1.2/mars"
 QML_EVENT_NAME_DESCRIPTION_TYPE = 'earthquake name'
 
 from mqs_reports.event import Event
+from obspy import UTCDateTime as utct
+
+
 def lxml_prefix_with_namespace(elementname, namespace):
     """Prefix an XML element name with a namsepace in lxml syntax."""
 
@@ -128,6 +131,13 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
                 "longitude", XMLNS_QUAKEML_BED),
             lxml_prefix_with_namespace(
                 "value", XMLNS_QUAKEML_BED))).text
+        origin_time = ev.find("./{}[@publicID='{}']/{}/{}".format(
+            lxml_prefix_with_namespace("origin", XMLNS_QUAKEML_BED),
+            pref_ori.text,
+            lxml_prefix_with_namespace(
+                "time", XMLNS_QUAKEML_BED),
+            lxml_prefix_with_namespace(
+                "value", XMLNS_QUAKEML_BED))).text
 
 
         if not ev_name == 'S0085a':
@@ -139,7 +149,8 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
                 quality=str(lq.text).strip(),
                 latitude=float(latitude),
                 longitude=float(longitude),
-                mars_event_type=mars_event_type_str))
+                mars_event_type=mars_event_type_str,
+                origin_time=utct(origin_time)))
 
     return event_info
 
