@@ -35,13 +35,13 @@ def create_row(list, fmts=None, extras=None):
     if extras is None:
         for li, fmt in zip(list, fmts):
             if li is None:
-                row += ind_string + '<td></td>\n'
+                row += ind_string + '<td>-</td>\n'
             else:
                 row += ind_string + '<td>' + fmt % (li) + '</td>\n'
     else:
         for li, fmt, extra in zip(list, fmts, extras):
             if li is None:
-                row += ind_string + '<td></td>\n'
+                row += ind_string + '<td>-</td>\n'
             else:
                 if extra is None:
                     row += ind_string + '<td>' + fmt % (li) + \
