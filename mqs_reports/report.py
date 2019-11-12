@@ -228,7 +228,7 @@ def plot_spec(event: mqs_reports.event.Event,
             row=row, col=col)
 
     fig.update_yaxes(range=[ymin, ymax],
-                     title_text='PSD, displacement / (m/s²)²/Hz [dB]',
+                     title_text='PSD, displacement / m²/Hz [dB]',
                      row=row, col=col)
     fig.update_xaxes(range=[-1, 1.5], type='log',
                      title_text='frequency / Hz',
@@ -333,7 +333,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                                      **kwargs),
                           row=row, col=col)
 
-    fig.update_yaxes(title_text='displacement', row=row, col=col)
+    fig.update_yaxes(title_text='displacement / m', row=row, col=col)
 
 
 def _calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):

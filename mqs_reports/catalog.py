@@ -10,6 +10,7 @@
 
 from os.path import join as pjoin
 from typing import Union
+from scipy import stats
 
 import matplotlib.ticker
 import numpy as np
@@ -125,6 +126,16 @@ class Catalog:
                   'Catalog.__str__(extended=True))" to print all Events]'
         out += '\n'
         return out
+
+    def origin_vs_start_time(self):
+        dt = [(ev.name, utct(ev.picks['start']) - ev.origin_time)
+              for ev in self]
+
+        dt = sorted(dt, key=lambda x: x[1], reverse=True)
+
+        for item in dt:
+            print(item[0], item[1])
+
 
     def select(self,
                name: Union[tuple, list, str] = None,
@@ -575,7 +586,8 @@ class Catalog:
 
     def plot_magnitude_distance(
          self, mag_type='m2.4',
-         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+                 'VERY_HIGH_FREQUENCY': 'C0'},
          markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
          markerfill={'A': True, 'B': True, 'C': False, 'D': False},
          show=True):
@@ -584,7 +596,7 @@ class Catalog:
 
         legend_elements = []
 
-        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY']:
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
             for quality in 'ABCD':
                 cat = self.select(quality=quality, event_type=event_type)
 
@@ -657,6 +669,69 @@ class Catalog:
         plt.legend([l3, l2, l1], ['Quality B', 'Quality BC', 'Quality BCD'])
         plt.xlabel('distance / degree')
         plt.ylabel('# events per area')
+
+        if show:
+            plt.show()
+        else:
+            return fig
+
+    def plot_distance_distribution_cumulative(self, fig=None, label=None,
+                                              show=True):
+
+        if fig is None:
+            fig = plt.figure()
+        ax = fig.gca()
+
+        d = np.array(sorted([e.distance for e in self]))
+        N = np.arange(len(d)) / len(d)
+        ax.plot(d, N, label=label)
+
+        ax.set_xlabel('distance / degree')
+        ax.set_ylabel('cumulative relative distribution of events')
+
+        if label is not None:
+            ax.legend()
+
+        if show:
+            plt.show()
+        else:
+            return fig
+
+    def plot_distance_distribution_density(self, N_average=None, fig=None,
+                                           label=None, show=True):
+
+        if fig is None:
+            fig = plt.figure()
+        ax = fig.gca()
+
+        d = np.array(sorted([e.distance for e in self]))
+        print(np.mean(d), np.std(d))
+        #np.random.seed(1235)
+        d = np.sort(np.random.normal(np.mean(d), np.std(d), len(d)))
+
+        plt.plot(d, np.zeros(d.shape), '|', ms=20)
+
+        if N_average is None:
+            N_average = int(len(self) / 10)
+            print(N_average)
+        density = N_average / (d[N_average:] - d[:-N_average]) / len(self)
+        dd = (d[N_average:] + d[:-N_average]) / 2
+        plt.plot(dd, density, label=label)
+
+        # maybe plot sum over error functions instead? This is called
+        # Parzen-window method:
+        # https://en.wikipedia.org/wiki/Kernel_density_estimation
+
+        # kde_factor = len(d) ** (-0.2)  # Scott's rule
+        kde = stats.gaussian_kde(d)
+
+        x = np.linspace(0., 45, 1000.)
+        plt.plot(x, kde(x))
+
+        plt.xlabel('distance / deg')
+
+        if label is not None:
+            ax.legend()
 
         if show:
             plt.show()
