@@ -7,17 +7,19 @@
 :license:
     None
 """
-import mqs_reports
 import numpy as np
 import obspy
 import plotly.graph_objects as go
-from mqs_reports.magnitudes import lorenz, lorenz_att
-from mqs_reports.utils import envelope_smooth
+import plotly.io as pio
 from obspy import UTCDateTime as utct
 from plotly.subplots import make_subplots
 
+import mqs_reports
+from mqs_reports.magnitudes import lorenz, lorenz_att
+from mqs_reports.utils import envelope_smooth
 
-def make_report(event, fnam_out, annotations):
+
+def make_report(event, chan, fnam_out, annotations):
     fig = make_subplots(rows=3, cols=2,
                         shared_xaxes=True,
                         specs=[[{"rowspan": 3}, {}],
@@ -32,32 +34,25 @@ def make_report(event, fnam_out, annotations):
                             "<b>Acceleration spectrogram</b>")
                         )
     pick_plot(event, fig, types=['mb_P', 'mb_S'], row=1, col=2,
-              annotations=annotations
-              )
+              annotations=annotations, chan=chan)
     pick_plot(event, fig, types=['m2.4'], row=2, col=2,
-              annotations=annotations
-              )
-    # pick_plot(event, fig, types=['full', 'mb_P', 'mb_S'],
-    #           row=3, col=2,
-    #           annotations=annotations
-    #           )
+              annotations=annotations, chan=chan)
 
-    plot_specgram(event, fig, row=3, col=2)
+    plot_specgram(event, fig, row=3, col=2, chan=chan)
 
-    plot_spec(event, fig, row=1, col=1)
+    plot_spec(event, fig, row=1, col=1, chan=chan)
 
-    fig.update_layout({"title": {"text": "Event %s overview" % event.name,
+    fig.update_layout({"title": {"text": "Event %s overview BH%s" %
+                                         (event.name, chan),
                                  "font": {"size": 30}}})
 
-    import plotly.io as pio
-    # pio.show(fig)
     pio.write_html(fig, file=fnam_out,
                    include_plotlyjs=True)
-    event.fnam_report = fnam_out
+    event.fnam_report[chan] = fnam_out
 
 
-def plot_specgram(event, fig, row, col, fmin=0.05, fmax=10.0):
-    tr = event.waveforms_VBB.select(channel='??Z')[0].copy()
+def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
+    tr = event.waveforms_VBB.select(channel='??' + chan)[0].copy()
     tr.trim(starttime=utct(event.picks['start']) - 180.,
             endtime=utct(event.picks['end']) + 180.)
 
@@ -102,8 +97,8 @@ def plot_specgram(event, fig, row, col, fmin=0.05, fmax=10.0):
 
 
 def plot_spec(event: mqs_reports.event.Event,
-              fig, row, col, ymin=-250,
-              ymax=-170,
+              fig, row, col, chan,
+              ymin=-250, ymax=-170,
               df_mute=1.07, f_VBB_SP_transition=7.5, **kwargs):
     colors = ['black', 'navy', 'coral', 'orange']
 
@@ -120,7 +115,7 @@ def plot_spec(event: mqs_reports.event.Event,
                          np.array((f < 1. / df_mute,
                                    f > df_mute)).any(axis=0))
                         ).all(axis=0)
-                    p = spec[kind]['p_Z']
+                    p = spec[kind]['p_' + chan]
 
                     fig.add_trace(
                         go.Scatter(x=f[bol_1Hz_mask],
@@ -147,14 +142,14 @@ def plot_spec(event: mqs_reports.event.Event,
                        mode="lines+text", **kwargs),
             row=row, col=col)
     else:
-        # Add only VBBZ text
+        # Add only VBB text
         fig.add_trace(
             go.Scatter(x=[f_VBB_SP_transition,
                           f_VBB_SP_transition,
                           f_VBB_SP_transition],
                        y=[-250, -180, -100],
                        showlegend=False,
-                       text=['', 'VBBZ', ''],
+                       text=['', 'VBB' + chan, ''],
                        textfont={'size': 30},
                        textposition='bottom center',
                        mode="text", **kwargs),
@@ -240,7 +235,7 @@ def plot_spec(event: mqs_reports.event.Event,
                      row=row, col=col)
 
 
-def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
+def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
     pick_name = {'mb_P': 'Peak_MbP',
                  'mb_S': 'Peak_MbS',
                  'm2.4': 'Peak_M2.4',
@@ -252,7 +247,7 @@ def pick_plot(event, fig, types, row, col, annotations=None, **kwargs):
              'full': (1. / 15., 3.5)
              }
 
-    tr = event.waveforms_VBB.select(channel='??Z')[0].copy()
+    tr = event.waveforms_VBB.select(channel='??' + chan)[0].copy()
     tr.decimate(2)
     fmin = freqs[types[0]][0]
     fmax = freqs[types[0]][1]

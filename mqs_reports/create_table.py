@@ -12,9 +12,10 @@ from argparse import ArgumentParser
 
 import obspy
 from mars_tools.insight_time import solify
-from mqs_reports.snr import calc_SNR, calc_stalta
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
+
+from mqs_reports.snr import calc_SNR, calc_stalta
 
 
 def create_row_header(list):
@@ -143,9 +144,13 @@ def write_html(catalog, fnam_out):
                    None,
                    None
                    )
-
+        event.fnam_report['name'] = event.name
         link_report = \
-            '<a href="%s" target="_blank">%s</a>'
+            ('<a href="{Z:s}" target="_blank">{name:s}</a><br>' +
+             '<a href="{Z:s}" target="_blank">Z</a> ' +
+             '<a href="{N:s}" target="_blank">N</a> ' +
+             '<a href="{E:s}" target="_blank">E</a>').format(
+                **event.fnam_report)
         # snr_string = '%.1f (2.4 Hz)' % calc_SNR(event, fmin=2.1, fmax=2.7) \
         if event.mars_event_type_short in ('HF', 'VF', '24'):
             snr_string = '%.1f (2.4Hz)' % calc_stalta(event,
@@ -158,7 +163,7 @@ def write_html(catalog, fnam_out):
 
         output += create_row(
             (ievent,
-             link_report % (event.fnam_report, event.name),
+             link_report,
              event.mars_event_type_short,
              event.quality,
              utc_time,

@@ -17,13 +17,14 @@ from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from mpldatacursor import datacursor
+from obspy import UTCDateTime as utct
+from tqdm import tqdm
+
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
-from obspy import UTCDateTime as utct
-from tqdm import tqdm
 
 
 class Catalog:
@@ -673,14 +674,16 @@ class Catalog:
         """
         from os.path import exists as pexists
         for event in tqdm(self):
-            fnam_report = pjoin(dir_out,
-                                'mag_report_%s.html' %
-                                event.name)
-            if not pexists(fnam_report):
-                event.make_report(fnam_out=fnam_report,
-                                  annotations=annotations)
-            else:
-                event.fnam_report = fnam_report
+            for chan in ['Z', 'N', 'E']:
+                fnam_report = pjoin(dir_out,
+                                    'mag_report_%s_%s.html' %
+                                    (event.name, chan))
+                if not pexists(fnam_report):
+                    event.make_report(fnam_out=fnam_report,
+                                      chan=chan,
+                                      annotations=annotations)
+                else:
+                    event.fnam_report[chan] = fnam_report
 
     def plot_spectra(self,
                      ymin: float = -240.,

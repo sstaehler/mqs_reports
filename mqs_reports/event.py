@@ -16,10 +16,11 @@ from typing import Union
 
 import numpy as np
 import obspy
-from mqs_reports.magnitudes import fit_spectra
-from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+
+from mqs_reports.magnitudes import fit_spectra
+from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 
 RADIUS_MARS = 2889.
 LANDER_LAT = 4.5024
@@ -91,6 +92,8 @@ class Event:
         self.kind = None
         self.spectra = None
         self.spectra_SP = None
+
+        self.fnam_report = dict()
 
     @property
     def mars_event_type_short(self):
@@ -567,9 +570,9 @@ class Event:
             return funcs[mag_type](amplitude_dB=amplitude,
                                    distance_degree=distance)
 
-    def make_report(self, fnam_out, annotations=None):
+    def make_report(self, chan, fnam_out, annotations=None):
         from mqs_reports.report import make_report
-        make_report(self, fnam_out, annotations)
+        make_report(self, chan=chan, fnam_out=fnam_out, annotations=annotations)
 
     def write_locator_yaml(self, fnam_out, dt=2.):
         with open(fnam_out, 'w') as f:
