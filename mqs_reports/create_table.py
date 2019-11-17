@@ -130,10 +130,6 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
             snr = calc_SNR(event, fmin=0.2, fmax=0.5)
             snr_string = '%.1f (2-5s)' % snr
 
-    except KeyError:
-        row = create_row((event.name, 'INCOMPLETE PICKS'))
-
-    else:
         sortkey = (ievent,
                    None,
                    event_type_idx[event.mars_event_type_short],
@@ -213,6 +209,9 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
              ),
             extras=sortkey,
             fmts=formats)
+
+    except KeyError:
+        row = create_row((ievent, event.name, 'INCOMPLETE PICKS'))
     return row
 
 
