@@ -104,105 +104,115 @@ def write_html(catalog, fnam_out):
     ievent = len(catalog)
     print('Filling HTML table with event entries')
     for event in tqdm(catalog):
-        utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
-        lmst_time = solify(event.starttime).strftime('%H:%M:%S')
-        duration = event.duration.strftime('%M:%S')
-        sortkey = (ievent,
-                   None,
-                   event_type_idx[event.mars_event_type_short],
-                   None,
-                   float(utct(event.picks['start'])),
-                   None,
-                   None,
-                   None,
-                   calc_SNR(event, fmin=2.1, fmax=2.7)
-                   if event.mars_event_type_short in ('HF', '24')
-                       else calc_SNR(event, fmin=0.2, fmax=0.5),
-                   event.pick_amplitude('Peak_MbP',
-                                        comp='vertical',
-                                        fmin=1. / 6.,
-                                        fmax=1. / 2,
-                                        unit='fm'),
-                   event.pick_amplitude('Peak_MbS',
-                                        comp='horizontal',
-                                        fmin=1. / 6.,
-                                        fmax=1. / 2,
-                                        unit='fm'),
-                   event.pick_amplitude('Peak_M2.4',
-                                        comp='vertical',
-                                        fmin=2.2, fmax=2.6,
-                                        unit='fm'),
-                   event.amplitudes['A_24'],
-                   event.amplitudes['A0'],
-                   None,
-                   None,
-                   None,
-                   None,
-                   None,
-                   None,
-                   None,
-                   None,
-                   None
-                   )
-        event.fnam_report['name'] = event.name
-        link_report = \
-            ('<a href="{Z:s}" target="_blank">{name:s}</a><br>' +
-             '<a href="{Z:s}" target="_blank">Z</a> ' +
-             '<a href="{N:s}" target="_blank">N</a> ' +
-             '<a href="{E:s}" target="_blank">E</a>').format(
-                **event.fnam_report)
-        # snr_string = '%.1f (2.4 Hz)' % calc_SNR(event, fmin=2.1, fmax=2.7) \
-        if event.mars_event_type_short in ('HF', 'VF', '24'):
-            snr_string = '%.1f (2.4Hz)' % calc_stalta(event,
-                                                      fmin=2.2, fmax=2.8)
-        elif event.mars_event_type_short == ('UF'):
-            snr_string = '%.1f (8-12Hz)' % calc_SNR(event, fmin=8.0, fmax=12.,
-                                                    SP=True, hor=True)
-        else:
-            snr_string = '%.1f (2-5s)' % calc_SNR(event, fmin=0.2, fmax=0.5)
+        row = create_event_row(dist_string, event, event_type_idx, formats,
+                               ievent)
 
-        output += create_row(
-            (ievent,
-             link_report,
-             event.mars_event_type_short,
-             event.quality,
-             utc_time,
-             lmst_time,
-             duration,
-             dist_string[event.distance_type] % event.distance,
-             snr_string,
-             event.pick_amplitude('Peak_MbP',
-                                  comp='vertical',
-                                  fmin=1. / 6.,
-                                  fmax=1. / 2),
-             event.pick_amplitude('Peak_MbS',
-                                  comp='horizontal',
-                                  fmin=1. / 6.,
-                                  fmax=1. / 2),
-             event.pick_amplitude('Peak_M2.4',
-                                  comp='vertical',
-                                  fmin=2.2, fmax=2.6),
-             10 ** (event.amplitudes['A_24'] / 20.)
-             if event.amplitudes['A_24'] is not None else None,
-             10 ** (event.amplitudes['A0'] / 20.)
-             if event.amplitudes['A0'] is not None else None,
-             event.magnitude(mag_type='mb_P'),
-             event.magnitude(mag_type='mb_S'),
-             event.magnitude(mag_type='m2.4'),
-             event.magnitude(mag_type='MFB'),
-             event.amplitudes['f_c'],
-             event.amplitudes['tstar'],
-             event.available_sampling_rates()['VBB_Z'],
-             _fmt_bool(event.available_sampling_rates()['SP_Z'] == 100.),
-             _fmt_bool(event.available_sampling_rates()['SP_N'] == 100.),
-             ),
-            extras=sortkey,
-            fmts=formats)
+        output += row
         ievent -= 1
     footer = create_footer()
     output += footer
     with open(fnam_out, 'w') as f:
         f.write(output)
+
+
+def create_event_row(dist_string, event, event_type_idx, formats, ievent):
+    utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
+    lmst_time = solify(event.starttime).strftime('%H:%M:%S')
+    duration = event.duration.strftime('%M:%S')
+    try:
+        if event.mars_event_type_short in ('HF', 'VF', '24'):
+            snr = calc_stalta(event, fmin=2.2, fmax=2.8)
+            snr_string = '%.1f (2.4Hz)' % snr
+        elif event.mars_event_type_short == ('UF'):
+            snr = calc_SNR(event, fmin=8.0, fmax=12., SP=True, hor=True)
+            snr_string = '%.1f (8-12Hz)' % snr
+        else:
+            snr = calc_SNR(event, fmin=0.2, fmax=0.5)
+            snr_string = '%.1f (2-5s)' % snr
+    except KeyError:
+        snr = 0.
+        snr_string = 'no noise'
+
+    sortkey = (ievent,
+               None,
+               event_type_idx[event.mars_event_type_short],
+               None,
+               float(utct(event.picks['start'])),
+               None,
+               None,
+               None,
+               snr,
+               event.pick_amplitude('Peak_MbP',
+                                    comp='vertical',
+                                    fmin=1. / 6.,
+                                    fmax=1. / 2,
+                                    unit='fm'),
+               event.pick_amplitude('Peak_MbS',
+                                    comp='horizontal',
+                                    fmin=1. / 6.,
+                                    fmax=1. / 2,
+                                    unit='fm'),
+               event.pick_amplitude('Peak_M2.4',
+                                    comp='vertical',
+                                    fmin=2.2, fmax=2.6,
+                                    unit='fm'),
+               event.amplitudes['A_24'],
+               event.amplitudes['A0'],
+               None,
+               None,
+               None,
+               None,
+               None,
+               None,
+               None,
+               None,
+               None
+               )
+    event.fnam_report['name'] = event.name
+    link_report = \
+        ('<a href="{Z:s}" target="_blank">{name:s}</a><br>' +
+         '<a href="{Z:s}" target="_blank">Z</a> ' +
+         '<a href="{N:s}" target="_blank">N</a> ' +
+         '<a href="{E:s}" target="_blank">E</a>').format(
+            **event.fnam_report)
+    row = create_row(
+        (ievent,
+         link_report,
+         event.mars_event_type_short,
+         event.quality,
+         utc_time,
+         lmst_time,
+         duration,
+         dist_string[event.distance_type] % event.distance,
+         snr_string,
+         event.pick_amplitude('Peak_MbP',
+                              comp='vertical',
+                              fmin=1. / 6.,
+                              fmax=1. / 2),
+         event.pick_amplitude('Peak_MbS',
+                              comp='horizontal',
+                              fmin=1. / 6.,
+                              fmax=1. / 2),
+         event.pick_amplitude('Peak_M2.4',
+                              comp='vertical',
+                              fmin=2.2, fmax=2.6),
+         10 ** (event.amplitudes['A_24'] / 20.)
+         if event.amplitudes['A_24'] is not None else None,
+         10 ** (event.amplitudes['A0'] / 20.)
+         if event.amplitudes['A0'] is not None else None,
+         event.magnitude(mag_type='mb_P'),
+         event.magnitude(mag_type='mb_S'),
+         event.magnitude(mag_type='m2.4'),
+         event.magnitude(mag_type='MFB'),
+         event.amplitudes['f_c'],
+         event.amplitudes['tstar'],
+         event.available_sampling_rates()['VBB_Z'],
+         _fmt_bool(event.available_sampling_rates()['SP_Z'] == 100.),
+         _fmt_bool(event.available_sampling_rates()['SP_N'] == 100.),
+         ),
+        extras=sortkey,
+        fmts=formats)
+    return row
 
 
 def create_footer():
