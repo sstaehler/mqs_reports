@@ -11,12 +11,10 @@ import numpy as np
 import obspy
 import plotly.graph_objects as go
 import plotly.io as pio
-from obspy import UTCDateTime as utct
-from plotly.subplots import make_subplots
-
-import mqs_reports
 from mqs_reports.magnitudes import lorenz, lorenz_att
 from mqs_reports.utils import envelope_smooth
+from obspy import UTCDateTime as utct
+from plotly.subplots import make_subplots
 
 
 def make_report(event, chan, fnam_out, annotations):
@@ -61,12 +59,17 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
     z, f, t = _calc_cwf(tr, fmin=fmin, fmax=fmax)
     z = 10 * np.log10(z)
     z[z < -220] = -220.
-    z[z > -160] = -160.
+    z[z > -150] = -150.
     df = 2
     dt = 4
-    fig.add_trace(go.Heatmap(z=z[::df, ::dt],
-                             x=t[::dt], y=f[::df],
-                             colorscale='plasma'),
+    data_heatmap = go.Heatmap(z=z[::df, ::dt],
+                              x=t[::dt], y=f[::df],
+                              colorscale='plasma')
+    data_heatmap.colorbar.len = 0.35
+    data_heatmap.colorbar.yanchor = 'bottom'
+    data_heatmap.colorbar.y = 0.0
+    data_heatmap.colorbar.title.text = '(m/s²)²/Hz [dB]'
+    fig.add_trace(data_heatmap,
                   row=row, col=col)
 
     for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
@@ -96,7 +99,7 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
                      row=row, col=col)
 
 
-def plot_spec(event: mqs_reports.event.Event,
+def plot_spec(event,
               fig, row, col, chan,
               ymin=-250, ymax=-170,
               df_mute=1.07, f_VBB_SP_transition=7.5, **kwargs):
@@ -361,7 +364,8 @@ if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
 
     events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
-                     type_select='all', quality=('A', 'B', 'C'))
+                     type_select='all', quality=('A', 'B'))
     inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
     events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
     events.calc_spectra(winlen_sec=20.)
+    events.make_report()
