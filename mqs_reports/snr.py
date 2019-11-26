@@ -28,23 +28,22 @@ def calc_SNR(event: Event, fmin: float, fmax: float,
                        spectra['noise']['f'] < fmax)).all(axis=0)
     power_noise = np.trapz(p_noise[f_bool], dx=df_noise)
 
-    for type in ['S', 'P', 'all']:
-        if type in spectra:
-            p_signal = spectra[type]['p_' + comp]
-            df_signal = spectra[type]['f'][1]
-            f_bool = np.array((spectra[type]['f'] > fmin,
-                               spectra[type]['f'] < fmax)).all(axis=0)
+    for spec_win in ['S', 'P', 'all']:
+        if spec_win in spectra:
+            p_signal = spectra[spec_win]['p_' + comp]
+            df_signal = spectra[spec_win]['f'][1]
+            f_bool = np.array((spectra[spec_win]['f'] > fmin,
+                               spectra[spec_win]['f'] < fmax)).all(axis=0)
             continue
 
     power_signal = np.trapz(p_signal[f_bool], dx=df_signal)
-    return power_signal / power_noise
+    return power_signal / power_noise, spec_win
 
 
 def calc_stalta(event: Event,
                 fmin: float, fmax: float,
                 len_sta=100, len_lta=1000) -> float:
     from obspy.signal.trigger import classic_sta_lta
-    import matplotlib.pyplot as plt
     tr_stalta = event.waveforms_VBB.select(channel='BHZ')[0].copy()
     tr_stalta.differentiate()
     tr_stalta.filter('bandpass', freqmin=fmin, freqmax=fmax, corners=6,

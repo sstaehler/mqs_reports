@@ -12,10 +12,9 @@ from argparse import ArgumentParser
 
 import obspy
 from mars_tools.insight_time import solify
+from mqs_reports.snr import calc_SNR, calc_stalta
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
-
-from mqs_reports.snr import calc_SNR, calc_stalta
 
 
 def create_row_header(list):
@@ -124,11 +123,12 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
             snr = calc_stalta(event, fmin=2.2, fmax=2.8)
             snr_string = '%.1f (2.4Hz)' % snr
         elif event.mars_event_type_short == ('UF'):
-            snr = calc_SNR(event, fmin=8.0, fmax=12., SP=True, hor=True)
-            snr_string = '%.1f (8-12Hz)' % snr
+            snr, snr_win = calc_SNR(event, fmin=8.0, fmax=12., SP=True,
+                                    hor=True)
+            snr_string = '%.1f (%s, 8-12Hz)' % (snr, snr_win)
         else:
-            snr = calc_SNR(event, fmin=0.2, fmax=0.5)
-            snr_string = '%.1f (2-5s)' % snr
+            snr, snr_win = calc_SNR(event, fmin=0.2, fmax=0.5)
+            snr_string = '%.1f (%s, 2-5s)' % (snr, snr_win)
 
         sortkey = (ievent,
                    None,
