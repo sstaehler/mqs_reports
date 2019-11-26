@@ -27,14 +27,13 @@ def calc_SNR(event: Event, fmin: float, fmax: float,
     f_bool = np.array((spectra['noise']['f'] > fmin,
                        spectra['noise']['f'] < fmax)).all(axis=0)
     power_noise = np.trapz(p_noise[f_bool], dx=df_noise)
-
     for spec_win in ['S', 'P', 'all']:
         if spec_win in spectra:
             p_signal = spectra[spec_win]['p_' + comp]
             df_signal = spectra[spec_win]['f'][1]
             f_bool = np.array((spectra[spec_win]['f'] > fmin,
                                spectra[spec_win]['f'] < fmax)).all(axis=0)
-            continue
+            break
 
     power_signal = np.trapz(p_signal[f_bool], dx=df_signal)
     return power_signal / power_noise, spec_win
