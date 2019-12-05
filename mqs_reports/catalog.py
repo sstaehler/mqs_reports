@@ -10,7 +10,6 @@
 
 from os.path import join as pjoin
 from typing import Union
-from scipy import stats
 
 import matplotlib.ticker
 import numpy as np
@@ -18,14 +17,14 @@ from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from mpldatacursor import datacursor
-from obspy import UTCDateTime as utct
-from tqdm import tqdm
-
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
+from obspy import UTCDateTime as utct
+from scipy import stats
+from tqdm import tqdm
 
 
 class Catalog:
@@ -212,6 +211,17 @@ class Catalog:
         """
         for event in tqdm(self):
             event.calc_spectra(winlen_sec=winlen_sec)
+
+    def save_magnitudes(self, fnam):
+        mags = []
+        for event in self:
+            mags.append([event.name,
+                         event.magnitude(mag_type='mb_P'),
+                         event.magnitude(mag_type='mb_S'),
+                         event.magnitude(mag_type='m2.4'),
+                         event.magnitude(mag_type='MFB')
+                         ])
+        np.savetxt(fnam, mags, fmt=('%s'))
 
     def read_waveforms(self,
                        inv,

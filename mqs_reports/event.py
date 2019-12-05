@@ -16,16 +16,14 @@ from typing import Union
 
 import numpy as np
 import obspy
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
-
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
 RADIUS_MARS = 2889.
 LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
-
 
 EVENT_TYPES_SHORT = {
     'ULTRA_HIGH_FREQUENCY': 'UF',
@@ -142,18 +140,7 @@ class Event:
             distance_km = deltat / (1. / vs - 1. / vp)
             return kilometers2degrees(distance_km, radius=RADIUS_MARS)
         else:
-            # TODO: replace to use the velocities from the arguments
-            # t0 = 600.
-            # d0 = 8.
-            # t1 = 1200
-            # d1 = 35.
-            # # fudge factor to compensate observation bias (low SNR events are
-            # # observed shorter)
-            # distance = (d1 - d0) / (t1 - t0) * (self.duration_s * 1. - t0) + d0
-            # return distance
-
             deltat = float(utct(self.picks['end']) - utct(self.picks['start']))
-
             # map duration to Ts - Tp
             deltat /= 3.
             distance_km = deltat / (1. / vs - 1. / vp)
@@ -545,8 +532,10 @@ class Event:
                  }
         if self.distance is None and distance is None:
             return None
-        elif self.distance is not None:
+        elif self.distance is not None and distance is None:
             distance = self.distance
+        else:
+            distance = distance
         if mag_type in ('mb_P', 'mb_S'):
             amplitude = self.pick_amplitude(pick=pick_name[mag_type],
                                             comp=component[mag_type],
