@@ -13,7 +13,7 @@ import numpy as np
 
 def mb_P(amplitude_dB, distance_degree):
     amplitude_dB = 10 ** (amplitude_dB / 20.)
-    mbP_tmp = np.log10(amplitude_dB) + 1.4 * np.log10(distance_degree) + 9.5
+    mbP_tmp = np.log10(amplitude_dB) + 1.5 * np.log10(distance_degree) + 9.5
     mag = (mbP_tmp) + 0.1 + \
           1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - mbP_tmp),
                            axis=0)
@@ -34,12 +34,12 @@ def M2_4(amplitude_dB, distance_degree):
     if amplitude_dB is None:
         return None
     else:
-        # mag = np.log10(amplitude) - np.log10(4.78e-11) + \
-        #       (np.log10(distance) - np.log10(30.)) * 1.2 + 3.
         amp_true = 10 ** (amplitude_dB / 20.)
         A0_est = 10 ** (0.7 * np.log10(amp_true) - 3.)
+        # mag = (2. / 3.) * (np.log10(A0_est) +
+        #                    1.2 * np.log10(distance_degree) + 9.4) + 1.5
         mag = (2. / 3.) * (np.log10(A0_est) +
-                           1.5 * np.log10(distance_degree) + 9.4) + 1.9
+                           1.1 * np.log10(distance_degree) + 9.8) + 1.5
         return mag
 
 
@@ -51,6 +51,30 @@ def MFB(amplitude_dB, distance_degree):
         amp_true = 10 ** (amplitude_dB / 20.)
         mag = (2. / 3.) * (np.log10(amp_true) +
                            1.1 * np.log10(distance_degree) + 9.8) + 1.9
+        return mag
+
+
+def MFB(amplitude_dB, distance_degree):
+    dist_term = 1.1
+    if amplitude_dB is None:
+        return None
+    else:
+        logM0 = amplitude_dB / 20. + \
+                dist_term * np.log10(distance_degree) + \
+                21.475
+        mag = 2. / 3. * (logM0 - 9.1)
+        return mag
+
+
+def MFB_HF(amplitude_dB, distance_degree):
+    dist_term = 0.9
+    if amplitude_dB is None:
+        return None
+    else:
+        logM0 = amplitude_dB / 20. + \
+                dist_term * np.log10(distance_degree) + \
+                21.475
+        mag = 2. / 3. * (logM0 - 9.1)
         return mag
 
 

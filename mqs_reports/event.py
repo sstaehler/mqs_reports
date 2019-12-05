@@ -528,7 +528,8 @@ class Event:
         funcs = {'mb_P': mag.mb_P,
                  'mb_S': mag.mb_S,
                  'm2.4': mag.M2_4,
-                 'MFB': mag.MFB
+                 'MFB': mag.MFB,
+                 'MFB_HF': mag.MFB_HF
                  }
         if self.distance is None and distance is None:
             return None
@@ -547,6 +548,8 @@ class Event:
                 amplitude = 20 * np.log10(amplitude)
 
         elif mag_type == 'MFB':
+            if self.mars_event_type_short in ['24', 'HF', 'VF']:
+                mag_type == 'MFB_HF'
             amplitude = self.amplitudes['A0'] \
                 if 'A0' in self.amplitudes else None
         elif mag_type == 'm2.4':
