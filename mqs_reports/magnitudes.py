@@ -12,21 +12,26 @@ import numpy as np
 
 
 def mb_P(amplitude_dB, distance_degree):
-    amplitude_dB = 10 ** (amplitude_dB / 20.)
-    mbP_tmp = np.log10(amplitude_dB) + 1.5 * np.log10(distance_degree) + 9.5
-    mag = (mbP_tmp) + 0.1 + \
-          1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - mbP_tmp),
-                           axis=0)
+    amplitude = 10 ** (amplitude_dB / 20.)
+    # mbP_tmp = np.log10(amplitude_dB) + 1.5 * np.log10(distance_degree) + 9.5
+    # mag = (mbP_tmp) + 0.1 + \
+    #       1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - mbP_tmp),
+    #                        axis=0)
+    # mag = 0.6463 * np.log10(amplitude) + 0.7868 * np.log10(distance_degree)
+    # + 8.2236
+    mag = 0.7318 * np.log10(amplitude) + 1.2 * np.log10(distance_degree)+ 8.3471
 
     return mag
 
 
 def mb_S(amplitude_dB, distance_degree):
-    amplitude_dB = 10 ** (amplitude_dB / 20.)
-    mb_S_tmp = np.log10(amplitude_dB) + 2.2 * np.log10(distance_degree) + 8.4
-    mag = (mb_S_tmp) + 0.1 + \
-          1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - (mb_S_tmp)),
-                           axis=0)
+    amplitude = 10 ** (amplitude_dB / 20.)
+    # mb_S_tmp = np.log10(amplitude_dB) + 2.2 * np.log10(distance_degree) + 8.4
+    # mag = (mb_S_tmp) + 0.1 + \
+    #       1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - (mb_S_tmp)),
+    #                        axis=0)
+    mag = 0.7647 * np.log10(amplitude)+ 1.4 * np.log10(distance_degree) + 8.0755
+
     return mag
 
 
@@ -34,25 +39,15 @@ def M2_4(amplitude_dB, distance_degree):
     if amplitude_dB is None:
         return None
     else:
-        amp_true = 10 ** (amplitude_dB / 20.)
-        A0_est = 10 ** (0.7 * np.log10(amp_true) - 3.)
+        amplitude = 10 ** (amplitude_dB / 20.)
+        # A0_est = 10 ** (0.7 * np.log10(amp_true) - 3.)
+        # # mag = (2. / 3.) * (np.log10(A0_est) +
+        # #                    1.2 * np.log10(distance_degree) + 9.4) + 1.5
         # mag = (2. / 3.) * (np.log10(A0_est) +
-        #                    1.2 * np.log10(distance_degree) + 9.4) + 1.5
-        mag = (2. / 3.) * (np.log10(A0_est) +
-                           1.1 * np.log10(distance_degree) + 9.8) + 1.5
+        #                    1.1 * np.log10(distance_degree) + 9.8) + 1.5
+        mag = 0.6177 * np.log10(amplitude) + 0.9 * np.log10(distance_degree) + \
+              7.0026
         return mag
-
-
-def MFB(amplitude_dB, distance_degree):
-    if amplitude_dB is None:
-        return None
-    else:
-        # A0 is given in dB
-        amp_true = 10 ** (amplitude_dB / 20.)
-        mag = (2. / 3.) * (np.log10(amp_true) +
-                           1.1 * np.log10(distance_degree) + 9.8) + 1.9
-        return mag
-
 
 def MFB(amplitude_dB, distance_degree):
     dist_term = 1.1
