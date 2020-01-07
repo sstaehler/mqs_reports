@@ -16,10 +16,11 @@ from typing import Union
 
 import numpy as np
 import obspy
-from mqs_reports.magnitudes import fit_spectra
-from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+
+from mqs_reports.magnitudes import fit_spectra
+from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 
 RADIUS_MARS = 2889.
 LANDER_LAT = 4.5024
@@ -77,6 +78,7 @@ class Event:
             self.distance = kilometers2degrees(dist_km,
                                                radius=RADIUS_MARS)
             self.baz = baz
+            self.az = az
             self.distance_type = 'GUI'
         elif self.mars_event_type_short in ['HF', 'UF', 'VF', '24']:
             self.distance = self.calc_distance()

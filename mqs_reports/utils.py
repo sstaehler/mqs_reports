@@ -39,28 +39,44 @@ def f_c(M0, vs, ds):
 def M0(Mw):
     return 10 ** (Mw * 1.5 + 9.1)
 
-
-def attenuation_term(freqs, Qm, Qk=5e4, x=1e6, phase='S', exp=0.0, f0=1,
-                     vp=7.5e3, vs=4.1e3):
+def attenuation_term(freqs, Qm, Qk=5e4, x=1e6, phase='S', vp=7.5e3, vs=4.1e3):
     if phase == 'P':
-        vel = vp
         L = 4 / 3 * (vs / vp) ** 2
         Q = 1 / (L / Qm + (1 - L) / Qk)
     else:
-        vel = vs
         Q = Qm
-    Q = Q * (freqs / f0) ** exp
-    Qscat = 300
-    Q = 1. / (1. / Q + 1 / Qscat)
-    return np.exp(-np.pi * x / vel * freqs / Q)
+    return np.exp(-np.pi * x * freqs / vs / Q)
 
 
-def pred_spec(freqs, ds, Qm, amp, dist, mag, phase='S', vp=7.5e3, vs=4.2e3):
+def pred_spec(freqs, ds, Qm, amp, dist, mag, phase, vs=5.e3):
     stf_amp = 1 / (1 + (freqs / f_c(M0=M0(mag),
-                                    vs=2.8e3, ds=ds)
+                                    vs=vs, ds=ds)
                         ) ** 2)
-    A = attenuation_term(freqs, Qm=Qm, x=dist, phase=phase, vp=vp, vs=vs)
+    A = attenuation_term(freqs, Qm=Qm, x=dist, vs=vs, phase=phase)
     return 20 * np.log10(A * stf_amp) + amp
+
+
+# def attenuation_term(freqs, Qm, Qk=5e4, x=1e6, phase='S', exp=0.0, f0=1,
+#                      vp=7.5e3, vs=4.1e3):
+#     if phase == 'P':
+#         vel = vp
+#         L = 4 / 3 * (vs / vp) ** 2
+#         Q = 1 / (L / Qm + (1 - L) / Qk)
+#     else:
+#         vel = vs
+#         Q = Qm
+#     Q = Q * (freqs / f0) ** exp
+#     Qscat = 300
+#     Q = 1. / (1. / Q + 1 / Qscat)
+#     return np.exp(-np.pi * x / vel * freqs / Q)
+#
+#
+# def pred_spec(freqs, ds, Qm, amp, dist, mag, phase='S', vp=7.5e3, vs=4.2e3):
+#     stf_amp = 1 / (1 + (freqs / f_c(M0=M0(mag),
+#                                     vs=2.8e3, ds=ds)
+#                         ))
+#     A = attenuation_term(freqs, Qm=Qm, x=dist, phase=phase, vp=vp, vs=vs)
+#     return 20 * np.log10(A * stf_amp) + amp
 
 
 def create_ZNE_HG(st: obspy.Stream,
@@ -309,11 +325,12 @@ def calc_PSD(tr, winlen_sec):
     return f, p
 
 
-def plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
+def plot_spectrum(ax, ax_all, df_mute, iax, ichan_in, spectrum,
                   fmin=0.1, fmax=100.,
                   **kwargs):
     f = spectrum['f']
-    for chan in ['Z', 'N', 'E']:
+    for i, chan in enumerate(['Z', 'N', 'E']):
+        ichan = ichan_in + i
         try:
             p = spectrum['p_' + chan]
         except(KeyError):
@@ -325,23 +342,31 @@ def plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
                            f > df_mute)).any(axis=0))
                 ).all(axis=0)
 
-            ax[iax, ichan].plot(f[bol_1Hz_mask],
-                                10 * np.log10(p[bol_1Hz_mask]),
-                                **kwargs)
             bol_1Hz_mask = np.invert(bol_1Hz_mask)
             p = np.ma.masked_where(condition=bol_1Hz_mask, a=p,
+                                   copy=False)
+            f = np.ma.masked_where(condition=bol_1Hz_mask, a=f,
                                    copy=False)
 
             if ichan % 3 == 0:
                 ax_all[ichan % 3].plot(f,
                                        10 * np.log10(p),
                                        lw=0.5, c='lightgrey', zorder=1)
+                ax[iax, ichan].plot(f,
+                                    10 * np.log10(p),
+                                    **kwargs)
             elif ichan % 3 == 1:
                 tmp2 = p
             elif ichan % 3 == 2:
                 ax_all[ichan % 3 - 1].plot(f,
                                            10 * np.log10(tmp2 + p),
                                            lw=0.5, c='lightgrey', zorder=1)
+                ax[iax, ichan - 1].plot(f,
+                                        10 * np.log10(p + tmp2),
+                                        **kwargs)
+
+            # ax[iax, ichan].axes.get_xaxis().set_visible(False)
+            # ax[iax, ichan].axes.get_yaxis().set_visible(False)
             ichan += 1
 
 
@@ -415,11 +440,9 @@ def phase_ac(x, Fs, maxlag_sec=8., nu=2.5):
     return ac
 
 
-def autocorrelation(st, starttime, endtime, max_lag_sec=40):
-    st.decimate(2)
-    fmin = 1.2
+def autocorrelation(st, starttime, endtime, fmin=1.2, fmax=3.5, max_lag_sec=40):
+    # st.decimate(2)
     st.filter('highpass', freq=fmin, zerophase=True)
-    fmax = 3.5
     st.filter('lowpass', freq=fmax, zerophase=True)
     st.trim(starttime=starttime,
             endtime=endtime)
@@ -462,7 +485,7 @@ def autocorrelation(st, starttime, endtime, max_lag_sec=40):
     ax[1].set_xlabel('seconds')
     ax[0].set_ylim(-0.8, 0.8)
     ax[1].set_ylim(-0.8, 0.8)
-    ax[0].set_xlim((0, 30))
+    ax[0].set_xlim((0, max_lag_sec * 0.8))
     for a in ax:
         a.set_xticks(np.arange(0, 30), minor=True)
         a.grid('on', which='major')
