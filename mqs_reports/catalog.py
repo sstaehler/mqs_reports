@@ -16,7 +16,6 @@ import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
-from mpldatacursor import datacursor
 from obspy import UTCDateTime as utct
 from scipy import stats
 from tqdm import tqdm
@@ -502,7 +501,7 @@ class Catalog:
             return fig
 
     def plot_HF_spectra(self, SNR=2., tooltip=False, show=True):
-
+        from mpldatacursor import datacursor
         fig = plt.figure()
 
         cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY'])
