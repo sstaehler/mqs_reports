@@ -17,12 +17,13 @@ def create_fnam_event(
         sc3dir,
         filenam_inst
         ):
-    dirnam = pjoin(sc3dir, 'op/data/waveform/2019/XB/ELYSE/')
+    dirnam = pjoin(sc3dir, 
+                   'op/data/waveform/%04d/XB/ELYSE/' % utct(time).year)
     dirnam_inst = pjoin(dirnam, '?H?.D')
 
     hour = utct(time).strftime('%H')
     fnam_inst = pjoin(dirnam_inst,
-                      filenam_inst % utct(time).julday)
+                      filenam_inst % (utct(time).year, utct(time).julday))
     if hour in ['00', '23']:
         fnam_inst = fnam_inst[:-1] + '?'
 
@@ -171,9 +172,13 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
             correct_shift(st_seis.select(channel='??U')[0], nsamples=-1)
         for tr in st_seis:
             fmax = tr.stats.sampling_rate * 0.5
-            tr.remove_response(inv,
-                               pre_filt=(fmin / 2., fmin, fmax, fmax * 1.2),
-                               output=kind)
+            try:
+                tr.remove_response(inv,
+                                   pre_filt=(fmin / 2., fmin, fmax, fmax * 1.2),
+                                   output=kind)
+            except ValueError:
+                print(tr)
+                print(inv.select(channel=tr.stats.channel, location=tr.stats.location))
 
         correct_subsample_shift(st_seis)
 
