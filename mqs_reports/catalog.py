@@ -140,6 +140,8 @@ class Catalog:
                name: Union[tuple, list, str] = None,
                event_type: Union[tuple, list, str] = None,
                quality: Union[tuple, list, str] = None,
+               distmin: float = None,
+               distmax: float = None,
                starttime: utct = None,
                endtime: utct = None,
                ):
@@ -183,12 +185,20 @@ class Catalog:
                     if not fnmatch(event.quality, quality):
                         continue
 
+            if distmin is not None:
+                if event.distance is None or event.distance < distmin:
+                    continue
+
+            if distmax is not None:
+                if event.distance is None or event.distance > distmax:
+                    continue
+
             if starttime is not None:
                 if event.starttime < starttime:
                     continue
 
             if endtime is not None:
-                if event.starttime > endtime:
+                if event.endtime > endtime:
                     continue
 
             events.append(event)
