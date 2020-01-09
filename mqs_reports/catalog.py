@@ -12,6 +12,7 @@ from os.path import join as pjoin
 from typing import Union
 
 import matplotlib.ticker
+import matplotlib.pylab as pl
 import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
@@ -57,11 +58,12 @@ class Catalog:
             elif type_select == 'lower':
                 type_des = ['LOW_FREQUENCY',
                             'BROADBAND']
+            elif isinstance(type_select, str):
+                type_des = [type_select]
+            elif isinstance(type_select, list):
+                type_des = type_select
             else:
-                if len(type_select) == 1:
-                    type_des = [type_select]
-                else:
-                    type_des = type_select
+                raise ValueError
             if quality == 'all':
                 quality = ('A', 'B', 'C', 'D')
             self.types = type_des
@@ -364,20 +366,23 @@ class Catalog:
 
     def plot_24_alignment(
          self, pre_time=120., post_time=120., fmax_filt=2.7, fmin_filt=2.1,
-         envelope_window=100., amp_fac=2., show_picks=True,
-         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2'},
+         envelope_window=100., amp_fac=2., show_picks=True, shift_to_S=False,
+         regular_spacing=True, label=True, fill=True,
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+                 'VERY_HIGH_FREQUENCY': 'C3'},
          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
          show=True):
 
         events = []
         for event in self:
             # filter for HF and 2.4 events
-            if event.mars_event_type not in ['2.4_HZ', 'HIGH_FREQUENCY']:
+            if event.mars_event_type not in ['2.4_HZ', 'HIGH_FREQUENCY',
+                                             'VERY_HIGH_FREQUENCY']:
                 continue
 
             # Remove events that do not have all picks
             try:
-                for pick in ['Pg', 'Sg', 'end', 'noise_start', 'noise_end']:
+                for pick in ['Pg', 'Sg', 'start', 'end', 'noise_start', 'noise_end']:
                     assert not event.picks[pick] == ''
             except:
                 print('One or more picks missing for event %s' % (event.name))
@@ -405,7 +410,7 @@ class Catalog:
                 print(event.name, ': starttime problem')
                 start_shift = - (starttime - trZ.stats.starttime)
             else:
-                start_shift = 0.
+                start_shift = -tt_PgSg[i] if shift_to_S else 0.
 
             if (endtime - trZ.stats.endtime) > 0.:
                 print(event.name, ': endtime problem')
@@ -440,42 +445,72 @@ class Catalog:
             X = trZ_env.times() - pre_time + start_shift
             #Y = trZ_env.data * amp_fac + k
             #Y0 = np.median(trZ_noise_env.data) * amp_fac + k
-            Y = (trZ_env.data - np.median(trZ_noise_env.data)) * amp_fac + k
-            Y0 = k
+            if regular_spacing:
+                Y0 = k
+                #Y0 = 0.
+            else:
+                Y0 = tt_PgSg[i]
+                #Y0 = 0.
+
+            Y = (trZ_env.data - np.median(trZ_noise_env.data)) * amp_fac + Y0
+            #Y = (np.log10(trZ_env.data) -
+            #     np.log10(np.median(trZ_noise_env.data))) * amp_fac + Y0
+            #Y = np.log10(trZ_env.data) * amp_fac + Y0
+            #Y = trZ_env.data * amp_fac + Y0
 
             # downsample to speed up plotting
             X = X[::10]
             Y = Y[::10]
 
-            plt.plot(X, Y, color=colors[event.mars_event_type],
+            #color = colors[event.mars_event_type]
+            color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
+            plt.plot(X, Y, color=color,
                      ls=linestyle[event.quality], zorder=1000-k)
 
-            # fill between noise amplitude estimate and envelope
-            plt.fill_between(X, Y0, Y,  where=((Y>=Y0) * (X>0) * (X<duration)),
-                             color=colors[event.mars_event_type], alpha=0.4,
-                             zorder=-20)
+            if fill:
+                # fill between noise amplitude estimate and envelope
+                plt.fill_between(X, Y0, Y,  where=((Y>=Y0) * (X>start_shift) *
+                                                   (X<duration+start_shift)),
+                                 color=colors[event.mars_event_type], alpha=0.2,
+                                 zorder=-20)
 
             if show_picks:
-                plt.plot([tt, tt], [k, k+0.3*amp_fac], color='C8')
-                plt.plot([duration, duration], [k, k+0.8], color='C9')
+                if shift_to_S:
+                    plt.plot([-tt, -tt], [Y0, Y0+0.3*amp_fac], color='C8')
+                else:
+                    plt.plot([tt, tt], [Y0, Y0+0.3*amp_fac], color='C8')
+                plt.plot([duration + start_shift, duration + start_shift],
+                         [Y0, Y0+0.8*amp_fac], color='C9')
 
-            # plot noise
-            X = trZ_noise_env.times()
-            X = X - pre_time - 400 - X[-1]
-            Y = trZ_noise_env.data * amp_fac + k
-            X = X[::10]
-            Y = Y[::10]
-            plt.plot(X, Y, color='k')
+            # # plot noise
+            # X = trZ_noise_env.times()
+            # X = X - pre_time - 400 - X[-1]
+            # Y = trZ_noise_env.data * amp_fac + k
+            # X = X[::10]
+            # Y = Y[::10]
+            # plt.plot(X, Y, color='k')
 
-            plt.text(-pre_time, k + 0.5, event.name + ' ',
-                     ha='right', va='center')
+            if label:
+                plt.text(-pre_time + start_shift, Y0, # + 0.5*amp_fac,
+                         event.name + ' ',
+                         ha='right', va='center')
 
         # time 0 line
         plt.axvline(0, color='C4')
 
+
+        if not regular_spacing:
+            #plt.plot([-50, -400], [50, 400], color='C5')
+            #plt.plot([-200, -400], [200, 400], color='C5')
+            #bla = 0.5
+            #plt.plot([-200 * bla, -400 * bla], [200, 400], color='C6')
+            #bla = 0.5
+            #plt.plot([200 * bla, 400 * bla], [200, 400], color='C6')
+            plt.plot([150, 150], [50, 400], color='C7')
+
         if legend:
             # legend
-            llabels = ['HIGH_FREQUENCY', '2.4_HZ']
+            llabels = ['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ']
             lcolors = [colors[l] for l in llabels]
             llines = [Line2D([0], [0], color=c) for c in lcolors]
             plt.legend(llines, llabels)
@@ -483,7 +518,7 @@ class Catalog:
         # lable, limit, ticks
         plt.xlabel('time after Pg / s')
         plt.xlim(-pre_time - 300, None)
-        plt.yticks([], [])
+        #plt.yticks([], [])
 
         if show:
             plt.show()
@@ -563,17 +598,23 @@ class Catalog:
 
         # plot lorenz with attenuation
         f = np.linspace(0.01, 10., 1000)
-        spec1 = lorenz_att(f, A0=-7, f0=2.4, tstar=0.1, fw=0.3, ampfac=15.)
-        spec2 = lorenz_att(f, A0=-5, f0=2.4, tstar=0.2, fw=0.3, ampfac=15.)
-        spec3 = lorenz_att(f, A0=-8, f0=2.4, tstar=0.05, fw=0.3, ampfac=15.)
-        spec4 = lorenz_att(f, A0=-3, f0=2.4, tstar=0.3, fw=0.3, ampfac=15.)
+        f_c = 100.
+        ampfac = 30.
+        spec1 = lorenz_att(f, A0=-11.5, f0=2.4, tstar=0.1, fw=0.3,
+                           ampfac=ampfac, f_c=f_c)
+        spec2 = lorenz_att(f, A0=-8.5, f0=2.4, tstar=0.2, fw=0.3,
+                           ampfac=ampfac, f_c=f_c)
+        spec3 = lorenz_att(f, A0=-13, f0=2.4, tstar=0.05, fw=0.3,
+                           ampfac=ampfac, f_c=f_c)
+        spec4 = lorenz_att(f, A0=-5, f0=2.4, tstar=0.3, fw=0.3,
+                           ampfac=ampfac, f_c=f_c)
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
         l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
         l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.3')
 
-        llabels = ['P', 'S'] + [l.get_label() for l in [l3, l4, l5, l6]]
-        plt.legend([l1, l2, l3, l4, l5, l6], llabels)
+        llabels = ['P', 'S'] + [l.get_label() for l in [l5, l3, l4, l6]]
+        plt.legend([l1, l2, l5, l3, l4, l6], llabels)
         plt.xlabel('frequency / Hz')
         plt.ylabel('PSD relative to 2.4 peak amplitude')
 
@@ -717,7 +758,7 @@ class Catalog:
         d = np.array(sorted([e.distance for e in self]))
         print(np.mean(d), np.std(d))
         #np.random.seed(1235)
-        d = np.sort(np.random.normal(np.mean(d), np.std(d), len(d)))
+        #d = np.sort(np.random.normal(np.mean(d), np.std(d), len(d)))
 
         plt.plot(d, np.zeros(d.shape), '|', ms=20)
 
