@@ -16,6 +16,7 @@ from typing import Union
 
 import numpy as np
 import obspy
+from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
@@ -61,6 +62,7 @@ class Event:
         self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
         self.starttime = utct(utct(self.picks['start']))
         self.endtime = utct(utct(self.picks['end']))
+        self.sol = solify(utct(self.picks['start'])).julday
 
         self.amplitudes = dict()
 
