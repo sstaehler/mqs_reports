@@ -16,10 +16,11 @@ from typing import Union
 
 import numpy as np
 import obspy
-from mqs_reports.magnitudes import fit_spectra
-from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+
+from mqs_reports.magnitudes import fit_spectra
+from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 
 RADIUS_MARS = 2889.
 LANDER_LAT = 4.5024
@@ -77,6 +78,7 @@ class Event:
             self.distance = kilometers2degrees(dist_km,
                                                radius=RADIUS_MARS)
             self.baz = baz
+            self.az = az
             self.distance_type = 'GUI'
         elif self.mars_event_type_short in ['HF', 'UF', 'VF', '24']:
             self.distance = self.calc_distance()
@@ -241,7 +243,7 @@ class Event:
         else:
             twin_end = utct(self.picks['end'])
 
-        filenam_SP_HG = 'XB.ELYSE.65.EH?.D.2019.%03d'
+        filenam_SP_HG = 'XB.ELYSE.65.EH?.D.%04d.%03d'
         fnam_SP = create_fnam_event(
             filenam_inst=filenam_SP_HG,
             sc3dir=sc3dir, time=self.picks['start'])
@@ -258,25 +260,21 @@ class Event:
 
         # Try for 02.BH? (20sps VBB)
         success_VBB = False
-        filenam_VBB_HG = 'XB.ELYSE.02.BH?.D.2019.%03d'
+        filenam_VBB_HG = 'XB.ELYSE.02.BH?.D.%04d.%03d'
         fnam_VBB = create_fnam_event(
             filenam_inst=filenam_VBB_HG,
             sc3dir=sc3dir, time=self.picks['start'])
         if len(glob(fnam_VBB)) % 3 == 0:
-            try:
-                self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
-                                               kind=kind,
-                                               twin=[twin_start - tpre_VBB,
+            self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                           kind=kind,
+                                           twin=[twin_start - tpre_VBB,
                                                      twin_end + tpre_VBB])
-            except Exception:
-                success_VBB = False
-            else:
-                if len(self.waveforms_VBB) == 3:
-                    success_VBB = True
+            if len(self.waveforms_VBB) == 3:
+                success_VBB = True
 
         if not success_VBB:
             # Try for 03.BH? (10sps VBB)
-            filenam_VBB_HG = 'XB.ELYSE.03.BH?.D.2019.%03d'
+            filenam_VBB_HG = 'XB.ELYSE.03.BH?.D.%04d.%03d'
             fnam_VBB = create_fnam_event(
                 filenam_inst=filenam_VBB_HG,
                 sc3dir=sc3dir, time=self.picks['start'])

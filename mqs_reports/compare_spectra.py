@@ -9,7 +9,6 @@ Script to calculate and plot spectra for all MQS events so far
 :license:
     None
 """
-from mqs_reports.catalog import Catalog
 from mqs_reports.utils import __dayplot_set_x_ticks
 
 __author__ = "Simon Stähler"
@@ -104,6 +103,8 @@ def define_arguments():
 
 
 if __name__ == '__main__':
+    from mqs_reports.catalog import Catalog
+
     args = define_arguments()
     # for type in ('all', 'HIGH_FREQUENCY', 'lower', 'HQ'):
     inv = obspy.read_inventory(args.input_inventory)
@@ -111,23 +112,59 @@ if __name__ == '__main__':
     winlen_sec = 20.
 
     events = Catalog(fnam_quakeml=args.input_quakeml,
-                     type_select='higher',
-                     quality=['A', 'B', ])
-    events.read_waveforms(inv, kind, args.sc3_dir)
+                     type_select='all',
+                     quality=['A', 'B', 'C', 'D'])
+    print(events.select(endtime=obspy.UTCDateTime('2019-09-30')))
+    names = ['S0128a', 'S0218a', 'S0263a', 'S0264e', 'S0260a',
+             'S0239a',
+             'S0167a', 'S0226b', 'S0234c', 'S0185a', 'S0183a',
+             'S0205a', 'S0235b', 'S0173a', 'S0154a', 'S0325a']
+    events = events.select(name=names)
+    # events = events.select(name=['S0105a',
+    #                             'S0260a',
+    #                             'S0290b',
+    #                             'S0167a',
+    #                             'S0133a',
+    #                             'S0173a',
+    #                             'S0128a',
+    #                             'S0235b'])
+    events.read_waveforms(inv=inv, sc3dir=args.sc3_dir,
+                          )
+    events.load_distances(fnam_csv='./mqs_reports/data/manual_distances.csv')
+    fits = {'S0105a': {'Qm': 300, 'phase': 'S'},
+            'S0260a': {'Qm': 2500, 'phase': 'P'},
+            'S0263a': {'A0': -212, 'Qm': 2500, 'phase': 'P'},
+            'S0264e': {'A0': -210, 'Qm': 2500, 'phase': 'P'},
+            'S0239a': {'A0': -216, 'Qm': 2500, 'phase': 'P'},
+            'S0290b': {'Qm': 2500, 'phase': 'P'},
+            'S0167a': {'Qm': 1000, 'phase': 'S'},
+            'S0133a': {'Qm': 1100, 'phase': 'S'},
+            'S0234c': {'Qm': 1100, 'phase': 'S'},
+            'S0226b': {'Qm': 300, 'phase': 'S'},
+            'S0325a': {'Qm': 300, 'phase': 'S'},
+            'S0205a': {'Qm': 300, 'phase': 'P'},
+            'S0183a': {'Qm': 300, 'phase': 'P'},
+            'S0154a': {'Qm': 1100, 'phase': 'S'},
+            'S0185a': {'A0': -200, 'Qm': 1100, 'phase': 'S'},
+            'S0173a': {'Qm': 320, 'phase': 'S'},
+            'S0128a': {'Qm': 2500, 'phase': 'P'},
+            'S0218a': {'Qm': 2500, 'phase': 'P'},
+            'S0235b': {'Qm': 320, 'phase': 'S'}}
 
-    for i, event in events.events.items():
-        print(  # '%s, %10.3e, %10.e' %
-            i,
-            event.pick_amplitude('Peak_MbP',
-                                 comp='vertical',
-                                 fmin=1. / 6.,
-                                 fmax=1. / 2),
-            event.pick_amplitude('Peak_MbS',
-                                 comp='vertical',
-                                 fmin=1. / 6.,
-                                 fmax=1. / 2),
-            event.pick_amplitude('Peak_M2.4',
-                                 comp='vertical',
-                                 fmin=2.2, fmax=2.6))
+    # for event in events:
+    # print(  # '%s, %10.3e, %10.e' %
+    #     event.pick_amplitude('Peak_MbP',
+    #                          comp='vertical',
+    #                          fmin=1. / 6.,
+    #                          fmax=1. / 2),
+    #     event.pick_amplitude('Peak_MbS',
+    #                          comp='vertical',
+    #                          fmin=1. / 6.,
+    #                          fmax=1. / 2),
+    #     event.pick_amplitude('Peak_M2.4',
+    #                          comp='vertical',
+    #                          fmin=2.2, fmax=2.6))
     events.calc_spectra(winlen_sec)
-    events.plot_spectra(ymin=-240, ymax=-170)
+    events.plot_spectra(ymin=-240, ymax=-170, fits=fits)
+    events.make_report(dir_out='reports')
+    events.write_table('table_SI5.1.html')

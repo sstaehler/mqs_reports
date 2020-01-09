@@ -17,15 +17,15 @@ import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
-from mpldatacursor import datacursor
+from obspy import UTCDateTime as utct
+from scipy import stats
+from tqdm import tqdm
+
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
-from obspy import UTCDateTime as utct
-from scipy import stats
-from tqdm import tqdm
 
 
 class Catalog:
@@ -142,6 +142,8 @@ class Catalog:
                name: Union[tuple, list, str] = None,
                event_type: Union[tuple, list, str] = None,
                quality: Union[tuple, list, str] = None,
+               distmin: float = None,
+               distmax: float = None,
                starttime: utct = None,
                endtime: utct = None,
                ):
@@ -174,7 +176,7 @@ class Catalog:
                         continue
                 else:
                     if (not fnmatch(event.mars_event_type_short, event_type)
-                         and not fnmatch(event.mars_event_type, event_type)):
+                            and not fnmatch(event.mars_event_type, event_type)):
                         continue
 
             if quality is not None:
@@ -185,12 +187,20 @@ class Catalog:
                     if not fnmatch(event.quality, quality):
                         continue
 
+            if distmin is not None:
+                if event.distance is None or event.distance < distmin:
+                    continue
+
+            if distmax is not None:
+                if event.distance is None or event.distance > distmax:
+                    continue
+
             if starttime is not None:
                 if event.starttime < starttime:
                     continue
 
             if endtime is not None:
-                if event.starttime > endtime:
+                if event.endtime > endtime:
                     continue
 
             events.append(event)
@@ -526,7 +536,7 @@ class Catalog:
             return fig
 
     def plot_HF_spectra(self, SNR=2., tooltip=False, show=True):
-
+        from mpldatacursor import datacursor
         fig = plt.figure()
 
         cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY'])
@@ -823,91 +833,52 @@ class Catalog:
         :param df_mute: percentage to mute around 1 Hz
         """
         nevents = len(self.events)
-        nrows = max(2, (nevents + 1) // 2)
+        nevents_LF = len(self.select(event_type=['LF', 'BB']))
+        nevents_HF = len(self.select(event_type=['HF', '24', 'VF']))
+        nrows_HF = max(1, (nevents_HF + 1) // 2)
+        nrows_LF = max(2, (nevents_LF + 1) // 2)
+        nrows = nrows_HF + nrows_LF + 1
+        print('nevents:   ', nevents)
+        print('nevents_LF:', nevents_LF)
+        print('nevents_HF:', nevents_HF)
+        print('nrow_LF:', nrows_LF)
+        print('nrow_HF:', nrows_HF)
+        hr = []
+        for i in range(0, nevents_HF // 2):
+            hr.append(2)
+        hr.append(1)
+        for i in range(0, nevents_LF // 2):
+            hr.append(2)
+        print(hr)
         fig, ax = plt.subplots(nrows=nrows, ncols=6, figsize=(14, 10),
-                               sharex='all', sharey='all')
+                               sharex='all', sharey='all',
+                               gridspec_kw={'height_ratios': hr})
         fig_all, ax_all = plt.subplots(nrows=1, ncols=2,
                                        sharex='all', sharey='all',
                                        figsize=(12, 6))
-        iax = 0
-        second = 0
-        for a in ax_all:
-            a.set_prop_cycle(plt.cycler('color',
-                                        plt.cm.tab20(
-                                            np.linspace(0, 1, nevents))))
-        ievent = 0
-        for event in self:
-            ichan = 0
-            if iax == nrows:
-                iax -= nrows
-                ichan = 3
-                second = 1
-            if second == 1:
-                ichan = 3
+        self.select(event_type=['HF', '24', 'VF']).plot_many_spectra(
+            ax, ax_all, df_mute, fits, nevents_HF, nrows_HF,
+            source=False, iaxoff=0)
+        self.select(event_type=['HF', '24', 'VF']).plot_many_spectra(
+            ax, ax_all, df_mute, fits, nevents_HF, nrows_HF,
+            iaxoff=0)
+        self.select(event_type=['LF', 'BB']).plot_many_spectra(
+            ax, ax_all, df_mute, fits, nevents_LF, nrows_LF,
+            iaxoff=nrows_HF + 1)
 
-            bodywave = False
-            spectrum = event.spectra['noise']
-            if len(spectrum) > 0:
-                plot_spectrum(ax, ax_all, df_mute, iax, ichan,
-                              spectrum, fmax=8., color='k', label='noise')
-            spectrum = event.spectra['P']
-            if len(spectrum) > 0:
-                plot_spectrum(ax, ax_all, df_mute, iax, ichan,
-                              spectrum, fmax=8., color='b', label='P-coda')
-                bodywave = True
-            spectrum = event.spectra['S']
-            if len(spectrum) > 0:
-                plot_spectrum(ax, ax_all, df_mute, iax, ichan,
-                              spectrum, fmax=8., color='g', label='S-code')
-                bodywave = True
-            spectrum = event.spectra['all']
-            if len(spectrum) > 0 and not bodywave:
-                plot_spectrum(ax, ax_all, df_mute, iax, ichan,
-                              spectrum, fmax=8., color='r', label='total')
-
-            if len(event.spectra_SP) > 0:
-                if 'noise' in event.spectra_SP:
-                    spectrum = event.spectra_SP['noise']
-                    if len(spectrum) > 0:
-                        plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
-                                      fmin=7., color='k')  # , label='noise')
-                if 'P' in event.spectra_SP:
-                    spectrum = event.spectra_SP['P']
-                    if len(spectrum) > 0:
-                        plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
-                                      fmin=7., color='b')  # , label='P-coda')
-                        bodywave = True
-                if 'S' in event.spectra_SP:
-                    spectrum = event.spectra_SP['S']
-                    if len(spectrum) > 0:
-                        plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
-                                      fmin=7., color='g')  # , label='S-code')
-                        bodywave = True
-                spectrum = event.spectra_SP['all']
-                if len(spectrum) > 0 and not bodywave:
-                    plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
-                                  fmin=7., color='r')  # , label='total')
-
-                if fits is not None:
-                    f = np.geomspace(0.01, 20., 100)
-                    Mw = event.magnitude(mag_type='MFB')
-                    p_pred = pred_spec(freqs=f,
-                                       ds=1e6,
-                                       mag=Mw,
-                                       amp=fits[event.name]['A0'],
-                                       Qm=fits[event.name]['Qm'],
-                                       dist=event.distance * 55e3)
-                    ax[iax, ichan].plot(f, p_pred)
-
-
-            ax[iax, ichan + 2].legend()
-            ax[iax, ichan].text(x=0.55, y=0.75, s=event.name,
-                                fontsize=14,
-                                transform=ax[iax, ichan].transAxes)
-
-            iax += 1
-            ievent += 1
-
+        self.select(event_type=['LF', 'BB']).plot_many_spectra(
+            ax, ax_all, df_mute, fits, nevents_LF, nrows_LF,
+            source=False, iaxoff=nrows_HF + 1)
+        # The subplots that are abused for text
+        for ax_param in ax[:, [2, -1]].flatten():
+            ax_param.set_frame_on(True)
+            ax_param.tick_params(axis=u'both', which=u'both', length=0)
+            ax_param.patch.set_visible(False)
+            plt.setp(ax_param.get_xticklabels(), visible=False)
+            for sp in ax_param.spines.values():
+                sp.set_visible(False)
+            pass
+        # The subplots that act as spacing between HF and LF
         ax_all[0].set_xscale('log')
         ax_all[0].set_xlim(0.03, 5)
         ax_all[0].set_title('vertical', fontsize=18)
@@ -918,28 +889,191 @@ class Catalog:
         ax_all[0].set_yticklabels((-140, -160, -180, -200, -220, -240))
         ax_all[0].set_ylim(ymin, ymax)
         ax_all[0].legend()
+        plt.close(fig_all)
+
         ax[0][0].set_xscale('log')
         ax[0][0].set_yticks((-140, -160, -180, -200, -220, -240))
         ax[0][0].set_yticklabels((-140, -160, -180, -200, -220, -240))
-        ax[0][0].set_xlim(0.1, 20)
+        ax[0][0].set_xlim(0.1, 8)
         ax[0][0].set_ylim(ymin, ymax)
         ax[0][0].set_title('vertical', fontsize=18)
-        ax[0][1].set_title('north/south', fontsize=18)
-        ax[0][2].set_title('east/west', fontsize=18)
+        ax[0][1].set_title('horizontal', fontsize=18)
         ax[0][3].set_title('vertical', fontsize=18)
-        ax[0][4].set_title('north/south', fontsize=18)
-        ax[0][5].set_title('east/west', fontsize=18)
-        fig.subplots_adjust(bottom=0.05, top=0.95, wspace=0.05, hspace=0.05,
-                            left=0.1, right=0.98)
-
-        string = 'displacement PSD [m$^2$]/Hz'
-        ax[(nevents + 1) // 4][0].set_ylabel(string, fontsize=13)
-        for a in [ax[-1][1], ax[-1][4]]:
+        ax[0][4].set_title('horizontal', fontsize=18)
+        ax[nrows_HF + 1][0].set_title('vertical', fontsize=18)
+        ax[nrows_HF + 1][1].set_title('horizontal', fontsize=18)
+        ax[nrows_HF + 1][3].set_title('vertical', fontsize=18)
+        ax[nrows_HF + 1][4].set_title('horizontal', fontsize=18)
+        string = 'displacement PSD / (m$^2$/Hz) [dB]'
+        ax[(nrows_HF) // 2][0].set_ylabel(string, fontsize=13)
+        ax[nrows_HF + (nrows_LF + 1) // 2][0].set_ylabel(string,
+                                                         fontsize=13)
+        for a in [ax[-1][0], ax[-1][1], ax[-1][3], ax[-1][4]]:
             a.set_xlabel('frequency / Hz', fontsize=12)
-        ax[-1][-1].legend()
-        plt.tight_layout()
+        ax[-1][0].legend()  # bbox_to_anchor=(-0.4, 0.2))
+        fig.subplots_adjust(top=0.95, bottom=0.06, left=0.08, right=0.985,
+                            hspace=0.03, wspace=0.03)
 
+        for ax_param in ax[nrows_HF, :].flatten():
+            ax_param.set_frame_on(True)
+            ax_param.tick_params(axis=u'both', which=u'both', length=0)
+            ax_param.patch.set_visible(False)
+            plt.setp(ax_param.get_xticklabels(), visible=False)
+            for sp in ax_param.spines.values():
+                sp.set_visible(False)
+            pass
+
+        fig.savefig('spectra_many_events.pdf')
         plt.show()
+
+    def plot_many_spectra(self, ax, ax_all, df_mute, fits, nevents, nrows,
+                          source=True, iaxoff=0):
+
+        def f_c(M0, vs, ds):
+            # Calculate corner frequency for event with M0,
+            # assuming a stress drop ds
+            return 4.9e-1 * vs * (ds / M0) ** (1 / 3)
+
+        def M0(Mw):
+            return 10 ** (Mw * 1.5 + 9.1)
+
+        for a in ax_all:
+            a.set_prop_cycle(plt.cycler('color',
+                                        plt.cm.tab20(
+                                            np.linspace(0, 1, nevents))))
+        iax = iaxoff
+        second = 0
+        dists = []
+        for event in self:
+            if event.distance is not None:
+                dists.append(event.distance)
+            else:
+                dists.append(30)
+        order = np.argsort(dists)
+        ievent = 0
+        with open('time_windows_spectra.txt', 'a') as fid:
+            for event in np.asarray(self.events)[order]:
+                fid.write('%s, ' % event.name)
+                ichan = 0
+                if iax == nrows + iaxoff:
+                    iax -= nrows
+                    ichan = 3
+                    second = 1
+                if second == 1:
+                    ichan = 3
+                print('iax', iax, ' ichan', ichan, 'nrows', nrows, 'event', \
+                      event.name)
+                bodywave = False
+                spectrum = event.spectra['noise']
+                phase = fits[event.name]['phase']
+                if len(spectrum) > 0:
+                    plot_spectrum(ax, ax_all, df_mute, iax, ichan,
+                                  spectrum, fmax=8., color='k', lw=2,
+                                  label='noise')
+                if 'S' in event.spectra:  # len(spectrum) > 0:
+                    spectrum = event.spectra['S']
+                    plot_spectrum(ax, ax_all, df_mute, iax, ichan,
+                                  spectrum, fmax=8., color='r', lw=2,
+                                  label='event')
+                    # phase = 'S'
+                    bodywave = True
+                    fid.write('%s, ' % event.picks['S_spectral_start'])
+                    fid.write('%s, ' % event.picks['S_spectral_end'])
+                if 'P' in event.spectra and not bodywave:  # len(spectrum) > 0:
+                    spectrum = event.spectra['P']
+                    plot_spectrum(ax, ax_all, df_mute, iax, ichan,
+                                  spectrum, fmax=8., color='r', lw=2,
+                                  label='event')
+                    # phase = 'P'
+                    bodywave = True
+                    fid.write('%s, ' % event.picks['P_spectral_start'])
+                    fid.write('%s, ' % event.picks['P_spectral_end'])
+                if 'all' in event.spectra and not bodywave:
+                    spectrum = event.spectra['all']
+                    plot_spectrum(ax, ax_all, df_mute, iax, ichan,
+                                  spectrum, fmax=8., color='r', lw=2,
+                                  label='total')
+                    fid.write('%s, ' % event.picks['start'])
+                    fid.write('%s, ' % event.picks['end'])
+                    # phase = 'S'
+
+                fid.write('%s, ' % event.picks['noise_start'])
+                fid.write('%s, ' % event.picks['noise_end'])
+
+                fid.write('\n')
+                # if len(event.spectra_SP) > 0:
+                #     if 'noise' in event.spectra_SP:
+                #         spectrum = event.spectra_SP['noise']
+                #         if len(spectrum) > 0:
+                #             plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
+                #                           fmin=7., color='k')  # , label='noise')
+                #     if 'P' in event.spectra_SP:
+                #         spectrum = event.spectra_SP['P']
+                #         if len(spectrum) > 0:
+                #             plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
+                #                           fmin=7., color='b')  # , label='P-coda')
+                #             bodywave = True
+                #     if 'S' in event.spectra_SP:
+                #         spectrum = event.spectra_SP['S']
+                #         if len(spectrum) > 0:
+                #             plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
+                #                           fmin=7., color='g')  # , label='S-code')
+                #             bodywave = True
+                #     spectrum = event.spectra_SP['all']
+                #     if len(spectrum) > 0 and not bodywave:
+                #         plot_spectrum(ax, ax_all, df_mute, iax, ichan, spectrum,
+                #                       fmin=7., color='r')  # , label='total')
+
+                if fits is not None:
+                    if event.distance is None:
+                        distance = 1600e3
+                    else:
+                        distance = event.distance * 55.e3
+                    f = np.geomspace(0.01, 20., 100)
+                    Mw = event.magnitude(mag_type='MFB')
+                    if Mw is None:
+                        Mw = 3.
+                    A0 = fits[event.name]['A0'] if 'A0' in fits[event.name] \
+                        else event.amplitudes['A0']
+
+                    # phase = fits[event.name]['phase']
+                    p_pred = pred_spec(freqs=f,
+                                       ds=1e6,
+                                       mag=Mw,
+                                       # amp=fits[event.name]['A0'],
+                                       amp=A0,
+                                       phase=phase,
+                                       Qm=fits[event.name]['Qm'],
+                                       dist=distance)
+                    if source:
+                        stf_amp = 20 * np.log10(1 / (1 + (f / f_c(M0=M0(Mw),
+                                                                  vs=4.0e3,
+                                                                  ds=1e5)) ** 2))
+                        p_pred += stf_amp
+
+                    ax[iax, ichan].plot(f, p_pred, c='darkblue', lw=2,
+                                        ls='dashed',
+                                        label='pred. src\n+ Att.')
+                    ax[iax, ichan + 1].plot(f, p_pred, c='darkblue', lw=2,
+                                            ls='dashed',
+                                            label='pred. src\n+ Att.')
+                    s = '$M_W$[$M^m_F$]=%3.1f\nPhase=%s\ndist=%d deg\n$Q_{' \
+                        'eff}$=%d\n$A_0$=%ddB' \
+                        % \
+                        (Mw, phase, distance / 55e3, fits[event.name]['Qm'], A0)
+                    ax[iax, ichan + 2].text(x=0.15, y=0.15, s=s,
+                                            fontsize=10,
+                                            transform=ax[iax,
+                                                         ichan + 2].transAxes)
+
+                ax[iax, ichan].text(x=0.96, y=0.96, s=event.name,
+                                    fontsize=12, horizontalalignment='right',
+                                    verticalalignment='top',
+                                    bbox=dict(facecolor='white', alpha=0.5),
+                                    transform=ax[iax, ichan].transAxes)
+
+                iax += 1
+                ievent += 1
 
     def write_table(self,
                     fnam_out: str = 'overview.html') -> None:
