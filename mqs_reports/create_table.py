@@ -9,12 +9,14 @@
 '''
 
 from argparse import ArgumentParser
+from os.path import exists as pexists, join as pjoin
 
 import obspy
 from mars_tools.insight_time import solify
-from mqs_reports.snr import calc_SNR, calc_stalta
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
+
+from mqs_reports.snr import calc_SNR, calc_stalta
 
 
 def create_row_header(list):
@@ -114,7 +116,9 @@ def write_html(catalog, fnam_out):
         f.write(output)
 
 
-def create_event_row(dist_string, event, event_type_idx, formats, ievent):
+def create_event_row(dist_string, event, event_type_idx, formats, ievent,
+                     path_images_local='/usr/share/nginx/html/InSight_plots',
+                     path_images='http://mars.ethz.ch/InSight_plots'):
     utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
     lmst_time = solify(event.starttime).strftime('%H:%M:%S')
     duration = event.duration.strftime('%M:%S')
@@ -135,7 +139,7 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
                    event_type_idx[event.mars_event_type_short],
                    None,
                    float(utct(event.picks['start'])),
-                   None,
+                   lmst_time,
                    None,
                    None,
                    snr,
@@ -166,19 +170,43 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
                    None
                    )
         event.fnam_report['name'] = event.name
-        link_report = \
-            ('<a href="{Z:s}" target="_blank">{name:s}</a><br>' +
-             '<a href="{Z:s}" target="_blank">Z</a> ' +
-             '<a href="{N:s}" target="_blank">N</a> ' +
-             '<a href="{E:s}" target="_blank">E</a>').format(
-                **event.fnam_report)
+        event.fnam_report['summary_local'] = pjoin(path_images_local,
+                                                   'event_summary',
+                                                   '%s_event_summary.png' %
+                                                   event.name)
+        event.fnam_report['summary'] = pjoin(path_images,
+                                             'event_summary',
+                                             '%s_event_summary.png' %
+                                             event.name)
+        path_dailyspec = pjoin(path_images,
+                               'spectrograms/by_channels/02.BHZ/',
+                               'Sol%04d.Spectrogram_LF-02.BHZ__HF-02.BHZ.png'
+                               )
+        if pexists(event.fnam_report['summary']):
+            link_report = \
+                ('<a href="{summary:s}" target="_blank">{name:s}</a><br>' +
+                 '<a href="{Z:s}" target="_blank">Z</a> ' +
+                 '<a href="{N:s}" target="_blank">N</a> ' +
+                 '<a href="{E:s}" target="_blank">E</a>').format(
+                    **event.fnam_report)
+        else:
+            link_report = \
+                ('{name:s}<br>' +
+                 '<a href="{Z:s}" target="_blank">Z</a> ' +
+                 '<a href="{N:s}" target="_blank">N</a> ' +
+                 '<a href="{E:s}" target="_blank">E</a>').format(
+                    **event.fnam_report)
+
+        link_lmst = '<a href="%s" target="_blank">%s</a>' % (
+            path_dailyspec, lmst_time)
+
         row = create_row(
             (ievent,
              link_report,
              event.mars_event_type_short,
              event.quality,
              utc_time,
-             lmst_time,
+             link_lmst,
              duration,
              dist_string[event.distance_type] % event.distance,
              snr_string,
