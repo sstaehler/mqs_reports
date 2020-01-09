@@ -68,8 +68,8 @@ class Noise():
         filenam_VBB_HG = 'XB.ELYSE.0[23].BH?.D.%d.%03d'
 
         jday_start = starttime.julday
-        jday_end = endtime.julday
-        year = starttime.year
+        jday_end = int(float(endtime - starttime) / 86400. + jday_start)
+        year_start = starttime.year
 
         stds_HF = list()
         stds_LF = list()
@@ -79,6 +79,8 @@ class Noise():
         print('reading seismic data from %s' % self.sc3_dir)
         for jday in tqdm(range(jday_start, jday_end)):
             try:
+                # TODO: This will fail in leap years
+                year = year_start + (jday // 365)
                 fnam = pjoin(dirnam % year,
                              filenam_VBB_HG % (year, jday))
                 st = obspy.read(fnam)
@@ -410,8 +412,7 @@ class Noise():
                     HF_dists.append(50.)
                 else:
                     HF_dists.append(event.distance)
-                HF_times.append(solify(event.starttime).julday +
-                                solify(event.starttime).hour / 60.)
+                HF_times.append(float(solify(event.starttime)) // 86400.)
                 HF_amps.append(event.amplitudes['A_24'])
 
             for event in cat.select(event_type=['LF', 'BB']):
@@ -434,8 +435,7 @@ class Noise():
                     instrument='VBB'
                     )
                 amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
-                LF_times.append(solify(event.starttime).julday +
-                                solify(event.starttime).hour / 60.)
+                LF_times.append(float(solify(event.starttime)) / 86400.)
                 LF_amps.append(20 * np.log10(amp))
 
             sc = ax_LF.scatter(LF_times, LF_amps,
