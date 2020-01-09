@@ -112,7 +112,7 @@ class Noise():
                     st_filt_LF.filter('lowpass', freq=1 / 1.5, corners=16)
 
                     for t in np.arange(0, 86400, self.winlen_sec):
-                        t0 = obspy.UTCDateTime('2019%03d' % jday) + t
+                        t0 = obspy.UTCDateTime('%04d%03d' % (year, jday)) + t
                         t1 = t0 + self.winlen_sec
                         st_win = st.slice(starttime=t0, endtime=t1)
                         st_filt_HF_win = st_filt_HF.slice(starttime=t0,
