@@ -178,11 +178,21 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent,
                                              'event_summary',
                                              '%s_event_summary.png' %
                                              event.name)
+        event.fnam_report['pol_local'] = pjoin(path_images_local,
+                                               'event_plots',
+                                               event.name,
+                                               '%s_polarization.png' %
+                                               event.name)
+        event.fnam_report['pol'] = pjoin(path_images,
+                                         'event_plots',
+                                         event.name,
+                                         '%s_polarization.png' %
+                                         event.name)
         path_dailyspec = pjoin(path_images,
                                'spectrograms/by_channels/02.BHZ/',
                                'Sol%04d.Spectrogram_LF-02.BHZ__HF-02.BHZ.png'
                                )
-        if pexists(event.fnam_report['summary']):
+        if pexists(event.fnam_report['summary_local']):
             link_report = \
                 ('<a href="{summary:s}" target="_blank">{name:s}</a><br>' +
                  '<a href="{Z:s}" target="_blank">Z</a> ' +
@@ -196,6 +206,8 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent,
                  '<a href="{N:s}" target="_blank">N</a> ' +
                  '<a href="{E:s}" target="_blank">E</a>').format(
                     **event.fnam_report)
+        if pexists(event.fnam_report['pol_local']):
+            link_report += ' <a href="{pol:s}" target="_blank">Pol</a>'
 
         link_lmst = '<a href="%s" target="_blank">%s</a>' % (
             path_dailyspec, lmst_time)
