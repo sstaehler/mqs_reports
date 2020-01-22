@@ -122,6 +122,29 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent,
     utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
     lmst_time = solify(event.starttime).strftime('%H:%M:%S')
     duration = event.duration.strftime('%M:%S')
+    event.fnam_report['name'] = event.name
+    event.fnam_report['summary_local'] = pjoin(path_images_local,
+                                               'event_summary',
+                                               '%s_event_summary.png' %
+                                               event.name)
+    event.fnam_report['summary'] = pjoin(path_images,
+                                         'event_summary',
+                                         '%s_event_summary.png' %
+                                         event.name)
+    event.fnam_report['pol_local'] = pjoin(path_images_local,
+                                           'event_plots',
+                                           event.name,
+                                           '%s_polarization.png' %
+                                           event.name)
+    event.fnam_report['pol'] = pjoin(path_images,
+                                     'event_plots',
+                                     event.name,
+                                     '%s_polarization.png' %
+                                     event.name)
+    path_dailyspec = pjoin(path_images,
+                           'spectrograms/by_channels/02.BHZ/',
+                           'Sol%04d.Spectrogram_LF-02.BHZ__HF-02.BHZ.png'
+                           % int(float(solify(event.starttime)) / 86400 + 1))
     try:
         if event.mars_event_type_short in ('HF', 'VF', '24'):
             snr = calc_stalta(event, fmin=2.2, fmax=2.8)
@@ -169,29 +192,6 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent,
                    None,
                    None
                    )
-        event.fnam_report['name'] = event.name
-        event.fnam_report['summary_local'] = pjoin(path_images_local,
-                                                   'event_summary',
-                                                   '%s_event_summary.png' %
-                                                   event.name)
-        event.fnam_report['summary'] = pjoin(path_images,
-                                             'event_summary',
-                                             '%s_event_summary.png' %
-                                             event.name)
-        event.fnam_report['pol_local'] = pjoin(path_images_local,
-                                               'event_plots',
-                                               event.name,
-                                               '%s_polarization.png' %
-                                               event.name)
-        event.fnam_report['pol'] = pjoin(path_images,
-                                         'event_plots',
-                                         event.name,
-                                         '%s_polarization.png' %
-                                         event.name)
-        path_dailyspec = pjoin(path_images,
-                               'spectrograms/by_channels/02.BHZ/',
-                               'Sol%04d.Spectrogram_LF-02.BHZ__HF-02.BHZ.png'
-                               )
         if pexists(event.fnam_report['summary_local']):
             link_report = \
                 ('<a href="{summary:s}" target="_blank">{name:s}</a><br>' +
@@ -251,7 +251,25 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent,
             fmts=formats)
 
     except KeyError:
-        row = create_row((ievent, event.name, 'INCOMPLETE PICKS'))
+        link_lmst = '<a href="%s" target="_blank">%s</a>' % (
+            path_dailyspec, lmst_time)
+        sortkey = (ievent,
+                   None,
+                   event_type_idx[event.mars_event_type_short],
+                   None,
+                   float(utct(event.picks['start'])),
+                   float(solify(event.picks['start'])) % 86400,
+                   0.)
+        row = create_row((  # ievent, event.name, 'PRELIMINARY LOCATION'
+            ievent,
+            event.name,
+            event.mars_event_type_short,
+            event.quality,
+            utc_time,
+            link_lmst,
+            'PRELIM'
+            ),
+            extras=sortkey)
     return row
 
 
@@ -339,7 +357,7 @@ if __name__ == '__main__':
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
     ann = Annotations(fnam_csv=args.input_csv)
-
+    catalog = catalog.select(starttime=utct('20200101'))
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)
     inv = obspy.read_inventory(args.inventory)
