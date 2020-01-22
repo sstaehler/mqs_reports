@@ -357,7 +357,6 @@ if __name__ == '__main__':
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
     ann = Annotations(fnam_csv=args.input_csv)
-    catalog = catalog.select(starttime=utct('20200101'))
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)
     inv = obspy.read_inventory(args.inventory)
