@@ -207,7 +207,8 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent,
                  '<a href="{E:s}" target="_blank">E</a>').format(
                     **event.fnam_report)
         if pexists(event.fnam_report['pol_local']):
-            link_report += ' <a href="{pol:s}" target="_blank">Pol</a>'
+            link_report += ' <a href="{pol:s}" target="_blank">Pol</a>'.format(
+                **event.fnam_report)
 
         link_lmst = '<a href="%s" target="_blank">%s</a>' % (
             path_dailyspec, lmst_time)
