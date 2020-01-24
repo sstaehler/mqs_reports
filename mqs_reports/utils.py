@@ -184,19 +184,33 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
         st_seis.taper(0.1)
         st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)
         st_seis.detrend()
+        correct_subsample_shift(st_seis)
+
         if st_seis[0].stats.starttime < utct('20190418T12:24'):
             correct_shift(st_seis.select(channel='??U')[0], nsamples=-1)
         for tr in st_seis:
             fmax = tr.stats.sampling_rate * 0.5
+            pre_filt = (fmin / 2., fmin, fmax, fmax * 1.2)
             try:
                 tr.remove_response(inv,
-                                   pre_filt=(fmin / 2., fmin, fmax, fmax * 1.2),
+                                   pre_filt=pre_filt,
                                    output=kind)
             except ValueError:
-                print(tr)
-                print(inv.select(channel=tr.stats.channel, location=tr.stats.location))
+                filtered_inv = inv.select(
+                    location=tr.stats.location, channel=tr.stats.channel,
+                    starttime=tr.stats.starttime - 7 * 86400,
+                    endtime=tr.stats.endtime + 7 * 86400)
 
-        correct_subsample_shift(st_seis)
+                if filtered_inv:
+                    last_epoch = filtered_inv[0][0][0]
+                    last_epoch.start_date = tr.stats.starttime - 1.0
+                    last_epoch.end_date = tr.stats.endtime + 1.0
+
+                    tr.remove_response(inventory=filtered_inv,
+                                       pre_filt=pre_filt, output=kind)
+                    plt.show()
+                else:
+                    raise ValueError
 
         st_rot = create_ZNE_HG(st_seis, inv=inv)
         if len(st_rot) > 0:
@@ -236,9 +250,23 @@ def correct_subsample_shift(st):
         for i in range(1, 3):
             shift[i] = (st[i].stats.starttime - st[0].stats.starttime) % \
                        st[0].stats.delta
-        if shift.sum() > 0:
-            for i in range(1, 3):
-                st[i].stats.starttime -= shift[i]
+
+        if shift.sum() > 0.01:
+            starttime = utct(0)
+            endtime = utct()
+            for tr in st:
+                starttime = utct(max(float(starttime),
+                                     float(tr.stats.starttime)))
+                endtime = utct(min(float(endtime),
+                                   float(tr.stats.endtime)))
+            print(st)
+            st.resample(tr.stats.sampling_rate * 10, no_filter=True)
+            print(st)
+            st.trim(starttime=starttime, endtime=endtime)
+            print(st)
+            st.decimate(5, no_filter=True)
+            st.decimate(2, no_filter=True)
+            print(st)
 
 
 def correct_shift(tr, nsamples=-1):
