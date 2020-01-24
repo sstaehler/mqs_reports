@@ -92,10 +92,14 @@ def write_html(catalog, fnam_out):
                '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
                '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
                '%s', '%s', '%s')
+    time_string = {'GUI': '%s<sup>[O]</sup>',
+                   'PgSg': '%s<sup>[S]</sup>',
+                   'aligned': '%s<sup>[S]</sup>',
+                   'unknown': '%s<sup>[S]</sup>'}
     dist_string = {'GUI': '%.3g',
-                   'PgSg': '%.3g*',
-                   'aligned': '%.3g&dagger;',
-                   'unknown': '%s'}
+                   'PgSg': '<i>%.3g<i>*',
+                   'aligned': '<i>%.3g<i>&dagger;',
+                   'unknown': '<i>%s<i>'}
     event_type_idx = {'LF': 1,
                       'BB': 2,
                       'HF': 3,
@@ -105,7 +109,11 @@ def write_html(catalog, fnam_out):
     ievent = len(catalog)
     print('Filling HTML table with event entries')
     for event in tqdm(catalog):
-        row = create_event_row(dist_string, event, event_type_idx, formats,
+        row = create_event_row(dist_string,
+                               time_string,
+                               event,
+                               event_type_idx,
+                               formats,
                                ievent)
 
         output += row
@@ -116,7 +124,8 @@ def write_html(catalog, fnam_out):
         f.write(output)
 
 
-def create_event_row(dist_string, event, event_type_idx, formats, ievent,
+def create_event_row(dist_string, time_string, event, event_type_idx, formats,
+                     ievent,
                      path_images_local='/usr/share/nginx/html/InSight_plots',
                      path_images='http://mars.ethz.ch/InSight_plots'):
     utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
@@ -218,7 +227,7 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent,
              link_report,
              event.mars_event_type_short,
              event.quality,
-             utc_time,
+             time_string[event.distance_type] % utc_time,
              link_lmst,
              duration,
              dist_string[event.distance_type] % event.distance,
@@ -357,6 +366,7 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
+    # catalog = catalog.select(name='S0360b')
     ann = Annotations(fnam_csv=args.input_csv)
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)
