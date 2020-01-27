@@ -17,7 +17,7 @@ def create_fnam_event(
         sc3dir,
         filenam_inst
         ):
-    dirnam = pjoin(sc3dir, 
+    dirnam = pjoin(sc3dir,
                    'op/data/waveform/%04d/XB/ELYSE/' % utct(time).year)
     dirnam_inst = pjoin(dirnam, '?H?.D')
 
@@ -340,11 +340,22 @@ def __dayplot_set_x_ticks(ax, starttime, endtime, sol=False):
                 float(endtime))
 
 
-def calc_PSD(tr, winlen_sec):
+def calc_PSD(tr, winlen_sec, detick_nfsamp=0):
+    tr = tr.copy()
     Fs = tr.stats.sampling_rate
+
+    # simplistic deticking by muting detick_nfsamp freqeuency samples around
+    # 1Hz
+    if detick_nfsamp > 0:
+        NFFT = next_pow_2(tr.stats.npts)
+        tr.detrend()
+        df = np.fft.rfft(tr.data, n=NFFT)
+        idx_1Hz = np.argmin(np.abs(np.fft.rfftfreq(NFFT) * Fs - 1.))
+        df[idx_1Hz-detick_nfsamp:idx_1Hz+detick_nfsamp] = 0.
+        tr.data = np.fft.irfft(df)[:tr.stats.npts]
+
     winlen = min(winlen_sec * Fs,
-                 (tr.stats.endtime -
-                  tr.stats.starttime) * Fs / 2.)
+                 (tr.stats.endtime - tr.stats.starttime) * Fs / 2.)
     NFFT = next_pow_2(winlen)
     pad_to = np.max((NFFT * 2, 1024))
     p, f = mlab.psd(tr.data,

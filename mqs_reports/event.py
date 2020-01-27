@@ -333,7 +333,7 @@ class Event:
 
 
 
-    def calc_spectra(self, winlen_sec):
+    def calc_spectra(self, winlen_sec, detick_nfsamp=0):
         """
         Add spectra to event object.
         Spectra are stored in dictionaries
@@ -377,8 +377,8 @@ class Event:
                 tr = st_sel[0].slice(starttime=utct(twin[0]),
                                      endtime=utct(twin[1]))
                 if tr.stats.npts > 0:
-                    f, p = calc_PSD(tr,
-                                    winlen_sec=winlen_sec)
+                    f, p = calc_PSD(tr, winlen_sec=winlen_sec,
+                                    detick_nfsamp=detick_nfsamp)
                     spectrum_variable['p_' + chan] = p
                 else:
                     f = np.arange(0, 1, 0.1)
@@ -396,8 +396,8 @@ class Event:
                         tr = st_sel[0].slice(starttime=utct(twin[0]),
                                              endtime=utct(twin[1]))
                         if tr.stats.npts > 0:
-                            f, p = calc_PSD(tr,
-                                            winlen_sec=winlen_sec)
+                            f, p = calc_PSD(tr, winlen_sec=winlen_sec,
+                                            detick_nfsamp=detick_nfsamp)
                             spectrum_variable['p_' + chan] = p
                         else:
                             f = np.arange(0, 1, 0.1)

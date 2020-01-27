@@ -210,7 +210,7 @@ class Catalog:
         for event in self:
             event.load_distance_manual(fnam_csv)
 
-    def calc_spectra(self, winlen_sec: float) -> None:
+    def calc_spectra(self, winlen_sec: float, detick_nfsamp=0) -> None:
         """
         Add spectra to each Event object in Catalog.
         Spectra are stored in dictionaries
@@ -222,7 +222,8 @@ class Catalog:
         :param winlen_sec: window length for Welch estimator
         """
         for event in tqdm(self):
-            event.calc_spectra(winlen_sec=winlen_sec)
+            event.calc_spectra(winlen_sec=winlen_sec,
+                               detick_nfsamp=detick_nfsamp)
 
     def save_magnitudes(self, fnam):
         mags = []
@@ -472,10 +473,10 @@ class Catalog:
             X = X[::10]
             Y = Y[::10]
 
-            #color = colors[event.mars_event_type]
-            color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
+            color = colors[event.mars_event_type]
+            #color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
             plt.plot(X, Y, color=color,
-                     ls=linestyle[event.quality], zorder=1000-k)
+                     ls=linestyle[event.quality], zorder=1000-k, lw=1.)
 
             if fill:
                 # fill between noise amplitude estimate and envelope
@@ -516,7 +517,8 @@ class Catalog:
             #plt.plot([-200 * bla, -400 * bla], [200, 400], color='C6')
             #bla = 0.5
             #plt.plot([200 * bla, 400 * bla], [200, 400], color='C6')
-            plt.plot([150, 150], [50, 400], color='C7')
+            #plt.plot([150, 150], [50, 400], color='C7')
+            pass
 
         if legend:
             # legend
@@ -560,7 +562,8 @@ class Catalog:
 
             lw = 1.
 
-            mask_P_1Hz = (event.spectra['P']['f'] > 0.86) * (event.spectra['P']['f'] < 1.14)
+            # mask_P_1Hz = (event.spectra['P']['f'] > 0.86) * (event.spectra['P']['f'] < 1.14)
+            mask_P_1Hz = event.spectra['P']['f'] > 1000.
 
             mask_P = event.spectra['P']['f'] < 1.3
             mask_P += event.spectra['P']['f'] > 7.
@@ -582,7 +585,8 @@ class Catalog:
                      color='lightgray', zorder=-10, lw=lw,
                      label=f'{event.name}, P noise')
 
-            mask_S_1Hz = (event.spectra['S']['f'] > 0.86) * (event.spectra['S']['f'] < 1.14)
+            #mask_S_1Hz = (event.spectra['S']['f'] > 0.86) * (event.spectra['S']['f'] < 1.14)
+            mask_S_1Hz = event.spectra['S']['f'] > 1000.
 
             mask_S = event.spectra['S']['f'] < 1.3
             mask_S += event.spectra['S']['f'] > 7.
@@ -649,11 +653,13 @@ class Catalog:
          self, mag_type='m2.4',
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C0'},
+         xlabel='distance / degree [vs = 2 km/s, vp/vs = 1.7]',
          markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
          markerfill={'A': True, 'B': True, 'C': False, 'D': False},
-         show=True):
+         fig=None, show=True):
 
-        fig = plt.figure()
+        if fig is None:
+            fig = plt.figure()
 
         legend_elements = []
 
@@ -688,13 +694,13 @@ class Catalog:
                               label=f'{event_type}, {quality}',
                               **colorargs)
 
-        dist = np.linspace(3, 40)
+        dist = np.linspace(3, 50)
         magc_24 = M2_4(-219, dist)
         magc_HF = M2_4(-212.5, dist)
         plt.plot(dist, magc_24, label='M2.4(-219.0 dB)', color='C3')
         plt.plot(dist, magc_HF, label='M2.4(-212.5 dB)', color='C3', ls='--')
 
-        plt.xlabel('distance / degree')
+        plt.xlabel(xlabel)
         plt.ylabel('M2.4')
         plt.legend()
 
@@ -758,8 +764,10 @@ class Catalog:
         else:
             return fig
 
-    def plot_distance_distribution_density(self, N_average=None, fig=None,
-                                           label=None, show=True):
+    def plot_distance_distribution_density(
+         self, fig=None,
+         xlabel='distance / degree [vs = 2 km/s, vp/vs = 1.7]',
+         label=None, show=True, color=None, plot_event_marker=True):
 
         if fig is None:
             fig = plt.figure()
@@ -767,29 +775,18 @@ class Catalog:
 
         d = np.array(sorted([e.distance for e in self]))
         print(np.mean(d), np.std(d))
-        #np.random.seed(1235)
-        #d = np.sort(np.random.normal(np.mean(d), np.std(d), len(d)))
 
-        plt.plot(d, np.zeros(d.shape), '|', ms=20)
-
-        if N_average is None:
-            N_average = int(len(self) / 10)
-            print(N_average)
-        density = N_average / (d[N_average:] - d[:-N_average]) / len(self)
-        dd = (d[N_average:] + d[:-N_average]) / 2
-        plt.plot(dd, density, label=label)
-
-        # maybe plot sum over error functions instead? This is called
-        # Parzen-window method:
-        # https://en.wikipedia.org/wiki/Kernel_density_estimation
+        if plot_event_marker:
+            plt.plot(d, np.zeros(d.shape), '|', ms=20, color=color)
 
         # kde_factor = len(d) ** (-0.2)  # Scott's rule
         kde = stats.gaussian_kde(d)
 
-        x = np.linspace(0., 45, 1000.)
-        plt.plot(x, kde(x))
+        x = np.linspace(0., 50, 1000.)
+        plt.plot(x, kde(x), color=color, label=label)
 
-        plt.xlabel('distance / deg')
+        plt.xlabel(xlabel)
+        plt.ylabel('PDF estimate from Gaussian KDE')
 
         if label is not None:
             ax.legend()
