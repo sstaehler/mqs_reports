@@ -23,7 +23,7 @@ from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 
-RADIUS_MARS = 2889.
+RADIUS_MARS = 3889.5
 LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
