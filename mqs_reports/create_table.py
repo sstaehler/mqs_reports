@@ -54,7 +54,7 @@ def create_row(list, fmts=None, extras=None):
                                + '<td sorttable_customkey="%d">' % extra \
                                + fmt % (li) + '</td>\n'
                     except(ValueError):
-                        row += ind_string + '<td sorttable_customkey=0>' + \
+                        row += ind_string + '<td sorttable_customkey=-100>' + \
                                fmt % (li) + '</td>\n'
 
     row += 4 * ' ' + '</tr>\n'
