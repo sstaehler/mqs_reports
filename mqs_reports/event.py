@@ -16,6 +16,7 @@ from typing import Union
 
 import numpy as np
 import obspy
+from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
@@ -46,21 +47,23 @@ class Event:
                  quality: str,
                  latitude: float,
                  longitude: float,
+                 sso_distance: float,
+                 sso_origin_time: str,
                  mars_event_type: str,
-                 origin_time: float):
+                 origin_time: str):
         self.name = name.strip()
         self.publicid = publicid
         self.origin_publicid = origin_publicid
         self.picks = picks
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
-        self.origin_time = origin_time
 
         self.duration = utct(utct(self.picks['end']) -
                              utct(self.picks['start']))
         self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
         self.starttime = utct(utct(self.picks['start']))
         self.endtime = utct(utct(self.picks['end']))
+        self.sol = solify(utct(self.picks['start'])).julday
 
         self.amplitudes = dict()
 
@@ -68,6 +71,8 @@ class Event:
         self.latitude = latitude
         self.longitude = longitude
         self.distance_type = 'unknown'
+
+        # Case that location was determined from BAZ and distance
         if (abs(self.latitude - LANDER_LAT) > 1e-3 and
                 abs(self.longitude - LANDER_LON) > 1e-3):
             dist_km, az, baz = gps2dist_azimuth(lat1=self.latitude,
@@ -79,13 +84,27 @@ class Event:
                                                radius=RADIUS_MARS)
             self.baz = baz
             self.az = az
+            self.origin_time = utct(origin_time)
             self.distance_type = 'GUI'
+
+        # Case that distance exists, but not BAZ. Then, distance and origin
+        # time should be taken from SSO (ie the locator PDF output)
+        elif sso_distance is not None:
+            self.origin_time = utct(sso_origin_time)
+            self.distance = sso_distance
+            self.distance_type = 'GUI'
+
+        # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'UF', 'VF', '24']:
             self.distance = self.calc_distance()
             if self.distance is not None:
                 self.distance_type = 'PgSg'
+            self.origin_time = utct(origin_time)
+
         else:
+            self.origin_time = utct(origin_time)
             self.distance = None
+
         self._waveforms_read = False
         self._spectra_available = False
 

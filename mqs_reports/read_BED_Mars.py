@@ -6,16 +6,38 @@ author: Fabian Euchner, Simon Stähler
 '''
 XMLNS_QUAKEML_BED = "http://quakeml.org/xmlns/bed/1.2"
 XMLNS_QUAKEML_BED_MARS = "http://quakeml.org/xmlns/bed/1.2/mars"
+XMLNS_QUAKEML_SST = "http://quakeml.org/xmlns/singlestation/1.0"
 QML_EVENT_NAME_DESCRIPTION_TYPE = 'earthquake name'
+QML_SINGLESTATION_PARAMETERS_ELEMENT_NAME = "singleStationParameters"
+QML_MARSQUAKE_PARAMETERS_ELEMENT_NAME = "marsquakeParameters"
+
+XMLNS_SINGLESTATION_ABBREV = "sst"
+XMLNS_SINGLESTATION = "http://quakeml.org/xmlns/singlestation/1.0"
 
 from mqs_reports.event import Event
-from obspy import UTCDateTime as utct
 
 
 def lxml_prefix_with_namespace(elementname, namespace):
     """Prefix an XML element name with a namsepace in lxml syntax."""
 
     return "{{{}}}{}".format(namespace, elementname)
+
+
+def lxml_text_or_none(element):
+    """
+    If an lxml element has a text node, return its value. Otherwise,
+    return None.
+
+    """
+
+    txt = None
+    try:
+        txt = element.text
+
+    except Exception:
+        pass
+
+    return txt
 
 
 def qml_get_pick_time_for_phase(event_element, pref_ori_publicid, phase_name):
@@ -48,9 +70,10 @@ def qml_get_pick_time_for_phase(event_element, pref_ori_publicid, phase_name):
     return pick_time_str
 
 
-def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
+def qml_get_event_info_for_event_waveform_files(xml_root,
+                                                location_quality,
                                                 event_type,
-                                                phase_list=['start', 'end']):
+                                                phase_list):
     event_info = []
 
     for ev in xml_root.iter(
@@ -73,8 +96,6 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
                 lxml_prefix_with_namespace(
                     "locationQuality", XMLNS_QUAKEML_BED_MARS)))
 
-        # if not lq.text.endswith(tuple(location_quality)):
-        #     continue
         if not lq.text[-1] in tuple(location_quality):
             continue
 
@@ -103,6 +124,17 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
 
         if not ev_name:
             continue
+
+        # Get single station origin (for PDF based distance and origin time)
+        sso = qml_get_sso_info_for_event_element(xml_root=xml_root, ev=ev)
+        if 'origin_time' in sso:
+            sso_origin_time = sso['origin_time']
+        else:
+            sso_origin_time = None
+        if 'distance' in sso:
+            sso_distance = sso['distance']
+        else:
+            sso_distance = None
 
         # Mars event type (from BED extension)
         mars_event_type_str = ''
@@ -139,20 +171,119 @@ def qml_get_event_info_for_event_waveform_files(xml_root, location_quality,
             lxml_prefix_with_namespace(
                 "value", XMLNS_QUAKEML_BED))).text
 
-
-        if not ev_name == 'S0085a':
-            event_info.append(Event(
-                name=ev_name,
-                publicid=ev_publicid,
-                origin_publicid=str(pref_ori.text).strip(),
-                picks=picks,
-                quality=str(lq.text).strip(),
-                latitude=float(latitude),
-                longitude=float(longitude),
-                mars_event_type=mars_event_type_str,
-                origin_time=utct(origin_time)))
+        event_info.append(Event(
+            name=ev_name,
+            publicid=ev_publicid,
+            origin_publicid=str(pref_ori.text).strip(),
+            picks=picks,
+            quality=str(lq.text).strip(),
+            latitude=float(latitude),
+            longitude=float(longitude),
+            sso_distance=sso_distance,
+            sso_origin_time=sso_origin_time,
+            mars_event_type=mars_event_type_str,
+            origin_time=origin_time))
 
     return event_info
+
+
+def qml_get_sso_info_for_event_element(xml_root, ev):
+    sso_info = {}
+
+    # preferredOriginID
+    preferred_ori_id = lxml_text_or_none(ev.find("./{}".format(
+        lxml_prefix_with_namespace("preferredOriginID", XMLNS_QUAKEML_BED))))
+
+    # find SingleStationOrigin that references preferredOrigin
+
+    # this xpath expression is invalid. why?
+    # bed_ori_ref = xml_root.xpath('./{}/{}/{}[text()="{}"]'.format(
+    # lxml_prefix_with_namespace(
+    # QML_SINGLESTATION_PARAMETERS_ELEMENT_NAME, XMLNS_SINGLESTATION),
+    # lxml_prefix_with_namespace("singleStationOrigin", XMLNS_SINGLESTATION),
+    # lxml_prefix_with_namespace("bedOriginReference", XMLNS_SINGLESTATION),
+    # preferred_ori_id))
+
+    bed_ori_ref = None
+
+    for bed_ori_ref in xml_root.iterfind('./{}/{}/{}'.format(
+            lxml_prefix_with_namespace(
+                QML_SINGLESTATION_PARAMETERS_ELEMENT_NAME, XMLNS_SINGLESTATION),
+            lxml_prefix_with_namespace("singleStationOrigin",
+                                       XMLNS_SINGLESTATION),
+            lxml_prefix_with_namespace("bedOriginReference",
+                                       XMLNS_SINGLESTATION))):
+
+        if bed_ori_ref.text.strip() == preferred_ori_id:
+            break
+
+    if bed_ori_ref is None:
+        return sso_info
+
+    sso = bed_ori_ref.getparent()
+
+    # extract distance, origin time, depth, backazimuth
+    pref_distance_id = lxml_text_or_none(sso.find("./{}".format(
+        lxml_prefix_with_namespace(
+            "preferredDistanceID", XMLNS_SINGLESTATION))))
+
+    pref_ori_time_id = lxml_text_or_none(sso.find("./{}".format(
+        lxml_prefix_with_namespace(
+            "preferredOriginTimeID", XMLNS_SINGLESTATION))))
+
+    pref_depth_id = lxml_text_or_none(sso.find("./{}".format(
+        lxml_prefix_with_namespace("preferredDepthID", XMLNS_SINGLESTATION))))
+
+    pref_azimuth_id = lxml_text_or_none(sso.find("./{}".format(
+        lxml_prefix_with_namespace("preferredAzimuthID", XMLNS_SINGLESTATION))))
+
+    if pref_distance_id is not None:
+        distance = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}".format(
+                    lxml_prefix_with_namespace("distance", XMLNS_SINGLESTATION),
+                    pref_distance_id,
+                    lxml_prefix_with_namespace("distance", XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
+
+        sso_info['distance'] = float(distance)
+
+    if pref_ori_time_id is not None:
+        origin_time = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}".format(
+                    lxml_prefix_with_namespace(
+                        "originTime", XMLNS_SINGLESTATION),
+                    pref_ori_time_id,
+                    lxml_prefix_with_namespace(
+                        "originTime", XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
+
+        sso_info['origin_time'] = origin_time
+
+    if pref_depth_id is not None:
+        depth = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}".format(
+                    lxml_prefix_with_namespace("depth", XMLNS_SINGLESTATION),
+                    pref_depth_id,
+                    lxml_prefix_with_namespace("depth", XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
+
+        sso_info['depth'] = float(depth)
+
+    if pref_azimuth_id is not None:
+        azimuth = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}".format(
+                    lxml_prefix_with_namespace("azimuth", XMLNS_SINGLESTATION),
+                    pref_azimuth_id,
+                    lxml_prefix_with_namespace("azimuth", XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
+
+        sso_info['azimuth'] = float(azimuth)
+
+    return sso_info
 
 
 def read_QuakeML_BED(fnam, event_type, phase_list,
@@ -162,7 +293,7 @@ def read_QuakeML_BED(fnam, event_type, phase_list,
         tree = etree.parse(fh)
         xml_root = tree.getroot()
         events = qml_get_event_info_for_event_waveform_files(
-                xml_root, location_quality=quality,
+            xml_root, location_quality=quality,
                 event_type=event_type,
                 phase_list=phase_list)
 

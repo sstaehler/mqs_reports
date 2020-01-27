@@ -9,12 +9,14 @@
 '''
 
 from argparse import ArgumentParser
+from os.path import exists as pexists, join as pjoin
 
 import obspy
 from mars_tools.insight_time import solify
-from mqs_reports.snr import calc_SNR, calc_stalta
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
+
+from mqs_reports.snr import calc_SNR, calc_stalta
 
 
 def create_row_header(list):
@@ -52,7 +54,7 @@ def create_row(list, fmts=None, extras=None):
                                + '<td sorttable_customkey="%d">' % extra \
                                + fmt % (li) + '</td>\n'
                     except(ValueError):
-                        row += ind_string + '<td sorttable_customkey=0>' + \
+                        row += ind_string + '<td sorttable_customkey=-100>' + \
                                fmt % (li) + '</td>\n'
 
     row += 4 * ' ' + '</tr>\n'
@@ -90,10 +92,14 @@ def write_html(catalog, fnam_out):
                '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
                '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
                '%s', '%s', '%s')
+    time_string = {'GUI': '%s<sup>[O]</sup>',
+                   'PgSg': '%s<sup>[S]</sup>',
+                   'aligned': '%s<sup>[S]</sup>',
+                   'unknown': '%s<sup>[S]</sup>'}
     dist_string = {'GUI': '%.3g',
-                   'PgSg': '%.3g*',
-                   'aligned': '%.3g&dagger;',
-                   'unknown': '%s'}
+                   'PgSg': '<i>%.3g<i>*',
+                   'aligned': '<i>%.3g<i>&dagger;',
+                   'unknown': '<i>%s<i>'}
     event_type_idx = {'LF': 1,
                       'BB': 2,
                       'HF': 3,
@@ -103,7 +109,11 @@ def write_html(catalog, fnam_out):
     ievent = len(catalog)
     print('Filling HTML table with event entries')
     for event in tqdm(catalog):
-        row = create_event_row(dist_string, event, event_type_idx, formats,
+        row = create_event_row(dist_string,
+                               time_string,
+                               event,
+                               event_type_idx,
+                               formats,
                                ievent)
 
         output += row
@@ -114,10 +124,36 @@ def write_html(catalog, fnam_out):
         f.write(output)
 
 
-def create_event_row(dist_string, event, event_type_idx, formats, ievent):
+def create_event_row(dist_string, time_string, event, event_type_idx, formats,
+                     ievent,
+                     path_images_local='/usr/share/nginx/html/InSight_plots',
+                     path_images='http://mars.ethz.ch/InSight_plots'):
     utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
     lmst_time = solify(event.starttime).strftime('%H:%M:%S')
     duration = event.duration.strftime('%M:%S')
+    event.fnam_report['name'] = event.name
+    event.fnam_report['summary_local'] = pjoin(path_images_local,
+                                               'event_summary',
+                                               '%s_event_summary.png' %
+                                               event.name)
+    event.fnam_report['summary'] = pjoin(path_images,
+                                         'event_summary',
+                                         '%s_event_summary.png' %
+                                         event.name)
+    event.fnam_report['pol_local'] = pjoin(path_images_local,
+                                           'event_plots',
+                                           event.name,
+                                           '%s_polarization.png' %
+                                           event.name)
+    event.fnam_report['pol'] = pjoin(path_images,
+                                     'event_plots',
+                                     event.name,
+                                     '%s_polarization.png' %
+                                     event.name)
+    path_dailyspec = pjoin(path_images,
+                           'spectrograms/by_channels/02.BHZ/',
+                           'Sol%04d.Spectrogram_LF-02.BHZ__HF-02.BHZ.png'
+                           % int(float(solify(event.starttime)) / 86400 + 1))
     try:
         if event.mars_event_type_short in ('HF', 'VF', '24'):
             snr = calc_stalta(event, fmin=2.2, fmax=2.8)
@@ -135,7 +171,7 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
                    event_type_idx[event.mars_event_type_short],
                    None,
                    float(utct(event.picks['start'])),
-                   None,
+                   float(solify(event.picks['start'])) % 86400,
                    None,
                    None,
                    snr,
@@ -165,20 +201,34 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
                    None,
                    None
                    )
-        event.fnam_report['name'] = event.name
-        link_report = \
-            ('<a href="{Z:s}" target="_blank">{name:s}</a><br>' +
-             '<a href="{Z:s}" target="_blank">Z</a> ' +
-             '<a href="{N:s}" target="_blank">N</a> ' +
-             '<a href="{E:s}" target="_blank">E</a>').format(
+        if pexists(event.fnam_report['summary_local']):
+            link_report = \
+                ('<a href="{summary:s}" target="_blank">{name:s}</a><br>' +
+                 '<a href="{Z:s}" target="_blank">Z</a> ' +
+                 '<a href="{N:s}" target="_blank">N</a> ' +
+                 '<a href="{E:s}" target="_blank">E</a>').format(
+                    **event.fnam_report)
+        else:
+            link_report = \
+                ('{name:s}<br>' +
+                 '<a href="{Z:s}" target="_blank">Z</a> ' +
+                 '<a href="{N:s}" target="_blank">N</a> ' +
+                 '<a href="{E:s}" target="_blank">E</a>').format(
+                    **event.fnam_report)
+        if pexists(event.fnam_report['pol_local']):
+            link_report += ' <a href="{pol:s}" target="_blank">Pol</a>'.format(
                 **event.fnam_report)
+
+        link_lmst = '<a href="%s" target="_blank">%s</a>' % (
+            path_dailyspec, lmst_time)
+
         row = create_row(
             (ievent,
              link_report,
              event.mars_event_type_short,
              event.quality,
-             utc_time,
-             lmst_time,
+             time_string[event.distance_type] % utc_time,
+             link_lmst,
              duration,
              dist_string[event.distance_type] % event.distance,
              snr_string,
@@ -211,7 +261,25 @@ def create_event_row(dist_string, event, event_type_idx, formats, ievent):
             fmts=formats)
 
     except KeyError:
-        row = create_row((ievent, event.name, 'INCOMPLETE PICKS'))
+        link_lmst = '<a href="%s" target="_blank">%s</a>' % (
+            path_dailyspec, lmst_time)
+        sortkey = (ievent,
+                   None,
+                   event_type_idx[event.mars_event_type_short],
+                   None,
+                   float(utct(event.picks['start'])),
+                   float(solify(event.picks['start'])) % 86400,
+                   0.)
+        row = create_row((  # ievent, event.name, 'PRELIMINARY LOCATION'
+            ievent,
+            event.name,
+            event.mars_event_type_short,
+            event.quality,
+            utc_time,
+            link_lmst,
+            'PRELIM'
+            ),
+            extras=sortkey)
     return row
 
 
@@ -298,8 +366,8 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
+    # catalog = catalog.select(name='S0360b')
     ann = Annotations(fnam_csv=args.input_csv)
-
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)
     inv = obspy.read_inventory(args.inventory)
