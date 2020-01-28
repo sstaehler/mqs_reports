@@ -18,11 +18,12 @@ from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from obspy import UTCDateTime as utct
+from obspy.geodetics.base import degrees2kilometers
 from scipy import stats
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES
+from mqs_reports.event import Event, EVENT_TYPES, RADIUS_MARS
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
@@ -605,7 +606,8 @@ class Catalog:
                            color='C1', alpha=1., label=f'{event.name}, S',
                            lw=lw)
             plt.plot(event.spectra['S']['f'], 10 * np.log10(msSN),
-                     color='lightgray', zorder=-10, lw=lw, label=f'{event.name}, S noise')
+                     color='lightgray', zorder=-10, lw=lw,
+                     label=f'{event.name}, S noise')
 
         if tooltip:
             datacursor(formatter='{label}'.format)
@@ -620,7 +622,9 @@ class Catalog:
                            ampfac=ampfac, f_c=f_c)
         spec3 = lorenz_att(f, A0=-13, f0=2.4, tstar=0.05, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        spec4 = lorenz_att(f, A0=-5, f0=2.4, tstar=0.3, fw=0.3,
+        #spec4 = lorenz_att(f, A0=-5, f0=2.4, tstar=0.3, fw=0.3,
+        #                   ampfac=ampfac, f_c=f_c)
+        spec4 = lorenz_att(f, A0=-2, f0=2.4, tstar=0.4, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
@@ -643,6 +647,73 @@ class Catalog:
         plt.ylim(-30., 7.)
 
         plt.title(f'Spectra for {len(cat)} events')
+
+        if show:
+            plt.show()
+        else:
+            return fig
+
+    def plot_amplitude_PgSg(
+         self,
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+                 'VERY_HIGH_FREQUENCY': 'C0'},
+         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+         fig=None, show=True):
+
+        if fig is None:
+            fig = plt.figure()
+
+        legend_elements = []
+
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+            for quality in 'ABCD':
+                cat = self.select(quality=quality, event_type=event_type)
+
+                if len(cat) == 0:
+                    continue
+
+                # collect properties for plotting
+                A = np.array([
+                    event.amplitudes['A_24'] for event in cat]).astype(float)
+
+                tt = np.array([
+                    float(utct(event.picks['Sg']) - utct(event.picks['Pg']))
+                    for event in cat])
+
+                S = np.array([markersize[event.quality] for event in cat])
+                names = np.array([f'{event.name} {event.duration_s:.0f}' for event in cat])
+
+                mask = np.logical_not(np.isnan(A))
+                A = A[mask]
+                tt = tt[mask]
+                S = S[mask]
+                names = names[mask]
+
+                if markerfill[quality]:
+                    colorargs = {'c': colors[event_type]}
+                else:
+                    colorargs = {'edgecolors': colors[event_type],
+                                 'facecolor': 'none'}
+
+                scatter_annot(tt, A, s=S, fig=fig, names=names,
+                              label=f'{event_type}, {quality}',
+                              **colorargs)
+
+
+        plt.xlabel('TP - TS / s')
+        plt.ylabel('A2.4 / dB')
+
+        vs = 2.
+        vp = 2. * 3 ** 0.5
+        d1 = degrees2kilometers(3 * (1. / vs - 1. / vp), RADIUS_MARS)
+        d2 = degrees2kilometers(50 * (1. / vs - 1. / vp), RADIUS_MARS)
+        dist = np.linspace(d1, d2)
+        plt.plot(dist, -219.0 * np.ones_like(dist), label='-219.0 dB',
+                 color='C3')
+        plt.plot(dist, -212.5 * np.ones_like(dist), label='-212.5 dB',
+                 color='C3', ls='--')
+        plt.legend()
 
         if show:
             plt.show()
