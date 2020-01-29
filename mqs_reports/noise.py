@@ -11,16 +11,15 @@
 from os.path import join as pjoin
 
 import matplotlib.pyplot as plt
+import mqs_reports
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
 from matplotlib.patches import Polygon, Rectangle
-from obspy import UTCDateTime as utct
-from tqdm import tqdm
-
-import mqs_reports
 from mqs_reports.catalog import Catalog
 from mqs_reports.utils import create_ZNE_HG
+from obspy import UTCDateTime as utct
+from tqdm import tqdm
 
 
 class Noise():
@@ -76,7 +75,9 @@ class Noise():
         times = list()
         times_LMST = list()
         sol = list()
-        print('reading seismic data from %s' % self.sc3_dir)
+        print('reading noise seismic data from %s (%d-%d)' % (self.sc3_dir,
+                                                              jday_start,
+                                                              jday_end))
         for jday in tqdm(range(jday_start, jday_end)):
             try:
                 # TODO: This will fail in leap years
