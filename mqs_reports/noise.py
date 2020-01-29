@@ -21,6 +21,7 @@ from mqs_reports.utils import create_ZNE_HG
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
+SECONDS_PER_DAY = 86400.
 
 class Noise():
     def __init__(self,
@@ -67,7 +68,8 @@ class Noise():
         filenam_VBB_HG = 'XB.ELYSE.0[23].BH?.D.%d.%03d'
 
         jday_start = starttime.julday
-        jday_end = int(float(endtime - starttime) / 86400. + jday_start)
+        jday_end = int(float(endtime - starttime) / SECONDS_PER_DAY
+                       + jday_start)
         year_start = starttime.year
 
         stds_HF = list()
@@ -112,7 +114,7 @@ class Noise():
                     st_filt_LF.filter('highpass', freq=1 / 6, corners=16)
                     st_filt_LF.filter('lowpass', freq=1 / 1.5, corners=16)
 
-                    for t in np.arange(0, 86400, self.winlen_sec):
+                    for t in np.arange(0, SECONDS_PER_DAY, self.winlen_sec):
                         t0 = obspy.UTCDateTime('%04d%03d' % (year, jday)) + t
                         t1 = t0 + self.winlen_sec
                         st_win = st.slice(starttime=t0, endtime=t1)
@@ -128,8 +130,8 @@ class Noise():
                             t0_lmst = solify(t0)
 
                             times.append(t0)
-                            times_LMST.append(float(t0_lmst) / 86400.)
-                            sol.append(int(float(t0_lmst) // 86400))
+                            times_LMST.append(float(t0_lmst) / SECONDS_PER_DAY)
+                            sol.append(int(float(t0_lmst) / SECONDS_PER_DAY))
 
         self.stds_HF = np.asarray(stds_HF)
         self.stds_LF = np.asarray(stds_LF)
@@ -167,7 +169,7 @@ class Noise():
     def calc_noise_stats(self, sol_end=None, sol_start=80):
         if sol_end is None:
             # Now
-            sol_end = float(solify(utct())) // 86400
+            sol_end = float(solify(utct())) // SECONDS_PER_DAY
         binwidth = 2.
         bins = np.arange(-260, -120, binwidth)
         bol_LF = np.array([np.isfinite(self.stds_LF),
@@ -245,8 +247,8 @@ class Noise():
         sc = ax_methane.scatter(methane[:, 0], methane[:, 1],
                                 s=80, vmin=0, vmax=2.,
                                 c=np.ones(methane.shape[0]))
-        ax_methane.set_xlim(calc_Ls(utct(sol_start * 86400.)) - 360,
-                            calc_Ls(utct(sol_end * 86400.)))
+        ax_methane.set_xlim(calc_Ls(utct(sol_start * SECONDS_PER_DAY)) - 360,
+                            calc_Ls(utct(sol_end * SECONDS_PER_DAY)))
         cax = plt.colorbar(sc, ax=ax_methane, use_gridspec=True)
 
         poly = Polygon(verts_LF, facecolor='0.9', edgecolor='0.5')
@@ -353,7 +355,7 @@ class Noise():
     def plot_daystats(self,
                       cat: mqs_reports.catalog.Catalog = None,
                       sol_start: int = 80,
-                      sol_end: int = 400):
+                      sol_end: int = 500):
         qs = [0.1, 0.25, 0.5, 0.9]
         if self.sols_quant is None:
             self.calc_quantiles(sol_end, sol_start, qs=qs)
@@ -413,7 +415,8 @@ class Noise():
                     HF_dists.append(50.)
                 else:
                     HF_dists.append(event.distance)
-                HF_times.append(float(solify(event.starttime)) // 86400.)
+                HF_times.append(float(solify(event.starttime)) //
+                                SECONDS_PER_DAY)
                 HF_amps.append(event.amplitudes['A_24'])
 
             for event in cat.select(event_type=['LF', 'BB']):
@@ -436,7 +439,8 @@ class Noise():
                     instrument='VBB'
                     )
                 amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
-                LF_times.append(float(solify(event.starttime)) / 86400.)
+                LF_times.append(float(solify(event.starttime)) /
+                                SECONDS_PER_DAY)
                 LF_amps.append(20 * np.log10(amp))
 
             sc = ax_LF.scatter(LF_times, LF_amps,
