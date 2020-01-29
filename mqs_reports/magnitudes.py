@@ -151,7 +151,7 @@ def fit_peak(f, p):
 
 def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
     if len(p_sig) < len(f):
-        fac = len(f) // len(p_sig)
+        fac = (len(f) + 1) // len(p_sig)
         f_dec = f[::fac]
         p_sig = np.interp(x=f, xp=f_dec, fp=p_sig)
     if len(p_noise) < len(f):

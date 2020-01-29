@@ -250,7 +250,10 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
              'full': (1. / 15., 3.5)
              }
 
-    tr = event.waveforms_VBB.select(channel='??' + chan)[0].copy()
+    if event.waveforms_VBB is None:
+        tr = event.waveforms_SP.select(channel='??' + chan)[0].copy()
+    else:
+        tr = event.waveforms_VBB.select(channel='??' + chan)[0].copy()
     tr.decimate(2)
     fmin = freqs[types[0]][0]
     fmax = freqs[types[0]][1]
@@ -363,9 +366,10 @@ def _create_timevector(tr):
 if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
 
-    events = Catalog(fnam_quakeml='./mqs_reports/data/catalog_20191007.xml',
-                     type_select='all', quality=('A', 'B'))
+    events = Catalog(fnam_quakeml='./mqs_reports/data/catalog.xml',
+                     type_select='all', quality=('A', 'B', 'C'))
     inv = obspy.read_inventory('./mqs_reports/data/inventory.xml')
+    events = events.select(name='S0376a')
     events.read_waveforms(inv=inv, kind='DISP', sc3dir='/mnt/mnt_sc3data')
     events.calc_spectra(winlen_sec=20.)
     events.make_report()

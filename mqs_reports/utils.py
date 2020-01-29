@@ -1,4 +1,5 @@
-from os.path import join as pjoin, exists as pexists
+import glob
+from os.path import join as pjoin
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,7 +20,7 @@ def create_fnam_event(
         ):
     dirnam = pjoin(sc3dir,
                    'op/data/waveform/%04d/XB/ELYSE/' % utct(time).year)
-    dirnam_inst = pjoin(dirnam, '?H?.D')
+    dirnam_inst = pjoin(dirnam, '???.D')
 
     hour = utct(time).strftime('%H')
     fnam_inst = pjoin(dirnam_inst,
@@ -170,7 +171,7 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     #                          )
     #     st.merge()
     # else:
-    if pexists(fnam_complete):
+    if len(glob.glob(fnam_complete)) > 0:
         st = obspy.read(fnam_complete,
                         starttime=twin[0] - 300.,
                         endtime=twin[1] + 300
@@ -211,7 +212,7 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
 
         st_rot = create_ZNE_HG(st_seis, inv=inv)
         if len(st_rot) > 0:
-            if st_rot.select(channel='?HZ')[0].stats.channel == 'MHZ':
+            if st_rot.select(channel='??Z')[0].stats.channel == 'MHZ':
                 fnam = fnam_complete[0:-32] + 'BZC' + fnam_complete[-29:-17] + \
                        '58.BZC' + fnam_complete[-11:]
                 tr_Z = obspy.read(fnam,

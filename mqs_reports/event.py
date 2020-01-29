@@ -17,11 +17,10 @@ from typing import Union
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
-
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
 RADIUS_MARS = 3389.5
 LANDER_LAT = 4.5024
@@ -196,19 +195,21 @@ class Event:
         waveform_path = pjoin(event_path, 'waveforms')
         origin_path = pjoin(event_path, 'origin_id.txt')
         success = False
+        VBB_path = pjoin(waveform_path, 'waveforms_VBB.mseed')
+        SP_path = pjoin(waveform_path, 'waveforms_SP.mseed')
         if len(glob(origin_path)) > 0:
             with open(origin_path, 'r') as f:
                 origin_local = f.readline().strip()
             if origin_local == self.origin_publicid:
-                try:
-                    self.waveforms_VBB = obspy.read(
-                        pjoin(waveform_path, 'waveforms_VBB.mseed'))
+                if len(glob(VBB_path)):
+                    self.waveforms_VBB = obspy.read(VBB_path)
                     success = True
-                except TypeError:
-                    success = False
-                SP_path = pjoin(waveform_path, 'waveforms_SP.mseed')
+                else:
+                    self.waveforms_VBB = None
+
                 if len(glob(SP_path)):
                     self.waveforms_SP = obspy.read(SP_path)
+                    success = True
                 else:
                     self.waveforms_SP = None
         return success
@@ -227,9 +228,10 @@ class Event:
 
         with open(origin_path, 'w') as f:
             f.write(self.origin_publicid)
-        self.waveforms_VBB.write(pjoin(waveform_path,
-                                       'waveforms_VBB.mseed'),
-                                 format='MSEED', encoding='FLOAT64')
+        if self.waveforms_VBB is not None and len(self.waveforms_VBB) > 0:
+            self.waveforms_VBB.write(pjoin(waveform_path,
+                                           'waveforms_VBB.mseed'),
+                                     format='MSEED', encoding='FLOAT64')
         if self.waveforms_SP is not None and len(self.waveforms_SP) > 0:
             self.waveforms_SP.write(pjoin(waveform_path,
                                           'waveforms_SP.mseed'),
@@ -287,7 +289,7 @@ class Event:
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
                                            twin=[twin_start - tpre_VBB,
-                                                     twin_end + tpre_VBB])
+                                                 twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
                 success_VBB = True
 
@@ -305,13 +307,30 @@ class Event:
                 success_VBB = True
 
         if not success_VBB:
+            # Try for 15.BL? (10sps VBB)
+            filenam_VBB_HG = 'XB.ELYSE.15.HL?.D.%04d.%03d'
+            fnam_VBB = create_fnam_event(
+                filenam_inst=filenam_VBB_HG,
+                sc3dir=sc3dir, time=self.picks['start'])
+            self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                           kind=kind,
+                                           twin=[twin_start - tpre_VBB,
+                                                 twin_end + tpre_VBB])
+            if len(self.waveforms_VBB) == 3:
+                success_VBB = True
+
+        if not success_VBB:
             self.waveforms_VBB = None
+
+        if self.waveforms_VBB is None and self.waveforms_SP is None:
+            raise FileNotFoundError('Neither SP nor VBB data found on day %s' %
+                                    self.picks['starttime'])
 
     def available_sampling_rates(self):
         available = dict()
-        channels = {'VBB_Z': 'BHZ',
-                    'VBB_N': 'BHN',
-                    'VBB_E': 'BHN'}
+        channels = {'VBB_Z': '??Z',
+                    'VBB_N': '??N',
+                    'VBB_E': '??N'}
         for chan, seed in channels.items():
             available[chan] = self.waveforms_VBB.select(
                 channel=seed)[0].stats.sampling_rate
@@ -365,27 +384,28 @@ class Event:
             spectrum_variable = dict()
             if len(twin[0]) == 0:
                 continue
-            for chan in ['Z', 'N', 'E']:
-                # f, p = read_spectrum(fnam_base=fnam_spectrum,
-                #                      variable=variable,
-                #                      chan=chan,
-                #                      origin_publicid=self[
-                #                          'origin_publicid'])
-                # if f is None:
-                st_sel = self.waveforms_VBB.select(
-                    channel='??' + chan)
-                tr = st_sel[0].slice(starttime=utct(twin[0]),
-                                     endtime=utct(twin[1]))
-                if tr.stats.npts > 0:
-                    f, p = calc_PSD(tr, winlen_sec=winlen_sec,
-                                    detick_nfsamp=detick_nfsamp)
-                    spectrum_variable['p_' + chan] = p
-                else:
-                    f = np.arange(0, 1, 0.1)
-                    p = np.zeros(10)
-                spectrum_variable['f'] = f
-            if len(spectrum_variable) > 0:
-                self.spectra[variable] = spectrum_variable
+            if self.waveforms_VBB is not None:
+                for chan in ['Z', 'N', 'E']:
+                    # f, p = read_spectrum(fnam_base=fnam_spectrum,
+                    #                      variable=variable,
+                    #                      chan=chan,
+                    #                      origin_publicid=self[
+                    #                          'origin_publicid'])
+                    # if f is None:
+                    st_sel = self.waveforms_VBB.select(
+                        channel='??' + chan)
+                    tr = st_sel[0].slice(starttime=utct(twin[0]),
+                                         endtime=utct(twin[1]))
+                    if tr.stats.npts > 0:
+                        f, p = calc_PSD(tr, winlen_sec=winlen_sec,
+                                        detick_nfsamp=detick_nfsamp)
+                        spectrum_variable['p_' + chan] = p
+                    else:
+                        f = np.arange(0, 1, 0.1)
+                        p = np.zeros(10)
+                    spectrum_variable['f'] = f
+                if len(spectrum_variable) > 0:
+                    self.spectra[variable] = spectrum_variable
 
             if self.waveforms_SP is not None:
                 spectrum_variable = dict()
@@ -412,6 +432,8 @@ class Event:
 
             if len(spectrum_variable) > 0:
                 self.spectra_SP[variable] = spectrum_variable
+            if self.waveforms_VBB is None and self.waveforms_SP is not None:
+                self.spectra[variable] = spectrum_variable
 
         self.amplitudes = {'A0': None,
                            'tstar': None,
