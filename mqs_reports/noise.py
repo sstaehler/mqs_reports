@@ -472,7 +472,6 @@ class Noise():
         # plt.tight_layout()
         # plt.savefig('noise_vs_eventamplitudes.pdf')
         plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
-        plt.show()
 
     def read_quantiles(self, fnam):
         data = np.load(fnam)
