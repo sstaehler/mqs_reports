@@ -446,7 +446,10 @@ class Event:
             for signal in ['S', 'P', 'all']:
                 amplitudes = None
                 if signal in self.spectra:
-                    p_sig = self.spectra[signal]['p_Z']
+                    if self.mars_event_type_short == 'UF':
+                        p_sig = self.spectra[signal]['p_N']
+                    else:
+                        p_sig = self.spectra[signal]['p_Z']
                     amplitudes = fit_spectra(f=f,
                                              p_sig=p_sig,
                                              p_noise=p_noise,
