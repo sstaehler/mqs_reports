@@ -1,4 +1,4 @@
-from os.path import join as pjoin
+from os.path import join as pjoin, exists as pexists
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -170,15 +170,12 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     #                          )
     #     st.merge()
     # else:
-    st = obspy.read(fnam_complete,
-                    starttime=twin[0] - 300.,
-                    endtime=twin[1] + 300
-                    )
-    st_seis = st.select(channel='?[LH]?')
-    if len(st_seis) == 0:
-        st_rot = obspy.Stream()
-    else:
-
+    if pexists(fnam_complete):
+        st = obspy.read(fnam_complete,
+                        starttime=twin[0] - 300.,
+                        endtime=twin[1] + 300
+                        )
+        st_seis = st.select(channel='?[LH]?')
         st_seis.merge(method=1, fill_value='interpolate')
         st_seis.detrend(type='demean')
         st_seis.taper(0.1)
@@ -241,6 +238,8 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
             else:
                 st_rot.trim(starttime=twin[0], endtime=twin[1])
 
+    else:
+        st_rot = obspy.Stream()
     return st_rot
 
 
