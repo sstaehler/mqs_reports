@@ -366,7 +366,7 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
-    # catalog = catalog.select(name='S0360b')
+    catalog = catalog.select(name='S0235b')
     ann = Annotations(fnam_csv=args.input_csv)
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)
@@ -374,7 +374,7 @@ if __name__ == '__main__':
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
-    catalog.calc_spectra(winlen_sec=20.)
+    catalog.calc_spectra(winlen_sec=20., detick_nfsamp=10)
 
     catalog.make_report(dir_out='reports', annotations=ann)
     catalog.write_table(fnam_out='./overview.html')

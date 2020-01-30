@@ -17,10 +17,11 @@ from typing import Union
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
-from mqs_reports.magnitudes import fit_spectra
-from mqs_reports.utils import create_fnam_event, read_data, calc_PSD
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+
+from mqs_reports.magnitudes import fit_spectra
+from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick
 
 RADIUS_MARS = 3389.5
 LANDER_LAT = 4.5024
@@ -386,19 +387,13 @@ class Event:
                 continue
             if self.waveforms_VBB is not None:
                 for chan in ['Z', 'N', 'E']:
-                    # f, p = read_spectrum(fnam_base=fnam_spectrum,
-                    #                      variable=variable,
-                    #                      chan=chan,
-                    #                      origin_publicid=self[
-                    #                          'origin_publicid'])
-                    # if f is None:
                     st_sel = self.waveforms_VBB.select(
                         channel='??' + chan)
-                    tr = st_sel[0].slice(starttime=utct(twin[0]),
-                                         endtime=utct(twin[1]))
+                    tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
+                    tr.trim(starttime=utct(twin[0]),
+                            endtime=utct(twin[1]))
                     if tr.stats.npts > 0:
-                        f, p = calc_PSD(tr, winlen_sec=winlen_sec,
-                                        detick_nfsamp=detick_nfsamp)
+                        f, p = calc_PSD(tr, winlen_sec=winlen_sec)
                         spectrum_variable['p_' + chan] = p
                     else:
                         f = np.arange(0, 1, 0.1)
@@ -413,11 +408,11 @@ class Event:
                     st_sel = self.waveforms_SP.select(
                         channel='??' + chan)
                     if len(st_sel) > 0:
-                        tr = st_sel[0].slice(starttime=utct(twin[0]),
-                                             endtime=utct(twin[1]))
+                        tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
+                        tr.trim(starttime=utct(twin[0]),
+                                endtime=utct(twin[1]))
                         if tr.stats.npts > 0:
-                            f, p = calc_PSD(tr, winlen_sec=winlen_sec,
-                                            detick_nfsamp=detick_nfsamp)
+                            f, p = calc_PSD(tr, winlen_sec=winlen_sec)
                             spectrum_variable['p_' + chan] = p
                         else:
                             f = np.arange(0, 1, 0.1)

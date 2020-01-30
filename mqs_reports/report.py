@@ -11,10 +11,11 @@ import numpy as np
 import obspy
 import plotly.graph_objects as go
 import plotly.io as pio
-from mqs_reports.magnitudes import lorenz, lorenz_att
-from mqs_reports.utils import envelope_smooth
 from obspy import UTCDateTime as utct
 from plotly.subplots import make_subplots
+
+from mqs_reports.magnitudes import lorenz, lorenz_att
+from mqs_reports.utils import envelope_smooth, detick
 
 
 def make_report(event, chan, fnam_out, annotations):
@@ -50,13 +51,15 @@ def make_report(event, chan, fnam_out, annotations):
 
 
 def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
-    tr = event.waveforms_VBB.select(channel='??' + chan)[0].copy()
+    tr = detick(event.waveforms_VBB.select(channel='??' + chan)[0],
+                detick_nfsamp=10)
     tr.trim(starttime=utct(event.picks['start']) - 180.,
             endtime=utct(event.picks['end']) + 180.)
 
     tr.differentiate()
     tr.differentiate()
-    z, f, t = _calc_cwf(tr, fmin=fmin, fmax=fmax)
+    z, f, t = _calc_cwf(tr,
+                        fmin=fmin, fmax=fmax)
     z = 10 * np.log10(z)
     z[z < -220] = -220.
     z[z > -150] = -150.
@@ -102,7 +105,7 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
 def plot_spec(event,
               fig, row, col, chan,
               ymin=-250, ymax=-170,
-              df_mute=1.07, f_VBB_SP_transition=7.5, **kwargs):
+              df_mute=0.99, f_VBB_SP_transition=7.5, **kwargs):
     colors = ['black', 'navy', 'coral', 'orange']
 
     fmins = [0.08, f_VBB_SP_transition]
@@ -344,7 +347,6 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
 
 def _calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
     from obspy.signal.tf_misfit import cwt
-    npts = tr.stats.npts
     dt = tr.stats.delta
 
     scalogram = abs(cwt(tr.data, dt, w0=w0, nf=200,

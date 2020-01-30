@@ -342,18 +342,10 @@ def __dayplot_set_x_ticks(ax, starttime, endtime, sol=False):
 
 
 def calc_PSD(tr, winlen_sec, detick_nfsamp=0):
-    tr = tr.copy()
     Fs = tr.stats.sampling_rate
 
-    # simplistic deticking by muting detick_nfsamp freqeuency samples around
-    # 1Hz
     if detick_nfsamp > 0:
-        NFFT = next_pow_2(tr.stats.npts)
-        tr.detrend()
-        df = np.fft.rfft(tr.data, n=NFFT)
-        idx_1Hz = np.argmin(np.abs(np.fft.rfftfreq(NFFT) * Fs - 1.))
-        df[idx_1Hz-detick_nfsamp:idx_1Hz+detick_nfsamp] = 0.
-        tr.data = np.fft.irfft(df)[:tr.stats.npts]
+        tr = detick(tr, detick_nfsamp)
 
     winlen = min(winlen_sec * Fs,
                  (tr.stats.endtime - tr.stats.starttime) * Fs / 2.)
@@ -363,6 +355,24 @@ def calc_PSD(tr, winlen_sec, detick_nfsamp=0):
                     Fs=Fs, NFFT=NFFT, detrend='linear',
                     pad_to=pad_to, noverlap=NFFT // 2)
     return f, p
+
+
+def detick(tr, detick_nfsamp, fill_val=None):
+    # simplistic deticking by muting detick_nfsamp freqeuency samples around
+    # 1Hz
+    tr_out = tr.copy()
+    Fs = tr.stats.sampling_rate
+    NFFT = next_pow_2(tr.stats.npts)
+    tr.detrend()
+    df = np.fft.rfft(tr.data, n=NFFT)
+    idx_1Hz = np.argmin(np.abs(np.fft.rfftfreq(NFFT) * Fs - 1.))
+    if fill_val is None:
+        fill_val = (df[idx_1Hz - detick_nfsamp - 1] + \
+                    df[idx_1Hz + detick_nfsamp + 1]) / 2.
+    df[idx_1Hz - detick_nfsamp:idx_1Hz + detick_nfsamp] /= \
+        df[idx_1Hz - detick_nfsamp:idx_1Hz + detick_nfsamp] / fill_val
+    tr_out.data = np.fft.irfft(df)[:tr.stats.npts]
+    return tr_out
 
 
 def plot_spectrum(ax, ax_all, df_mute, iax, ichan_in, spectrum,
