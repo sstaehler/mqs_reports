@@ -324,7 +324,7 @@ class Event:
 
         if self.waveforms_VBB is None and self.waveforms_SP is None:
             raise FileNotFoundError('Neither SP nor VBB data found on day %s' %
-                                    self.picks['starttime'])
+                                    self.picks['start'])
 
     def available_sampling_rates(self):
         available = dict()
