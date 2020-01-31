@@ -11,17 +11,19 @@
 from os.path import join as pjoin
 
 import matplotlib.pyplot as plt
-import mqs_reports
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
 from matplotlib.patches import Polygon, Rectangle
-from mqs_reports.catalog import Catalog
-from mqs_reports.utils import create_ZNE_HG
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
+import mqs_reports
+from mqs_reports.catalog import Catalog
+from mqs_reports.utils import create_ZNE_HG
+
 SECONDS_PER_DAY = 86400.
+
 
 class Noise():
     def __init__(self,
@@ -31,6 +33,10 @@ class Noise():
                  endtime: obspy.UTCDateTime = None,
                  inv: obspy.Inventory = None,
                  winlen_sec: float = None,
+                 fmin_LF: float = 1. / 6.,
+                 fmax_LF: float = 1. / 1.5,
+                 fmin_HF: float = 2.2,
+                 fmax_HF: float = 2.6
                  ):
         self.sols_quant = None
         if data is None:
@@ -42,6 +48,10 @@ class Noise():
             self.times = list()
             self.times_LMST = list()
             self.sol = list()
+            self.fmin_LF = fmin_LF
+            self.fmax_LF = fmax_LF
+            self.fmin_HF = fmin_HF
+            self.fmax_HF = fmax_HF
             self._add_data(starttime=starttime,
                            endtime=endtime,
                            inv=inv)
@@ -52,6 +62,10 @@ class Noise():
             self.times = np.asarray(data['times'])
             self.times_LMST = np.asarray(data['times_LMST'])
             self.sol = np.asarray(data['sol'])
+            self.fmin_LF = np.asarray(data['freqs'][0])
+            self.fmax_LF = np.asarray(data['freqs'][1])
+            self.fmin_HF = np.asarray(data['freqs'][2])
+            self.fmax_HF = np.asarray(data['freqs'][3])
 
 
     def __str__(self):
@@ -62,7 +76,8 @@ class Noise():
     def _add_data(self,
                   starttime: obspy.UTCDateTime,
                   endtime: obspy.UTCDateTime,
-                  inv: obspy.Inventory):
+                  inv: obspy.Inventory,
+                  ):
 
         dirnam = pjoin(self.sc3_dir, 'op/data/waveform/%d/XB/ELYSE/BH?.D')
         filenam_VBB_HG = 'XB.ELYSE.0[23].BH?.D.%d.%03d'
@@ -85,9 +100,11 @@ class Noise():
                 # TODO: This will fail in leap years
                 year = year_start + (jday // 365)
                 fnam = pjoin(dirnam % year,
-                             filenam_VBB_HG % (year, jday))
+                             filenam_VBB_HG % (year, jday % 365))
+                print('Trying %s' % fnam)
                 st = obspy.read(fnam)
             except Exception:
+                print('did not find %s' % fnam)
                 st = obspy.Stream()
             st.merge()
             if len(st.select(location='03')) == 3:
@@ -107,15 +124,15 @@ class Noise():
                     st.filter('highpass', freq=1. / 10., corners=8)
 
                     st_filt_HF = st.copy()
-                    st_filt_HF.filter('highpass', freq=2.2, corners=16)
-                    st_filt_HF.filter('lowpass', freq=2.6, corners=16)
+                    st_filt_HF.filter('highpass', freq=self.fmin_HF, corners=16)
+                    st_filt_HF.filter('lowpass', freq=self.fmax_HF, corners=16)
 
                     st_filt_LF = st.copy()
-                    st_filt_LF.filter('highpass', freq=1 / 6, corners=16)
-                    st_filt_LF.filter('lowpass', freq=1 / 1.5, corners=16)
+                    st_filt_LF.filter('highpass', freq=self.fmin_LF, corners=16)
+                    st_filt_LF.filter('lowpass', freq=self.fmax_LF, corners=16)
 
                     for t in np.arange(0, SECONDS_PER_DAY, self.winlen_sec):
-                        t0 = obspy.UTCDateTime('%04d%03d' % (year, jday)) + t
+                        t0 = utct('%04d%03d' % (year, jday % 365)) + t
                         t1 = t0 + self.winlen_sec
                         st_win = st.slice(starttime=t0, endtime=t1)
                         st_filt_HF_win = st_filt_HF.slice(starttime=t0,
@@ -146,6 +163,7 @@ class Noise():
                  times=self.times,
                  times_LMST=self.times_LMST,
                  sol=self.sol,
+                 freqs=[self.fmin_LF, self.fmax_LF, self.fmin_HF, self.fmax_HF],
                  winlen_sec=self.winlen_sec)
 
 
@@ -427,15 +445,15 @@ class Noise():
                 amp_P = event.pick_amplitude(
                     pick='Peak_MbP',
                     comp='vertical',
-                    fmin=1. / 6.,
-                    fmax=1. / 1.5,
+                    fmin=self.fmin_LF,
+                    fmax=self.fmax_LF,
                     instrument='VBB'
                     )
                 amp_S = event.pick_amplitude(
                     pick='Peak_MbS',
                     comp='vertical',
-                    fmin=1. / 6.,
-                    fmax=1. / 1.5,
+                    fmin=self.fmin_LF,
+                    fmax=self.fmax_LF,
                     instrument='VBB'
                     )
                 amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
@@ -490,8 +508,7 @@ class Noise():
                  quantiles_LF=self.quantiles_LF,
                  sols=self.sols_quant)
 
-    def calc_quantiles(self, sol_end, sol_start,
-                       qs):
+    def calc_quantiles(self, sol_end, sol_start, qs):
 
         self.sols_quant = np.arange(sol_start, sol_end + 1)
         self.quantiles_LF = np.zeros((sol_end - sol_start + 1, len(qs)))
@@ -502,10 +519,10 @@ class Noise():
         for isol in tqdm(self.sols_quant):
             bol_sol = self.sol == isol - 1
             if sum(bol_sol) > 1:
-                values = np.quantile(
-                    a=np.ma.masked_less_equal(
-                        x=self.stds_LF[bol_sol], value=0.0) ** 2. / (
-                              1. / 1.5 - 1. / 6), q=qs)
+                df = self.fmax_LF - self.fmin_LF
+                disp_LF = np.ma.masked_less_equal(
+                    x=self.stds_LF[bol_sol], value=0.0) ** 2. / df
+                values = np.quantile(a=disp_LF, q=qs)
                 if np.isfinite(values).all():
                     self.quantiles_LF[i, :] = values
             i += 1
@@ -515,9 +532,10 @@ class Noise():
         for isol in tqdm(self.sols_quant):
             bol_sol = self.sol == isol - 1
             if sum(bol_sol) > 1:
-                values = np.quantile(
-                    a=np.ma.masked_less_equal(x=self.stds_HF[bol_sol],
-                                              value=0.0) ** 2. / 0.4, q=qs)
+                df = self.fmax_HF - self.fmin_HF
+                disp_HF = np.ma.masked_less_equal(
+                    x=self.stds_HF[bol_sol], value=0.0) ** 2. / df
+                values = np.quantile(a=disp_HF, q=qs)
                 if np.isfinite(values).all():
                     self.quantiles_HF[i, :] = values
             i += 1
