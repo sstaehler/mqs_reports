@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Polygon, Rectangle
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
@@ -187,7 +187,6 @@ class Noise():
 
                         stds_HF.append(std_HF)
                         stds_LF.append(std_LF)
-                        stds_press.append(std_press)
                         t0_lmst = solify(t0)
 
                         times.append(t0)
@@ -463,7 +462,7 @@ class Noise():
                                    sharex=ax_HF)
 
         cols = ['black', 'darkgrey', 'grey', 'black']
-        ls = ['dotted', 'dotted', 'dashed', 'dashed']
+        ls = ['dotted', 'dashed', 'dotted', 'dashed']
         labels = ['quiet (1700-2230 LMST)', 'noisy night (2230-0600 LMST)',
                   'morning (0600-0900 LMST)', 'day (0900-1700 LMST)']
         for i in range(self.quantiles_LF.shape[1] - 1, -1, -1):
@@ -483,15 +482,15 @@ class Noise():
                            y1=-300,
                            y2=10 * np.log10(self.quantiles_HF[:, 0]),
                            facecolor='lightgrey')
-
-        for i in range(self.quantiles_press.shape[1] - 1, -1, -1):
-            ax_apss.plot(self.sols_quant - 1.,
-                         10 * np.log10(self.quantiles_press[:, i]),
-                         label=labels[i], c=cols[i], ls=ls[i])
-        ax_apss.fill_between(x=self.sols_quant - 1.,
-                             y1=-300,
-                             y2=10 * np.log10(self.quantiles_press[:, 0]),
-                             facecolor='lightgrey')
+        if data_apss:
+            for i in range(self.quantiles_press.shape[1] - 1, -1, -1):
+                ax_apss.plot(self.sols_quant - 1.,
+                             10 * np.log10(self.quantiles_press[:, i]),
+                             label=labels[i], c=cols[i], ls=ls[i])
+            ax_apss.fill_between(x=self.sols_quant - 1.,
+                                 y1=-300,
+                                 y2=10 * np.log10(self.quantiles_press[:, 0]),
+                                 facecolor='lightgrey')
         HF_times = []
         HF_amps = []
         HF_dists = []

@@ -51,10 +51,10 @@ def create_row(list, fmts=None, extras=None):
                 else:
                     try:
                         row += ind_string \
-                               + '<td sorttable_customkey="%d">' % extra \
+                               + '<td sorttable_customkey="%d">' % (extra * 100) \
                                + fmt % (li) + '</td>\n'
                     except(ValueError):
-                        row += ind_string + '<td sorttable_customkey=-100>' + \
+                        row += ind_string + '<td sorttable_customkey=-100000>' + \
                                fmt % (li) + '</td>\n'
 
     row += 4 * ' ' + '</tr>\n'
@@ -174,23 +174,23 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                    float(solify(event.picks['start'])) % 86400,
                    None,
                    None,
-                   snr * 100.,
+                   snr,
                    event.pick_amplitude('Peak_MbP',
                                         comp='vertical',
                                         fmin=1. / 6.,
                                         fmax=1. / 2,
-                                        unit='fm') * 100.,
+                                        unit='fm'),
                    event.pick_amplitude('Peak_MbS',
                                         comp='horizontal',
                                         fmin=1. / 6.,
                                         fmax=1. / 2,
-                                        unit='fm') * 100.,
+                                        unit='fm'),
                    event.pick_amplitude('Peak_M2.4',
                                         comp='vertical',
                                         fmin=2.2, fmax=2.6,
-                                        unit='fm') * 100.,
-                   event.amplitudes['A_24'] * 100.,
-                   event.amplitudes['A0'] * 100.,
+                                        unit='fm'),
+                   event.amplitudes['A_24'],
+                   event.amplitudes['A0'],
                    None,
                    None,
                    None,
@@ -366,7 +366,6 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
-    catalog = catalog.select(name='S0235b')
     ann = Annotations(fnam_csv=args.input_csv)
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)
