@@ -362,7 +362,7 @@ class Noise():
                    verticalalignment='center', transform=ax_LF.transAxes)
         for a in [ax_HF, ax_LF]:
             a.grid('on')
-        plt.legend(loc='lower left')
+        plt.legend(loc='upper left')
         # plt.tight_layout()
         # plt.savefig('noise_vs_eventamplitudes.pdf')
         plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
@@ -416,7 +416,7 @@ class Noise():
                          facecolor='darkgrey', edgecolor='black')
         ax_HF.add_patch(rect)
         cols = ['black', 'darkgrey', 'grey', 'black']
-        ls = ['dotted', 'dotted', 'dashed', 'dashed']
+        ls = ['dotted', 'dashed', 'dotted', 'dashed']
         labels = ['quiet (1700-2230)', 'noisy (2230-0600)',
                   'morning (0600-0900)', 'day (0900-1700)']
         for i in range(self.quantiles_LF.shape[1] - 1, -1, -1):
