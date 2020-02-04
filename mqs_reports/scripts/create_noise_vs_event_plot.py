@@ -13,7 +13,7 @@ import obspy
 from obspy import UTCDateTime as utct
 
 from mqs_reports.catalog import Catalog
-from mqs_reports.noise import Noise
+from mqs_reports.noise import Noise, read_noise
 
 
 def define_arguments():
@@ -38,15 +38,19 @@ def define_arguments():
 args = define_arguments()
 
 inv = obspy.read_inventory(args.inventory)
+cat = Catalog(fnam_quakeml=args.input_quakeml,
+              quality=['A', 'B', 'C', 'D'])
+cat = cat.select(starttime='20190301',
+              event_type=['HF', '24', 'LF', 'BB'])
 noise = Noise(sc3_dir=args.sc3_dir,
               starttime=utct('20190202'),
               endtime=utct(),
               inv=inv,
               winlen_sec=120.
               )
-cat = Catalog(fnam_quakeml=args.input_quakeml,
-              quality=['A', 'B', 'C', 'D'])
-
+noise.save('noise_from_20190202.npz')
+# noise = read_noise('noise_from_20190202.npz')
+# noise.read_quantiles('noise_quantiles.npz')
 cat.load_distances(fnam_csv=args.input_dist)
 cat.read_waveforms(inv=inv, sc3dir=args.sc3_dir)
 cat.calc_spectra(winlen_sec=10.)
