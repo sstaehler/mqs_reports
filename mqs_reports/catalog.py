@@ -23,7 +23,7 @@ from scipy import stats
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES, RADIUS_MARS
+from mqs_reports.event import Event, EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
@@ -383,6 +383,7 @@ class Catalog:
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C3'},
          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
+         llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
          show=True):
 
         events = []
@@ -508,7 +509,7 @@ class Catalog:
                          ha='right', va='center')
 
         # time 0 line
-        plt.axvline(0, color='C4')
+        plt.axvline(0, color='k', ls='--')
 
 
         if not regular_spacing:
@@ -523,7 +524,6 @@ class Catalog:
 
         if legend:
             # legend
-            llabels = ['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ']
             lcolors = [colors[l] for l in llabels]
             llines = [Line2D([0], [0], color=c) for c in lcolors]
             plt.legend(llines, llabels)
@@ -538,9 +538,11 @@ class Catalog:
         else:
             return fig
 
-    def plot_HF_spectra(self, SNR=2., tooltip=False, show=True):
+    def plot_HF_spectra(self, SNR=2., tooltip=False, fig=None, show=True):
         from mpldatacursor import datacursor
-        fig = plt.figure()
+        if fig is None:
+            fig = plt.figure()
+        ax = fig.gca()
 
         cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY'])
 
@@ -629,12 +631,13 @@ class Catalog:
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
         l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
-        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.3')
+        #l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.3')
+        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4')
 
         llabels = ['P', 'S'] + [l.get_label() for l in [l5, l3, l4, l6]]
         plt.legend([l1, l2, l5, l3, l4, l6], llabels)
         plt.xlabel('frequency / Hz')
-        plt.ylabel('PSD relative to 2.4 peak amplitude')
+        plt.ylabel('Amplitude relative to 2.4 peak / dB')
 
         ax = plt.gca()
         ax.set_xscale('log')
@@ -646,7 +649,7 @@ class Catalog:
         plt.xlim(0.3, 8.)
         plt.ylim(-30., 7.)
 
-        plt.title(f'Spectra for {len(cat)} events')
+        #plt.title(f'Spectra for {len(cat)} events')
 
         if show:
             plt.show()
@@ -657,6 +660,8 @@ class Catalog:
          self,
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C0'},
+         markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
+                  'VERY_HIGH_FREQUENCY': '^'},
          markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
          markerfill={'A': True, 'B': True, 'C': False, 'D': False},
          fig=None, show=True):
@@ -669,6 +674,12 @@ class Catalog:
         for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
             for quality in 'ABCD':
                 cat = self.select(quality=quality, event_type=event_type)
+
+                for e in cat.events:
+                    if e.picks['Sg'] == '' or e.picks['Pg'] == '':
+                        print(f'missing pick on event {e.name}')
+                cat.events = [e for e in cat.events if not e.picks['Sg'] == ''
+                              and not e.picks['Pg'] == '']
 
                 if len(cat) == 0:
                     continue
@@ -697,6 +708,7 @@ class Catalog:
                                  'facecolor': 'none'}
 
                 scatter_annot(tt, A, s=S, fig=fig, names=names,
+                              marker=markers[event_type],
                               label=f'{event_type}, {quality}',
                               **colorargs)
 
@@ -704,8 +716,8 @@ class Catalog:
         plt.xlabel('TP - TS / s')
         plt.ylabel('A2.4 / dB')
 
-        vs = 2.
-        vp = 2. * 3 ** 0.5
+        vs = CRUST_VS
+        vp = CRUST_VP
         d1 = degrees2kilometers(3 * (1. / vs - 1. / vp), RADIUS_MARS)
         d2 = degrees2kilometers(50 * (1. / vs - 1. / vp), RADIUS_MARS)
         dist = np.linspace(d1, d2)
@@ -724,7 +736,9 @@ class Catalog:
          self, mag_type='m2.4',
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C0'},
-         xlabel='distance / degree [vs = 2 km/s, vp/vs = 1.7]',
+         markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
+                  'VERY_HIGH_FREQUENCY': '^'},
+         xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP/CRUST_VS:3.1f}]',
          markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
          markerfill={'A': True, 'B': True, 'C': False, 'D': False},
          fig=None, show=True):
@@ -762,6 +776,7 @@ class Catalog:
                                  'facecolor': 'none'}
 
                 scatter_annot(dist, M, s=S, fig=fig, names=names,
+                              marker=markers[event_type],
                               label=f'{event_type}, {quality}',
                               **colorargs)
 
@@ -837,7 +852,7 @@ class Catalog:
 
     def plot_distance_distribution_density(
          self, fig=None,
-         xlabel='distance / degree [vs = 2 km/s, vp/vs = 1.7]',
+         xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP/CRUST_VS:3.1f}]',
          label=None, show=True, color=None, plot_event_marker=True):
 
         if fig is None:
@@ -852,9 +867,20 @@ class Catalog:
 
         # kde_factor = len(d) ** (-0.2)  # Scott's rule
         kde = stats.gaussian_kde(d)
-
         x = np.linspace(0., 50, 1000.)
-        plt.plot(x, kde(x), color=color, label=label)
+        pdf1 = kde(x)
+        plt.plot(x, pdf1, color=color, label=label)
+
+        kde = stats.gaussian_kde(d, weights=1./d**2)
+        x = np.linspace(0., 50, 1000.)
+        pdf1 = kde(x)
+        plt.plot(x, pdf1, color=color, label=label + ' area weighted', ls='--')
+
+        # kde = stats.gaussian_kde(np.log10(d), weights=1./d**2)
+        # x = np.linspace(1., 50, 1000.)
+        # pdf1 = kde(np.log10(x))
+        # pdf1 = pdf1 / pdf1.sum() * 20
+        # plt.plot(x, pdf1, color=color, label=label, ls=':')
 
         plt.xlabel(xlabel)
         plt.ylabel('PDF estimate from Gaussian KDE')

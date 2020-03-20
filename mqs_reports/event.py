@@ -24,6 +24,8 @@ from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick
 
 RADIUS_MARS = 3389.5
+CRUST_VP = 4.
+CRUST_VS = 4. / 3. ** 0.5
 LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
@@ -147,8 +149,8 @@ class Event:
                         self.distance_type = 'aligned'
 
     def calc_distance(self,
-                      vp: float = np.sqrt(3) * 2.0,
-                      vs: float = 2.0) -> Union[float, None]:
+                      vp: float = CRUST_VP,
+                      vs: float = CRUST_VS) -> Union[float, None]:
         """
         Calculate distance of event based on Pg and Sg picks, if available,
         otherwise return None
