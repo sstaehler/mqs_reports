@@ -11,17 +11,19 @@
 from os.path import join as pjoin
 
 import matplotlib.pyplot as plt
-import mqs_reports
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
 from matplotlib.patches import Polygon, Rectangle
-from mqs_reports.catalog import Catalog
-from mqs_reports.utils import create_ZNE_HG
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
+import mqs_reports
+from mqs_reports.catalog import Catalog
+from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable
+
 SECONDS_PER_DAY = 86400.
+
 
 class Noise():
     def __init__(self,
@@ -31,17 +33,30 @@ class Noise():
                  endtime: obspy.UTCDateTime = None,
                  inv: obspy.Inventory = None,
                  winlen_sec: float = None,
+                 fmin_LF: float = 1. / 6.,
+                 fmax_LF: float = 1. / 1.5,
+                 fmin_HF: float = 2.2,
+                 fmax_HF: float = 2.6,
+                 fmin_press: float = 1 / 10.,
+                 fmax_press: float = 1. / 2.
                  ):
         self.sols_quant = None
         if data is None:
             self.sc3_dir = sc3_dir
             self.winlen_sec = winlen_sec
 
-            self.stds_HF = list()
-            self.stds_LF = list()
-            self.times = list()
-            self.times_LMST = list()
-            self.sol = list()
+            self.stds_HF = 0.
+            self.stds_LF = 0.
+            self.stds_press = 0.
+            self.times = 0.
+            self.times_LMST = 0.
+            self.sol = 0.
+            self.fmin_LF = fmin_LF
+            self.fmax_LF = fmax_LF
+            self.fmin_HF = fmin_HF
+            self.fmax_HF = fmax_HF
+            self.fmin_press = fmin_press
+            self.fmax_press = fmax_press
             self._add_data(starttime=starttime,
                            endtime=endtime,
                            inv=inv)
@@ -49,9 +64,16 @@ class Noise():
         else:
             self.stds_HF = np.asarray(data['stds_HF'])
             self.stds_LF = np.asarray(data['stds_LF'])
+            self.stds_press = np.asarray(data['stds_press'])
             self.times = np.asarray(data['times'])
             self.times_LMST = np.asarray(data['times_LMST'])
             self.sol = np.asarray(data['sol'])
+            self.fmin_LF = data['freqs'][0]
+            self.fmax_LF = data['freqs'][1]
+            self.fmin_HF = data['freqs'][2]
+            self.fmax_HF = data['freqs'][3]
+            self.fmin_press = data['freqs'][4]
+            self.fmax_press = data['freqs'][5]
 
 
     def __str__(self):
@@ -59,13 +81,18 @@ class Noise():
         return fmt % (self.times[0].date, self.times[-1].date,
                       len(self.stds_LF), len(self.stds_HF))
 
+
     def _add_data(self,
                   starttime: obspy.UTCDateTime,
                   endtime: obspy.UTCDateTime,
-                  inv: obspy.Inventory):
+                  inv: obspy.Inventory,
+                  ):
 
         dirnam = pjoin(self.sc3_dir, 'op/data/waveform/%d/XB/ELYSE/BH?.D')
         filenam_VBB_HG = 'XB.ELYSE.0[23].BH?.D.%d.%03d'
+
+        dirnam_pressure = pjoin(self.sc3_dir,
+                                'op/data/waveform/%d/XB/ELYSE/?DO.D')
 
         jday_start = starttime.julday
         jday_end = int(float(endtime - starttime) / SECONDS_PER_DAY
@@ -74,6 +101,7 @@ class Noise():
 
         stds_HF = list()
         stds_LF = list()
+        stds_press = list()
         times = list()
         times_LMST = list()
         sol = list()
@@ -81,60 +109,93 @@ class Noise():
                                                               jday_start,
                                                               jday_end))
         for jday in tqdm(range(jday_start, jday_end)):
+            year = year_start + (jday // 365)
             try:
                 # TODO: This will fail in leap years
-                year = year_start + (jday // 365)
                 fnam = pjoin(dirnam % year,
-                             filenam_VBB_HG % (year, jday))
+                             filenam_VBB_HG % (year, jday % 365))
                 st = obspy.read(fnam)
             except Exception:
+                print('did not find %s' % fnam)
                 st = obspy.Stream()
+            try:
+                # Before switching to L2 continuous data
+                if year == 2019 and jday < 120:
+                    filenam_pressure = 'XB.ELYSE.02.MDO.D.%d.%03d'
+                else:
+                    filenam_pressure = 'XB.ELYSE.03.BDO.D.%d.%03d'
+                # TODO: This will fail in leap years
+                fnam_press = pjoin(dirnam_pressure % year,
+                                   filenam_pressure % (year, jday % 365))
+                st_press = obspy.read(fnam_press)
+                if year > 2019 or jday > 120:
+                    st_press.decimate(5)
+
+            except Exception:
+                print('did not find %s' % fnam)
+                st_press = obspy.Stream()
             st.merge()
             if len(st.select(location='03')) == 3:
                 st = st.select(location='03')
             else:
                 st = st.select(location='02')
             if len(st) == 3:
-                try:
-                    st.remove_sensitivity(inv)
-                except ValueError:
-                    print('Inventory problem on jday %d' % jday)
-                else:
-                    st = create_ZNE_HG(st, inv=inv)
-                    st = st.select(channel='BHZ')
-                    st.filter('highpass', freq=1. / 10., corners=8)
-                    st.integrate()
-                    st.filter('highpass', freq=1. / 10., corners=8)
+                for tr in st:
+                    remove_sensitivity_stable(tr, inv)
+                st = create_ZNE_HG(st, inv=inv)
+                st = st.select(channel='BHZ')
+                st.filter('highpass', freq=1. / 10., corners=8)
+                st.integrate()
+                st.filter('highpass', freq=1. / 10., corners=8)
 
-                    st_filt_HF = st.copy()
-                    st_filt_HF.filter('highpass', freq=2.2, corners=16)
-                    st_filt_HF.filter('lowpass', freq=2.6, corners=16)
+                st_filt_HF = st.copy()
+                st_filt_HF.filter('highpass', freq=self.fmin_HF, corners=16)
+                st_filt_HF.filter('lowpass', freq=self.fmax_HF, corners=16)
 
-                    st_filt_LF = st.copy()
-                    st_filt_LF.filter('highpass', freq=1 / 6, corners=16)
-                    st_filt_LF.filter('lowpass', freq=1 / 1.5, corners=16)
+                st_filt_LF = st.copy()
+                st_filt_LF.filter('highpass', freq=self.fmin_LF, corners=16)
+                st_filt_LF.filter('lowpass', freq=self.fmax_LF, corners=16)
 
-                    for t in np.arange(0, SECONDS_PER_DAY, self.winlen_sec):
-                        t0 = obspy.UTCDateTime('%04d%03d' % (year, jday)) + t
-                        t1 = t0 + self.winlen_sec
-                        st_win = st.slice(starttime=t0, endtime=t1)
-                        st_filt_HF_win = st_filt_HF.slice(starttime=t0,
-                                                          endtime=t1)
-                        st_filt_LF_win = st_filt_LF.slice(starttime=t0,
-                                                          endtime=t1)
-                        if len(st_win) > 0 and st_win[0].stats.npts > 10:
-                            std_HF = st_filt_HF_win[0].std()
-                            std_LF = st_filt_LF_win[0].std()
-                            stds_HF.append(std_HF)
-                            stds_LF.append(std_LF)
-                            t0_lmst = solify(t0)
+                for tr in st_press:
+                    remove_sensitivity_stable(tr, inv=inv)
+                st_press.detrend()
+                st_press.taper(max_length=10., max_percentage=1.)
+                st_press.merge(method=0, fill_value='interpolate')
+                st_press.filter('highpass', freq=self.fmin_press, corners=16)
+                st_press.filter('highpass', freq=self.fmin_press, corners=16)
+                st_press.filter('lowpass', freq=self.fmax_press, corners=16)
 
-                            times.append(t0)
-                            times_LMST.append(float(t0_lmst) / SECONDS_PER_DAY)
-                            sol.append(int(float(t0_lmst) / SECONDS_PER_DAY))
+                for t in np.arange(0, SECONDS_PER_DAY, self.winlen_sec):
+                    t0 = utct('%04d%03d' % (year, jday % 365)) + t
+                    t1 = t0 + self.winlen_sec
+                    st_win = st.slice(starttime=t0, endtime=t1)
+                    st_filt_HF_win = st_filt_HF.slice(starttime=t0,
+                                                      endtime=t1)
+                    st_filt_LF_win = st_filt_LF.slice(starttime=t0,
+                                                      endtime=t1)
+
+                    st_press_win = st_press.slice(starttime=t0, endtime=t1)
+                    if len(st_win) > 0 and st_win[0].stats.npts > 10:
+                        std_HF = st_filt_HF_win[0].std()
+                        std_LF = st_filt_LF_win[0].std()
+
+                        if len(st_press_win) > 0 and \
+                                st_press_win[0].stats.npts > 10:
+                            std_press = st_press_win[0].std()
+                        else:
+                            std_press = 0.
+
+                        stds_HF.append(std_HF)
+                        stds_LF.append(std_LF)
+                        t0_lmst = solify(t0)
+
+                        times.append(t0)
+                        times_LMST.append(float(t0_lmst) / SECONDS_PER_DAY)
+                        sol.append(int(float(t0_lmst) / SECONDS_PER_DAY))
 
         self.stds_HF = np.asarray(stds_HF)
         self.stds_LF = np.asarray(stds_LF)
+        self.stds_press = np.asarray(stds_press)
         self.times = np.asarray(times)
         self.times_LMST = np.asarray(times_LMST)
         self.sol = np.asarray(sol)
@@ -143,9 +204,13 @@ class Noise():
         np.savez(fnam,
                  stds_HF=self.stds_HF,
                  stds_LF=self.stds_LF,
+                 stds_press=self.stds_press,
                  times=self.times,
                  times_LMST=self.times_LMST,
                  sol=self.sol,
+                 freqs=[self.fmin_LF, self.fmax_LF,
+                        self.fmin_HF, self.fmax_HF,
+                        self.fmin_press, self.fmax_press],
                  winlen_sec=self.winlen_sec)
 
 
@@ -213,67 +278,219 @@ class Noise():
 
     #     return quantiles_LF, quantiles_HF
 
-    def plot_daystats_apss(self,
-                           cat: mqs_reports.catalog.Catalog = None,
-                           sol_start: int = 80,
-                           sol_end: int = 400):
-        qs = [0.1, 0.25, 0.5, 0.9]
+    # def plot_daystats_apss(self,
+    #                        cat: mqs_reports.catalog.Catalog = None,
+    #                        sol_start: int = 80,
+    #                        sol_end: int = 400):
+    #     qs = [0.1, 0.25, 0.5, 0.9]
+    #     if self.sols_quant is None:
+    #         # self.calc_quantiles(sol_end, sol_start, qs=qs)
+    #         self.calc_time_windows(sol_end, sol_start)
+    #         self.save_quantiles(fnam='noise_quantiles.npz')
+
+    #     verts_LF = []
+    #     verts_HF = []
+
+    #     for i, isol in enumerate(self.sols_quant):
+    #         if self.quantiles_LF[i, 0] > 0:
+    #             verts_LF.append([isol, 10 * np.log10(self.quantiles_LF[i, 0])])
+    #         if self.quantiles_HF[i, 0] > 0:
+    #             verts_HF.append([isol, 10 * np.log10(self.quantiles_HF[i, 0])])
+    #     verts_LF.append([verts_LF[-1][0], -300])
+    #     verts_HF.append([verts_HF[-1][0], -300])
+    #     verts_HF.append([self.sols_quant[0], -300])
+    #     verts_LF.append([self.sols_quant[0], -300])
+
+    #     fig, ax = plt.subplots(3, 1, figsize=(16, 9), sharex='all')
+    #     ax_HF = ax[2]
+    #     ax_LF = ax[1]
+
+    #     ax_methane = ax[0].twiny()
+
+    #     methane = np.loadtxt(
+    #         '/home/staehler/CloudStation/InSight/seismicity/apss'
+    #         '/methane_median.csv', delimiter=',')
+    #     sc = ax_methane.scatter(methane[:, 0], methane[:, 1],
+    #                             s=80, vmin=0, vmax=2.,
+    #                             c=np.ones(methane.shape[0]))
+    #     ax_methane.set_xlim(calc_Ls(utct(sol_start * SECONDS_PER_DAY)) - 360,
+    #                         calc_Ls(utct(sol_end * SECONDS_PER_DAY)))
+    #     cax = plt.colorbar(sc, ax=ax_methane, use_gridspec=True)
+
+    #     poly = Polygon(verts_LF, facecolor='0.9', edgecolor='0.5')
+    #     ax_LF.add_patch(poly)
+    #     poly = Polygon(verts_HF, facecolor='0.9', edgecolor='0.5')
+    #     ax_HF.add_patch(poly)
+
+    #     rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
+    #                      facecolor='darkgrey', edgecolor='black')
+    #     ax_LF.add_patch(rect)
+    #     rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
+    #                      facecolor='darkgrey', edgecolor='black')
+    #     ax_HF.add_patch(rect)
+    #     cols = ['black', 'darkgrey', 'grey', 'darkgrey']
+    #     ls = ['dashed', 'dashed', 'dashed', 'dashed']
+    #     for i, q in enumerate(qs):
+    #         ax_LF.plot(self.sols_quant, 10 * np.log10(self.quantiles_LF[:, i]),
+    #                    label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
+
+    #     for i, q in enumerate(qs):
+    #         ax_HF.plot(self.sols_quant, 10 * np.log10(self.quantiles_HF[:, i]),
+    #                    label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
+    #     ax_HF.set_xlabel('Sol number')
+    #     ax_LF.set_ylabel('PSD, displ. 2-6 sec. [dB]')
+    #     ax_HF.set_ylabel('PSD, displ. 2-3 Hz [dB]')
+    #     HF_times = []
+    #     HF_amps = []
+    #     HF_dists = []
+    #     LF_times = []
+    #     LF_amps = []
+    #     LF_dists = []
+    #     if cat is not None:
+    #         cmap = plt.cm.get_cmap('plasma_r')
+    #         cmap.set_over('royalblue')
+    #         for event in cat.select(event_type=['HF', 'VF', '24']):
+    #             if event.distance is None:
+    #                 HF_dists.append(50.)
+    #             else:
+    #                 HF_dists.append(event.distance)
+    #             HF_times.append(solify(event.starttime).julday +
+    #                             solify(event.starttime).hour / 60.)
+    #             HF_amps.append(event.amplitudes['A_24'])
+
+    #         for event in cat.select(event_type=['LF', 'BB']):
+    #             if event.distance is None:
+    #                 LF_dists.append(120.)
+    #             else:
+    #                 LF_dists.append(event.distance)
+    #             amp_P = event.pick_amplitude(
+    #                 pick='Peak_MbP',
+    #                 comp='vertical',
+    #                 fmin=1. / 6.,
+    #                 fmax=1. / 1.5,
+    #                 instrument='VBB'
+    #                 )
+    #             amp_S = event.pick_amplitude(
+    #                 pick='Peak_MbS',
+    #                 comp='vertical',
+    #                 fmin=1. / 6.,
+    #                 fmax=1. / 1.5,
+    #                 instrument='VBB'
+    #                 )
+    #             amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
+    #             LF_times.append(solify(event.starttime).julday +
+    #                             solify(event.starttime).hour / 60.)
+    #             LF_amps.append(20 * np.log10(amp))
+
+    #         sc = ax_LF.scatter(LF_times, LF_amps,
+    #                            c=LF_dists, vmin=25., vmax=100., cmap=cmap,
+    #                            edgecolors='k', linewidths=0.5,
+    #                            s=80., marker='.', zorder=100)
+    #         cax = plt.colorbar(sc, ax=ax_LF, use_gridspec=True)
+    #         cax.ax.set_ylabel('distance / degree', rotation=270.,
+    #                           labelpad=4.45)
+    #         sc = ax_HF.scatter(HF_times, HF_amps,
+    #                            c=HF_dists, vmin=5., vmax=30., cmap=cmap,
+    #                            edgecolors='k', linewidths=0.5,
+    #                            s=80., marker='.', zorder=100)
+    #         cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True)
+    #         cax.ax.set_ylabel('distance / degree', rotation=270.,
+    #                           labelpad=12.45)
+
+    #     sc = ax_HF.scatter(0, -300, label='Marsquake',
+    #                        edgecolors='k', linewidths=0.5,
+    #                        c='royalblue', s=80., marker='.')
+    #     ax_LF.set_ylim(-210., -170.)
+    #     ax_LF.set_title('Noise 2-8 seconds and LF/BB events')
+    #     ax_HF.set_title('Noise 2-3 Hz and HF/2.4 Hz events')
+    #     ax_HF.set_ylim(-225., -185.)
+    #     ax_LF.set_xlim(sol_start, sol_end)
+    #     ax_LF.text(1.05, -0.5, s='Data from Sol %d to %d' % (sol_start,
+    #                                                          sol_end),
+    #                rotation=90.,
+    #                horizontalalignment='center',
+    #                verticalalignment='center', transform=ax_LF.transAxes)
+    #     for a in [ax_HF, ax_LF]:
+    #         a.grid('on')
+    #     plt.legend(loc='lower left')
+    #     # plt.tight_layout()
+    #     # plt.savefig('noise_vs_eventamplitudes.pdf')
+    #     plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
+    #     plt.show()
+
+    def plot_daystats(self, cat: mqs_reports.catalog.Catalog = None,
+                      sol_start: int = 80, sol_end: int = 500, data_apss=False):
         if self.sols_quant is None:
-            self.calc_quantiles(sol_end, sol_start, qs=qs)
+            self.calc_time_windows(sol_end, sol_start)
             self.save_quantiles(fnam='noise_quantiles.npz')
 
-        verts_LF = []
-        verts_HF = []
+        # verts_LF = []
+        # verts_HF = []
 
-        for i, isol in enumerate(self.sols_quant):
-            if self.quantiles_LF[i, 0] > 0:
-                verts_LF.append([isol, 10 * np.log10(self.quantiles_LF[i, 0])])
-            if self.quantiles_HF[i, 0] > 0:
-                verts_HF.append([isol, 10 * np.log10(self.quantiles_HF[i, 0])])
-        verts_LF.append([verts_LF[-1][0], -300])
-        verts_HF.append([verts_HF[-1][0], -300])
-        verts_HF.append([self.sols_quant[0], -300])
-        verts_LF.append([self.sols_quant[0], -300])
+        # for i, isol in enumerate(self.sols_quant):
+        #     if self.quantiles_LF[i, 0] > 0:
+        #         verts_LF.append([isol, 10 * np.log10(self.quantiles_LF[i, 0])])
+        #     if self.quantiles_HF[i, 0] > 0:
+        #         verts_HF.append([isol, 10 * np.log10(self.quantiles_HF[i, 0])])
+        # verts_LF.append([verts_LF[-1][0], -300])
+        # verts_HF.append([verts_HF[-1][0], -300])
+        # verts_HF.append([self.sols_quant[0], -300])
+        # verts_LF.append([self.sols_quant[0], -300])
 
-        fig, ax = plt.subplots(3, 1, figsize=(16, 9), sharex='all')
-        ax_HF = ax[2]
-        ax_LF = ax[1]
+        fig = plt.figure(figsize=(16, 9))
+        # ax_HF = ax[1
+        # ax_LF = ax[0]
+        h_base = 0.09
+        w_base = 0.06
+        w_LF = 0.95
+        h_pad = 0.05
+        h_LF = 0.42
 
-        ax_methane = ax[0].twiny()
+        if data_apss:
+            h_apss = 0.2
+            h_LF -= h_apss / 2. + h_pad
 
-        methane = np.loadtxt(
-            '/home/staehler/CloudStation/InSight/seismicity/apss'
-            '/methane_median.csv', delimiter=',')
-        sc = ax_methane.scatter(methane[:, 0], methane[:, 1],
-                                s=80, vmin=0, vmax=2.,
-                                c=np.ones(methane.shape[0]))
-        ax_methane.set_xlim(calc_Ls(utct(sol_start * SECONDS_PER_DAY)) - 360,
-                            calc_Ls(utct(sol_end * SECONDS_PER_DAY)))
-        cax = plt.colorbar(sc, ax=ax_methane, use_gridspec=True)
+        ax_HF = fig.add_axes([w_base, h_base,
+                              w_LF, h_LF])
+        ax_LF = fig.add_axes([w_base, h_base + h_LF + h_pad,
+                              w_LF, h_LF],
+                             sharex=ax_HF)
 
-        poly = Polygon(verts_LF, facecolor='0.9', edgecolor='0.5')
-        ax_LF.add_patch(poly)
-        poly = Polygon(verts_HF, facecolor='0.9', edgecolor='0.5')
-        ax_HF.add_patch(poly)
+        if data_apss:
+            ax_apss = fig.add_axes([w_base, h_base + h_LF * 2 + h_pad * 2,
+                                    w_LF, h_apss],
+                                   sharex=ax_HF)
 
-        rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
-                         facecolor='darkgrey', edgecolor='black')
-        ax_LF.add_patch(rect)
-        rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
-                         facecolor='darkgrey', edgecolor='black')
-        ax_HF.add_patch(rect)
-        cols = ['black', 'darkgrey', 'grey', 'darkgrey']
-        ls = ['dashed', 'dashed', 'dashed', 'dashed']
-        for i, q in enumerate(qs):
-            ax_LF.plot(self.sols_quant, 10 * np.log10(self.quantiles_LF[:, i]),
-                       label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
+        cols = ['black', 'darkgrey', 'grey', 'black']
+        ls = ['dotted', 'dashed', 'dotted', 'dashed']
+        labels = ['quiet (1700-2230 LMST)', 'noisy night (2230-0600 LMST)',
+                  'morning (0600-0900 LMST)', 'day (0900-1700 LMST)']
+        for i in range(self.quantiles_LF.shape[1] - 1, -1, -1):
+            ax_LF.plot(self.sols_quant - 1.,
+                       10 * np.log10(self.quantiles_LF[:, i]),
+                       label=labels[i], c=cols[i], ls=ls[i])
+        ax_LF.fill_between(x=self.sols_quant - 1.,
+                           y1=-300,
+                           y2=10 * np.log10(self.quantiles_LF[:, 0]),
+                           facecolor='lightgrey')
 
-        for i, q in enumerate(qs):
-            ax_HF.plot(self.sols_quant, 10 * np.log10(self.quantiles_HF[:, i]),
-                       label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
-        ax_HF.set_xlabel('Sol number')
-        ax_LF.set_ylabel('PSD, displ. 2-6 sec. [dB]')
-        ax_HF.set_ylabel('PSD, displ. 2-3 Hz [dB]')
+        for i in range(self.quantiles_HF.shape[1] - 1, -1, -1):
+            ax_HF.plot(self.sols_quant - 1.,
+                       10 * np.log10(self.quantiles_HF[:, i]),
+                       label=labels[i], c=cols[i], ls=ls[i])
+        ax_HF.fill_between(x=self.sols_quant - 1.,
+                           y1=-300,
+                           y2=10 * np.log10(self.quantiles_HF[:, 0]),
+                           facecolor='lightgrey')
+        if data_apss:
+            for i in range(self.quantiles_press.shape[1] - 1, -1, -1):
+                ax_apss.plot(self.sols_quant - 1.,
+                             10 * np.log10(self.quantiles_press[:, i]),
+                             label=labels[i], c=cols[i], ls=ls[i])
+            ax_apss.fill_between(x=self.sols_quant - 1.,
+                                 y1=-300,
+                                 y2=10 * np.log10(self.quantiles_press[:, 0]),
+                                 facecolor='lightgrey')
         HF_times = []
         HF_amps = []
         HF_dists = []
@@ -288,134 +505,7 @@ class Noise():
                     HF_dists.append(50.)
                 else:
                     HF_dists.append(event.distance)
-                HF_times.append(solify(event.starttime).julday +
-                                solify(event.starttime).hour / 60.)
-                HF_amps.append(event.amplitudes['A_24'])
-
-            for event in cat.select(event_type=['LF', 'BB']):
-                if event.distance is None:
-                    LF_dists.append(120.)
-                else:
-                    LF_dists.append(event.distance)
-                amp_P = event.pick_amplitude(
-                    pick='Peak_MbP',
-                    comp='vertical',
-                    fmin=1. / 6.,
-                    fmax=1. / 1.5,
-                    instrument='VBB'
-                    )
-                amp_S = event.pick_amplitude(
-                    pick='Peak_MbS',
-                    comp='vertical',
-                    fmin=1. / 6.,
-                    fmax=1. / 1.5,
-                    instrument='VBB'
-                    )
-                amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
-                LF_times.append(solify(event.starttime).julday +
-                                solify(event.starttime).hour / 60.)
-                LF_amps.append(20 * np.log10(amp))
-
-            sc = ax_LF.scatter(LF_times, LF_amps,
-                               c=LF_dists, vmin=25., vmax=100., cmap=cmap,
-                               edgecolors='k', linewidths=0.5,
-                               s=80., marker='.', zorder=100)
-            cax = plt.colorbar(sc, ax=ax_LF, use_gridspec=True)
-            cax.ax.set_ylabel('distance / degree', rotation=270.,
-                              labelpad=4.45)
-            sc = ax_HF.scatter(HF_times, HF_amps,
-                               c=HF_dists, vmin=5., vmax=30., cmap=cmap,
-                               edgecolors='k', linewidths=0.5,
-                               s=80., marker='.', zorder=100)
-            cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True)
-            cax.ax.set_ylabel('distance / degree', rotation=270.,
-                              labelpad=12.45)
-
-        sc = ax_HF.scatter(0, -300, label='Marsquake',
-                           edgecolors='k', linewidths=0.5,
-                           c='royalblue', s=80., marker='.')
-        ax_LF.set_ylim(-210., -170.)
-        ax_LF.set_title('Noise 2-8 seconds and LF/BB events')
-        ax_HF.set_title('Noise 2-3 Hz and HF/2.4 Hz events')
-        ax_HF.set_ylim(-225., -185.)
-        ax_LF.set_xlim(sol_start, sol_end)
-        ax_LF.text(1.05, -0.5, s='Data from Sol %d to %d' % (sol_start,
-                                                             sol_end),
-                   rotation=90.,
-                   horizontalalignment='center',
-                   verticalalignment='center', transform=ax_LF.transAxes)
-        for a in [ax_HF, ax_LF]:
-            a.grid('on')
-        plt.legend(loc='lower left')
-        # plt.tight_layout()
-        # plt.savefig('noise_vs_eventamplitudes.pdf')
-        plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
-        plt.show()
-
-    def plot_daystats(self,
-                      cat: mqs_reports.catalog.Catalog = None,
-                      sol_start: int = 80,
-                      sol_end: int = 500):
-        qs = [0.1, 0.25, 0.5, 0.9]
-        if self.sols_quant is None:
-            self.calc_quantiles(sol_end, sol_start, qs=qs)
-            self.save_quantiles(fnam='noise_quantiles.npz')
-
-        verts_LF = []
-        verts_HF = []
-
-        for i, isol in enumerate(self.sols_quant):
-            if self.quantiles_LF[i, 0] > 0:
-                verts_LF.append([isol, 10 * np.log10(self.quantiles_LF[i, 0])])
-            if self.quantiles_HF[i, 0] > 0:
-                verts_HF.append([isol, 10 * np.log10(self.quantiles_HF[i, 0])])
-        verts_LF.append([verts_LF[-1][0], -300])
-        verts_HF.append([verts_HF[-1][0], -300])
-        verts_HF.append([self.sols_quant[0], -300])
-        verts_LF.append([self.sols_quant[0], -300])
-
-        fig, ax = plt.subplots(2, 1, figsize=(16, 9), sharex='all')
-        ax_HF = ax[1]
-        ax_LF = ax[0]
-
-        poly = Polygon(verts_LF, facecolor='0.9', edgecolor='0.5')
-        ax_LF.add_patch(poly)
-        poly = Polygon(verts_HF, facecolor='0.9', edgecolor='0.5')
-        ax_HF.add_patch(poly)
-
-        rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
-                         facecolor='darkgrey', edgecolor='black')
-        ax_LF.add_patch(rect)
-        rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
-                         facecolor='darkgrey', edgecolor='black')
-        ax_HF.add_patch(rect)
-        cols = ['black', 'darkgrey', 'grey', 'darkgrey']
-        ls = ['dashed', 'dashed', 'dashed', 'dashed']
-        for i, q in enumerate(qs):
-            ax_LF.plot(self.sols_quant, 10 * np.log10(self.quantiles_LF[:, i]),
-                       label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
-
-        for i, q in enumerate(qs):
-            ax_HF.plot(self.sols_quant, 10 * np.log10(self.quantiles_HF[:, i]),
-                       label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
-        ax_HF.set_xlabel('Sol number')
-        ax_LF.set_ylabel('PSD, displ. 2-6 sec. [dB]')
-        ax_HF.set_ylabel('PSD, displ. 2-3 Hz [dB]')
-        HF_times = []
-        HF_amps = []
-        HF_dists = []
-        LF_times = []
-        LF_amps = []
-        LF_dists = []
-        if cat is not None:
-            cmap = plt.cm.get_cmap('plasma_r')
-            cmap.set_over('royalblue')
-            for event in cat.select(event_type=['HF', 'VF', '24']):
-                if event.distance is None:
-                    HF_dists.append(50.)
-                else:
-                    HF_dists.append(event.distance)
-                HF_times.append(float(solify(event.starttime)) //
+                HF_times.append(float(solify(event.starttime)) /
                                 SECONDS_PER_DAY)
                 HF_amps.append(event.amplitudes['A_24'])
 
@@ -427,15 +517,15 @@ class Noise():
                 amp_P = event.pick_amplitude(
                     pick='Peak_MbP',
                     comp='vertical',
-                    fmin=1. / 6.,
-                    fmax=1. / 1.5,
+                    fmin=self.fmin_LF,
+                    fmax=self.fmax_LF,
                     instrument='VBB'
                     )
                 amp_S = event.pick_amplitude(
                     pick='Peak_MbS',
                     comp='vertical',
-                    fmin=1. / 6.,
-                    fmax=1. / 1.5,
+                    fmin=self.fmin_LF,
+                    fmax=self.fmax_LF,
                     instrument='VBB'
                     )
                 amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
@@ -457,80 +547,124 @@ class Noise():
             cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True)
             cax.ax.set_ylabel('distance / degree', rotation=270.,
                               labelpad=12.45)
+            if data_apss:
+                cax = plt.colorbar(sc, ax=ax_apss, use_gridspec=True)
+                cax.ax.set_ylabel('distance / degree', rotation=270.,
+                                  labelpad=12.45)
+        for a in [ax_HF, ax_LF, ax_apss]:
+            a.grid(True)
+            rect = Rectangle(xy=(267, -300), width=20., height=400, zorder=10,
+                             facecolor='darkgrey', edgecolor='black')
+            a.add_patch(rect)
 
         sc = ax_HF.scatter(0, -300, label='Marsquake',
                            edgecolors='k', linewidths=0.5,
                            c='royalblue', s=80., marker='.')
+        ax_HF.set_xlabel('Sol number')
+        ax_LF.set_ylabel('PSD, displ. %3.1f-%3.1f sec. [dB]' %
+                         (1. / self.fmin_LF, 1. / self.fmax_LF))
+        ax_HF.set_ylabel('PSD, displ. %3.1f-%3.1f Hz. [dB]' %
+                         (self.fmin_HF, self.fmax_HF))
+
         ax_LF.set_ylim(-210., -170.)
-        ax_LF.set_title('Noise 2-8 seconds and LF/BB events')
-        ax_HF.set_title('Noise 2-3 Hz and HF/2.4 Hz events')
+        ax_LF.set_title('Noise %3.1f-%3.1f seconds and LF/BB events' %
+                        (1. / self.fmax_LF, 1. / self.fmin_LF))
+        ax_HF.set_title('Noise %3.1f-%3.1f Hz and HF/2.4 Hz events' %
+                        (self.fmin_HF, self.fmax_HF))
         ax_HF.set_ylim(-225., -185.)
         ax_LF.set_xlim(sol_start, sol_end)
-        ax_LF.text(1.05, -0.5, s='Data from Sol %d to %d' % (sol_start,
-                                                             sol_end),
-                   rotation=90.,
-                   horizontalalignment='center',
-                   verticalalignment='center', transform=ax_LF.transAxes)
-        for a in [ax_HF, ax_LF]:
-            a.grid('on')
-        plt.legend(loc='lower left')
-        # plt.tight_layout()
-        # plt.savefig('noise_vs_eventamplitudes.pdf')
+
+        ax_HF.legend(loc='upper left')
+
+        if data_apss:
+            ax_apss.set_title('Pressure Noise %3.1f-%3.1f seconds' %
+                              (1. / self.fmax_press, 1. / self.fmin_press))
+            ax_apss.set_ylabel('PSD, pressure. %3.1f-%4.1f sec. [dB]' %
+                               (1. / self.fmax_press, 1. / self.fmin_press))
+            ax_apss.set_ylim(-50, -25)
+
         plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
 
     def read_quantiles(self, fnam):
         data = np.load(fnam)
         self.quantiles_HF = data['quantiles_HF']
         self.quantiles_LF = data['quantiles_LF']
+        self.quantiles_press = data['quantiles_press']
         self.sols_quant = data['sols']
 
     def save_quantiles(self, fnam):
         np.savez(file=fnam,
                  quantiles_HF=self.quantiles_HF,
                  quantiles_LF=self.quantiles_LF,
+                 quantiles_press=self.quantiles_press,
                  sols=self.sols_quant)
 
-    def calc_quantiles(self, sol_end, sol_start,
-                       qs):
+    def calc_time_windows(self, sol_end, sol_start,
+                          time_windows_hour=[[17, 22.5],
+                                             [22.5, 6.0],
+                                             [6.0, 9.0],
+                                             [9.0, 17.]]):
 
         self.sols_quant = np.arange(sol_start, sol_end + 1)
-        self.quantiles_LF = np.zeros((sol_end - sol_start + 1, len(qs)))
-        self.quantiles_HF = np.zeros((sol_end - sol_start + 1, len(qs)))
+        self.quantiles_LF = np.zeros(
+            (sol_end - sol_start + 1, len(time_windows_hour)))
+        self.quantiles_HF = np.zeros_like(self.quantiles_LF)
+        self.quantiles_press = np.zeros_like(self.quantiles_LF)
+
+        values_HF = np.zeros(len(time_windows_hour))
+        values_LF = np.zeros_like(values_HF)
+        values_press = np.zeros_like(values_HF)
 
         i = 0
-        print('Calculating LF noise quantiles')
+        print('Calculating noise medians')
+        df_HF = self.fmax_HF - self.fmin_HF
+        df_LF = self.fmax_LF - self.fmin_LF
+        df_press = self.fmax_press - self.fmin_press
         for isol in tqdm(self.sols_quant):
             bol_sol = self.sol == isol - 1
+            times_this_sol = (self.times_LMST[bol_sol] % 1.) * 24.
             if sum(bol_sol) > 1:
-                values = np.quantile(
-                    a=np.ma.masked_less_equal(
-                        x=self.stds_LF[bol_sol], value=0.0) ** 2. / (
-                              1. / 1.5 - 1. / 6), q=qs)
-                if np.isfinite(values).all():
-                    self.quantiles_LF[i, :] = values
-            i += 1
+                for iwindow, time_window in enumerate(time_windows_hour):
+                    if time_window[0] < time_window[1]:
+                        bol_hours = np.array((
+                            (time_window[0] < times_this_sol),
+                            (times_this_sol < time_window[1]))).all(axis=0)
+                    else:
+                        bol_hours = np.array((
+                            (time_window[0] < times_this_sol),
+                            (times_this_sol < time_window[1]))).any(axis=0)
 
-        i = 0
-        print('Calculating HF noise quantiles')
-        for isol in tqdm(self.sols_quant):
-            bol_sol = self.sol == isol - 1
-            if sum(bol_sol) > 1:
-                values = np.quantile(
-                    a=np.ma.masked_less_equal(x=self.stds_HF[bol_sol],
-                                              value=0.0) ** 2. / 0.4, q=qs)
-                if np.isfinite(values).all():
-                    self.quantiles_HF[i, :] = values
-            i += 1
+                    # disp_LF = np.ma.masked_less_equal(
+                    #     x=self.stds_LF[bol_sol], value=0.0) ** 2. / df_LF
+                    # disp_HF = np.ma.masked_less_equal(
+                    #     x=self.stds_HF[bol_sol], value=0.0) ** 2. / df_HF
+                    disp_LF = self.stds_LF[bol_sol] ** 2. / df_LF
+                    disp_HF = self.stds_HF[bol_sol] ** 2. / df_HF
+                    disp_press = self.stds_press[bol_sol] ** 2. / df_press
+                    values_LF[iwindow] = np.nanmedian(disp_LF[bol_hours])
+                    values_HF[iwindow] = np.nanmedian(disp_HF[bol_hours])
+                    values_press[iwindow] = np.nanmedian(disp_press[bol_hours])
 
+                # if np.isfinite(values_HF).all():
+                self.quantiles_HF[i, :] = np.nan_to_num(values_HF)
+                # if np.isfinite(values_LF).all():
+                self.quantiles_LF[i, :] = np.nan_to_num(values_LF)
+                # if np.isfinite(values_press).all():
+                self.quantiles_press[i, :] = np.nan_to_num(values_press)
+            i += 1
         # Mask outliers
-        self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-25)
-        self.quantiles_HF = np.ma.masked_less(self.quantiles_HF, value=1e-25)
+        self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-23)
+        self.quantiles_HF = np.ma.masked_less(self.quantiles_HF, value=1e-23)
+        self.quantiles_press = np.ma.masked_less(self.quantiles_press,
+                                                 value=1e-6)
         self.quantiles_LF = np.ma.masked_greater(self.quantiles_LF, value=1e-8)
         self.quantiles_HF = np.ma.masked_greater(self.quantiles_HF, value=1e-8)
+        self.quantiles_press = np.ma.masked_greater(self.quantiles_press,
+                                                    value=1e-2)
 
 
     def compare_events(self,
-                       catalog = None,
+                       catalog=None,
                        threshold_dB: float = 3.):
         ratios = []
         for event in tqdm(catalog.select(event_type=['24', 'HF', 'VF'])):
@@ -543,15 +677,15 @@ class Noise():
             amp_P = event.pick_amplitude(
                 pick='Peak_MbP',
                 comp='vertical',
-                fmin=1. / 6.,
-                fmax=1. / 1.5,
+                fmin=self.fmin_LF,
+                fmax=self.fmax_LF,
                 instrument='VBB'
                 )
             amp_S = event.pick_amplitude(
                 pick='Peak_MbS',
                 comp='vertical',
-                fmin=1. / 6.,
-                fmax=1. / 1.5,
+                fmin=self.fmin_LF,
+                fmax=self.fmax_LF,
                 instrument='VBB'
                 )
             if amp_S is None:

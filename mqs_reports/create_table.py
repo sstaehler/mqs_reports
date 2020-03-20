@@ -51,10 +51,10 @@ def create_row(list, fmts=None, extras=None):
                 else:
                     try:
                         row += ind_string \
-                               + '<td sorttable_customkey="%d">' % extra \
+                               + '<td sorttable_customkey="%d">' % (extra * 100) \
                                + fmt % (li) + '</td>\n'
                     except(ValueError):
-                        row += ind_string + '<td sorttable_customkey=-100>' + \
+                        row += ind_string + '<td sorttable_customkey=-100000>' + \
                                fmt % (li) + '</td>\n'
 
     row += 4 * ' ' + '</tr>\n'
@@ -97,9 +97,9 @@ def write_html(catalog, fnam_out):
                    'aligned': '%s<sup>[S]</sup>',
                    'unknown': '%s<sup>[S]</sup>'}
     dist_string = {'GUI': '%.3g',
-                   'PgSg': '<i>%.3g<i>*',
-                   'aligned': '<i>%.3g<i>&dagger;',
-                   'unknown': '<i>%s<i>'}
+                   'PgSg': '<i>%.3g</i>*',
+                   'aligned': '<i>%.3g</i>&dagger;',
+                   'unknown': '<i>%s</i>'}
     event_type_idx = {'LF': 1,
                       'BB': 2,
                       'HF': 3,
@@ -366,7 +366,6 @@ if __name__ == '__main__':
     args = define_arguments()
     catalog = Catalog(fnam_quakeml=args.input_quakeml,
                       type_select=args.types, quality=args.quality)
-    catalog = catalog.select(name='S0235b')
     ann = Annotations(fnam_csv=args.input_csv)
     # load manual (aligned) distances
     catalog.load_distances(fnam_csv=args.input_dist)

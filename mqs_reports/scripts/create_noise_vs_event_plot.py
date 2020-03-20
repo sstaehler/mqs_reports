@@ -44,10 +44,12 @@ noise = Noise(sc3_dir=args.sc3_dir,
               inv=inv,
               winlen_sec=120.
               )
+noise.save('/opt/mqs_reports/noise.npz')
+# noise = read_noise('/opt/mqs_reports/noise_May_pressure.npz')
+# noise.read_quantiles('noise_quantiles.npz')
 cat = Catalog(fnam_quakeml=args.input_quakeml,
               quality=['A', 'B', 'C', 'D'])
-
 cat.load_distances(fnam_csv=args.input_dist)
 cat.read_waveforms(inv=inv, sc3dir=args.sc3_dir)
 cat.calc_spectra(winlen_sec=10.)
-noise.plot_daystats(cat)
+noise.plot_daystats(cat, data_apss=True)

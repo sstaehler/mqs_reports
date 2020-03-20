@@ -189,31 +189,14 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
             for tr in st_seis:
                 fmax = tr.stats.sampling_rate * 0.5
                 pre_filt = (fmin / 2., fmin, fmax, fmax * 1.2)
-                try:
-                    tr.remove_response(inv,
-                                       pre_filt=pre_filt,
-                                       output=kind)
-                except ValueError:
-                    filtered_inv = inv.select(
-                        location=tr.stats.location, channel=tr.stats.channel,
-                        starttime=tr.stats.starttime - 7 * 86400,
-                        endtime=tr.stats.endtime + 7 * 86400)
-
-                    if filtered_inv:
-                        last_epoch = filtered_inv[0][0][0]
-                        last_epoch.start_date = tr.stats.starttime - 1.0
-                        last_epoch.end_date = tr.stats.endtime + 1.0
-
-                        tr.remove_response(inventory=filtered_inv,
-                                           pre_filt=pre_filt, output=kind)
-                        plt.show()
-                    else:
-                        raise ValueError
+                remove_response_stable(tr, inv, output=kind,
+                                       pre_filt=pre_filt)
 
             st_rot = create_ZNE_HG(st_seis, inv=inv)
             if len(st_rot) > 0:
                 if st_rot.select(channel='??Z')[0].stats.channel == 'MHZ':
-                    fnam = fnam_complete[0:-32] + 'BZC' + fnam_complete[-29:-17] + \
+                    fnam = fnam_complete[0:-32] + 'BZC' + \
+                           fnam_complete[-29:-17] + \
                            '58.BZC' + fnam_complete[-11:]
                     tr_Z = obspy.read(fnam,
                                       starttime=twin[0] - 900.,
@@ -243,6 +226,44 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     else:
         st_rot = obspy.Stream()
     return st_rot
+
+
+def remove_response_stable(tr, inv, **kwargs):
+    try:
+        tr.remove_response(inv, **kwargs)
+    except ValueError:
+        filtered_inv = inv.select(
+            location=tr.stats.location, channel=tr.stats.channel,
+            starttime=tr.stats.starttime - 7 * 86400,
+            endtime=tr.stats.endtime + 7 * 86400)
+
+        if filtered_inv:
+            last_epoch = filtered_inv[0][0][0]
+            last_epoch.start_date = tr.stats.starttime - 1.0
+            last_epoch.end_date = tr.stats.endtime + 1.0
+
+            tr.remove_response(inventory=filtered_inv, **kwargs)
+        else:
+            raise ValueError
+
+
+def remove_sensitivity_stable(tr, inv, **kwargs):
+    try:
+        tr.remove_sensitivity(inv, **kwargs)
+    except ValueError:
+        filtered_inv = inv.select(
+            location=tr.stats.location, channel=tr.stats.channel,
+            starttime=tr.stats.starttime - 7 * 86400,
+            endtime=tr.stats.endtime + 7 * 86400)
+
+        if filtered_inv:
+            last_epoch = filtered_inv[0][0][0]
+            last_epoch.start_date = tr.stats.starttime - 1.0
+            last_epoch.end_date = tr.stats.endtime + 1.0
+
+            tr.remove_sensitivity(inventory=filtered_inv, **kwargs)
+        else:
+            raise ValueError
 
 
 def correct_subsample_shift(st):
