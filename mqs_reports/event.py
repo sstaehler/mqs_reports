@@ -437,6 +437,7 @@ class Event:
                            'A_24': None,
                            'f_24': None,
                            'width_24': None}
+
         if 'noise' in self.spectra:
             f = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
@@ -467,6 +468,11 @@ class Event:
         # except KeyError:
         #     print('Some time windows missing for event %s' % self.name)
         #     print(self.spectra)
+
+        # compute horizontal spectra
+        for signal in self.spectra.keys():
+            self.spectra[signal]['p_H'] = \
+                self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
 
         self._spectra_available = True
 

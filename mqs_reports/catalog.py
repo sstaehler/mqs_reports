@@ -384,6 +384,7 @@ class Catalog:
                  'VERY_HIGH_FREQUENCY': 'C3'},
          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
          llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
+         linewidth=None,
          show=True):
 
         events = []
@@ -478,7 +479,7 @@ class Catalog:
             color = colors[event.mars_event_type]
             #color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
             plt.plot(X, Y, color=color,
-                     ls=linestyle[event.quality], zorder=1000-k, lw=1.)
+                     ls=linestyle[event.quality], zorder=1000-k, lw=linewidth)
 
             if fill:
                 # fill between noise amplitude estimate and envelope
@@ -513,6 +514,8 @@ class Catalog:
 
 
         if not regular_spacing:
+            plt.plot([-50, -400], [50, 400], color='k', ls='--')
+
             #plt.plot([-50, -400], [50, 400], color='C5')
             #plt.plot([-200, -400], [200, 400], color='C5')
             #bla = 0.5
@@ -529,7 +532,7 @@ class Catalog:
             plt.legend(llines, llabels)
 
         # lable, limit, ticks
-        plt.xlabel('time after Pg / s')
+        plt.xlabel(f'time after {"S" if shift_to_S else "P"}g / s')
         plt.xlim(-pre_time - 300, None)
         #plt.yticks([], [])
 
@@ -538,13 +541,15 @@ class Catalog:
         else:
             return fig
 
-    def plot_HF_spectra(self, SNR=2., tooltip=False, fig=None, show=True):
+    def plot_HF_spectra(self, SNR=2., tooltip=False, component='Z', fmin=0.7,
+                        fmax=7., fig=None, show=True):
         from mpldatacursor import datacursor
         if fig is None:
             fig = plt.figure()
         ax = fig.gca()
 
-        cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY'])
+        cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY',
+                                                   'VERY_HIGH_FREQUENCY'])
 
         class ContinueI(Exception):
                 pass
@@ -569,14 +574,14 @@ class Catalog:
             mask_P_1Hz = event.spectra['P']['f'] > 1000.
 
             mask_P = event.spectra['P']['f'] < 1.3
-            mask_P += event.spectra['P']['f'] > 7.
-            peak = event.spectra['P']['p_Z'][np.logical_not(mask_P)].max()
-            mask_P = event.spectra['P']['f'] < 0.7
-            mask_P += event.spectra['P']['f'] > 7.
+            mask_P += event.spectra['P']['f'] > fmax
+            peak = event.spectra['P'][f'p_{component}'][np.logical_not(mask_P)].max()
+            mask_P = event.spectra['P']['f'] < fmin
+            mask_P += event.spectra['P']['f'] > fmax
             mask_P += mask_P_1Hz
-            mask_P += event.spectra['P']['p_Z'] < SNR * event.spectra['noise']['p_Z']
-            msP = np.ma.masked_where(mask_P, event.spectra['P']['p_Z'])
-            msPN = np.ma.masked_where(mask_P_1Hz, event.spectra['P']['p_Z'])
+            mask_P += event.spectra['P'][f'p_{component}'] < SNR * event.spectra['noise'][f'p_{component}']
+            msP = np.ma.masked_where(mask_P, event.spectra['P'][f'p_{component}'])
+            msPN = np.ma.masked_where(mask_P_1Hz, event.spectra['P'][f'p_{component}'])
 
             msP /= peak
             msPN /= peak
@@ -592,14 +597,14 @@ class Catalog:
             mask_S_1Hz = event.spectra['S']['f'] > 1000.
 
             mask_S = event.spectra['S']['f'] < 1.3
-            mask_S += event.spectra['S']['f'] > 7.
-            peak = event.spectra['S']['p_Z'][np.logical_not(mask_S)].max()
-            mask_S = event.spectra['S']['f'] < 0.7
-            mask_S += event.spectra['S']['f'] > 7.
+            mask_S += event.spectra['S']['f'] > fmax
+            peak = event.spectra['S'][f'p_{component}'][np.logical_not(mask_S)].max()
+            mask_S = event.spectra['S']['f'] < fmin
+            mask_S += event.spectra['S']['f'] > fmax
             mask_S += mask_S_1Hz
-            mask_S += event.spectra['S']['p_Z'] < SNR * event.spectra['noise']['p_Z']
-            msS = np.ma.masked_where(mask_S, event.spectra['S']['p_Z'])
-            msSN = np.ma.masked_where(mask_S_1Hz, event.spectra['S']['p_Z'])
+            mask_S += event.spectra['S'][f'p_{component}'] < SNR * event.spectra['noise'][f'p_{component}']
+            msS = np.ma.masked_where(mask_S, event.spectra['S'][f'p_{component}'])
+            msSN = np.ma.masked_where(mask_S_1Hz, event.spectra['S'][f'p_{component}'])
 
             msS /= peak
             msSN /= peak
