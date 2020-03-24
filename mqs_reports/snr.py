@@ -9,27 +9,28 @@
 '''
 
 import numpy as np
+
 from mqs_reports.event import Event
 
 
 def calc_SNR(event: Event, fmin: float, fmax: float,
-             hor=False, SP=False) -> float:
+             hor=False, SP=False) -> tuple(float, str):
     if SP:
         spectra = event.spectra_SP
     else:
         spectra = event.spectra
     if hor:
-        comp = 'E'
+        comp = 'p_H'
     else:
-        comp = 'Z'
-    p_noise = spectra['noise']['p_' + comp]
+        comp = 'p_Z'
+    p_noise = spectra['noise'][comp]
     df_noise = spectra['noise']['f'][1]
     f_bool = np.array((spectra['noise']['f'] > fmin,
                        spectra['noise']['f'] < fmax)).all(axis=0)
     power_noise = np.trapz(p_noise[f_bool], dx=df_noise)
     for spec_win in ['S', 'P', 'all']:
         if spec_win in spectra:
-            p_signal = spectra[spec_win]['p_' + comp]
+            p_signal = spectra[spec_win][comp]
             df_signal = spectra[spec_win]['f'][1]
             f_bool = np.array((spectra[spec_win]['f'] > fmin,
                                spectra[spec_win]['f'] < fmax)).all(axis=0)
