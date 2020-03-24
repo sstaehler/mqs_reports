@@ -8,13 +8,15 @@
     None
 '''
 
+from typing import Tuple
+
 import numpy as np
 
 from mqs_reports.event import Event
 
 
 def calc_SNR(event: Event, fmin: float, fmax: float,
-             hor=False, SP=False) -> tuple(float, str):
+             hor=False, SP=False) -> Tuple[float, str]:
     if SP:
         spectra = event.spectra_SP
     else:
