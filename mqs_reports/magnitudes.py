@@ -13,12 +13,6 @@ import numpy as np
 
 def mb_P(amplitude_dB, distance_degree):
     amplitude = 10 ** (amplitude_dB / 20.)
-    # mbP_tmp = np.log10(amplitude_dB) + 1.5 * np.log10(distance_degree) + 9.5
-    # mag = (mbP_tmp) + 0.1 + \
-    #       1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - mbP_tmp),
-    #                        axis=0)
-    # mag = 0.6463 * np.log10(amplitude) + 0.7868 * np.log10(distance_degree)
-    # + 8.2236
     mag = 0.7318 * np.log10(amplitude) + 1.2 * np.log10(distance_degree)+ 8.3471
 
     return mag
@@ -26,10 +20,6 @@ def mb_P(amplitude_dB, distance_degree):
 
 def mb_S(amplitude_dB, distance_degree):
     amplitude = 10 ** (amplitude_dB / 20.)
-    # mb_S_tmp = np.log10(amplitude_dB) + 2.2 * np.log10(distance_degree) + 8.4
-    # mag = (mb_S_tmp) + 0.1 + \
-    #       1. / 3. * np.max((np.zeros_like(amplitude_dB), 4.5 - (mb_S_tmp)),
-    #                        axis=0)
     mag = 0.7647 * np.log10(amplitude)+ 1.4 * np.log10(distance_degree) + 8.0755
 
     return mag
@@ -40,11 +30,6 @@ def M2_4(amplitude_dB, distance_degree):
         return None
     else:
         amplitude = 10 ** (amplitude_dB / 20.)
-        # A0_est = 10 ** (0.7 * np.log10(amp_true) - 3.)
-        # # mag = (2. / 3.) * (np.log10(A0_est) +
-        # #                    1.2 * np.log10(distance_degree) + 9.4) + 1.5
-        # mag = (2. / 3.) * (np.log10(A0_est) +
-        #                    1.1 * np.log10(distance_degree) + 9.8) + 1.5
         mag = 0.6177 * np.log10(amplitude) + 0.9 * np.log10(distance_degree) + \
               7.0026
         return mag
@@ -132,31 +117,15 @@ def fit_peak(f, p):
     except ValueError:
         popt = [-250, 2.4, 1.0]
 
-    # plt.plot(f, 10 * np.log10(p), 'b')
-    # plt.plot(f, lorenz(f, *popt), 'r')
-    # plt.show()
-    # def func(x, A, A0):
-    #     x0 = 2.4
-    #     xw = 0.4
-    #     w = (x-x0) / (xw / 2.)
-    #     return A / (1 + w**2) + A0
-
-    # popt, pcov = curve_fit(func, f, p, bounds=(0, 1), p0=(1e-20, 1e-22))
-
-    # plt.plot(f, 10*np.log10(p), 'b')
-    # plt.plot(f, 10*np.log10(func(f, popt[0], popt[1])), 'r')
-    # plt.show()
     return popt
 
 
 def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
     if len(p_sig) < len(f):
-        fac = (len(f) + 1) // len(p_sig)
-        f_dec = f[::fac]
+        f_dec = np.linspace(f[0], f[-1], len(p_sig)) 
         p_sig = np.interp(x=f, xp=f_dec, fp=p_sig)
     if len(p_noise) < len(f):
-        fac = len(f) // len(p_noise)
-        f_dec = f[::fac]
+        f_dec = np.linspace(f[0], f[-1], len(p_noise)) 
         p_sig = np.interp(x=f, xp=f_dec, fp=p_noise)
     fmin = 0.1
     fmax = 6.0
@@ -173,8 +142,6 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
         (np.array((f > fmin, f < fmax)).all(axis=0),
          np.array((f < 1. / df_mute,
                    f > df_mute)).any(axis=0),
-         # np.array((f < mute_24[0],
-         #           f > mute_24[1])).any(axis=0),
          np.array(p_sig > p_noise * 2.)
          )
         ).all(axis=0)
@@ -208,7 +175,6 @@ def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
                         A0_max, tstar_min)
                 except RuntimeError:
                     pass
-                # plt.plot(f, 10 * np.log10(p_noise), 'k')
             else:
                 res = np.polyfit(f[bol_1Hz_mask],
                                  10 * np.log10(p_sig[bol_1Hz_mask]),
