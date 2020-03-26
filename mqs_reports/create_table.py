@@ -105,7 +105,7 @@ def write_html(catalog, fnam_out):
                       'HF': 3,
                       '24': 4,
                       'VF': 5,
-                      'UF': 6}
+                      'SF': 6}
     ievent = len(catalog)
     print('Filling HTML table with event entries')
     for event in tqdm(catalog):
@@ -158,9 +158,9 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
         if event.mars_event_type_short in ('HF', 'VF', '24'):
             snr = calc_stalta(event, fmin=2.2, fmax=2.8)
             snr_string = '%.1f (2.4Hz)' % snr
-        elif event.mars_event_type_short == ('UF'):
-            snr, snr_win = calc_SNR(event, fmin=8.0, fmax=12., SP=True,
-                                    hor=True)
+        elif event.mars_event_type_short == ('SF'):
+            snr, snr_win = calc_SNR(event, fmin=8.0, fmax=12., 
+                                    SP=True, hor=True)
             snr_string = '%.1f (%s, 8-12Hz)' % (snr, snr_win)
         else:
             snr, snr_win = calc_SNR(event, fmin=0.2, fmax=0.5)
@@ -260,7 +260,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
             extras=sortkey,
             fmts=formats)
 
-    except KeyError:
+    except (KeyError, AttributeError):
         link_lmst = '<a href="%s" target="_blank">%s</a>' % (
             path_dailyspec, lmst_time)
         sortkey = (ievent,

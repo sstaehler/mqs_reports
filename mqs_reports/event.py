@@ -28,7 +28,7 @@ LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
 EVENT_TYPES_SHORT = {
-    'ULTRA_HIGH_FREQUENCY': 'UF',
+    'SUPER_HIGH_FREQUENCY': 'SF',
     'VERY_HIGH_FREQUENCY': 'VF',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
@@ -58,12 +58,16 @@ class Event:
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
 
-        self.duration = utct(utct(self.picks['end']) -
-                             utct(self.picks['start']))
-        self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
-        self.starttime = utct(utct(self.picks['start']))
-        self.endtime = utct(utct(self.picks['end']))
-        self.sol = solify(utct(self.picks['start'])).julday
+        try: 
+            self.sol = solify(utct(self.picks['start'])).julday
+            self.starttime = utct(utct(self.picks['start']))
+            self.endtime = utct(utct(self.picks['end']))
+            self.duration = utct(utct(self.picks['end']) -
+                                 utct(self.picks['start']))
+            self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
+        except TypeError:
+            print('incomplete picks for event %s' % self.name)
+            print(self.picks)
 
         self.amplitudes = dict()
 
@@ -95,7 +99,7 @@ class Event:
             self.distance_type = 'GUI'
 
         # Case that distance can be estimated from Pg/Sg arrivals
-        elif self.mars_event_type_short in ['HF', 'UF', 'VF', '24']:
+        elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
             self.distance = self.calc_distance()
             if self.distance is not None:
                 self.distance_type = 'PgSg'
@@ -147,8 +151,8 @@ class Event:
                         self.distance_type = 'aligned'
 
     def calc_distance(self,
-                      vp: float = np.sqrt(3) * 2.0,
-                      vs: float = 2.0) -> Union[float, None]:
+                      vp: float = 4.0,
+                      vs: float = 4.0 / np.sqrt(3)) -> Union[float, None]:
         """
         Calculate distance of event based on Pg and Sg picks, if available,
         otherwise return None
@@ -388,7 +392,7 @@ class Event:
             if self.waveforms_VBB is not None:
                 for chan in ['Z', 'N', 'E']:
                     st_sel = self.waveforms_VBB.select(
-                        channel='??' + chan)
+                        channel='??' + chan).copy()
                     tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
                     tr.trim(starttime=utct(twin[0]),
                             endtime=utct(twin[1]))
@@ -406,7 +410,7 @@ class Event:
                 spectrum_variable = dict()
                 for chan in ['Z', 'N', 'E']:
                     st_sel = self.waveforms_SP.select(
-                        channel='??' + chan)
+                        channel='??' + chan).copy()
                     if len(st_sel) > 0:
                         tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
                         tr.trim(starttime=utct(twin[0]),
@@ -441,7 +445,7 @@ class Event:
             for signal in ['S', 'P', 'all']:
                 amplitudes = None
                 if signal in self.spectra:
-                    if self.mars_event_type_short == 'UF':
+                    if self.mars_event_type_short == 'SF':
                         p_sig = self.spectra[signal]['p_N']
                     else:
                         p_sig = self.spectra[signal]['p_Z']
