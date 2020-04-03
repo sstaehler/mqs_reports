@@ -53,6 +53,12 @@ class Catalog:
         if events is None:
             if type_select == 'all':
                 type_des = EVENT_TYPES
+            elif type_select == 'noSF':
+                type_des = ['HIGH_FREQUENCY',
+                            'VERY_HIGH_FREQUENCY',
+                            'LOW_FREQUENCY',
+                            '2.4_HZ',
+                            'BROADBAND']
             elif type_select == 'higher':
                 type_des = ['HIGH_FREQUENCY',
                             'BROADBAND']
@@ -154,7 +160,7 @@ class Catalog:
         Criteria can either be given as string with wildcards or as tuple of
         allowed values.
         :param name: Name of the event ("SXXXXy")
-        :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF, "UF"
+        :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF, "SF"
         :param quality: A to D
         :return:
         """
