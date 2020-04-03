@@ -391,16 +391,16 @@ class Event:
                 for chan in ['Z', 'N', 'E']:
                     st_sel = self.waveforms_VBB.select(
                         channel='??' + chan)
+
                     tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
                     tr.trim(starttime=utct(twin[0]),
                             endtime=utct(twin[1]))
+
                     if tr.stats.npts > 0:
                         f, p = calc_PSD(tr, winlen_sec=winlen_sec)
                         spectrum_variable['p_' + chan] = p
-                    else:
-                        f = np.arange(0, 1, 0.1)
-                        p = np.zeros(10)
-                    spectrum_variable['f'] = f
+                        spectrum_variable['f'] = f
+
                 if len(spectrum_variable) > 0:
                     self.spectra[variable] = spectrum_variable
 
@@ -413,19 +413,15 @@ class Event:
                         tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
                         tr.trim(starttime=utct(twin[0]),
                                 endtime=utct(twin[1]))
+
                         if tr.stats.npts > 0:
                             f, p = calc_PSD(tr, winlen_sec=winlen_sec)
                             spectrum_variable['p_' + chan] = p
-                        else:
-                            f = np.arange(0, 1, 0.1)
-                            p = np.zeros(10)
-                            spectrum_variable['p_' + chan] = p
-                            spectrum_variable['f_' + chan] = f
+                            spectrum_variable['f'] = f
                     else:
                         # Case that only SP1==SPZ is switched on
                         spectrum_variable['p_' + chan] = \
                             np.zeros_like(p)
-                spectrum_variable['f'] = f
 
             if len(spectrum_variable) > 0:
                 self.spectra_SP[variable] = spectrum_variable
@@ -471,8 +467,13 @@ class Event:
 
         # compute horizontal spectra
         for signal in self.spectra.keys():
-            self.spectra[signal]['p_H'] = \
-                self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
+            if signal in self.spectra:
+                self.spectra[signal]['p_H'] = \
+                    self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
+            if signal in self.spectra_SP:
+                self.spectra_SP[signal]['p_H'] = \
+                    self.spectra_SP[signal]['p_N'] + \
+                    self.spectra_SP[signal]['p_E']
 
         self._spectra_available = True
 

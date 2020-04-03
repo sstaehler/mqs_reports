@@ -542,7 +542,7 @@ class Catalog:
             return fig
 
     def plot_HF_spectra(self, SNR=2., tooltip=False, component='Z', fmin=0.7,
-                        fmax=7., fig=None, show=True):
+                        fmax=10., use_SP=False, fig=None, show=True):
         from mpldatacursor import datacursor
         if fig is None:
             fig = plt.figure()
@@ -556,10 +556,15 @@ class Catalog:
 
         for event in cat:
 
+            if use_SP:
+                spectra = event.spectra_SP
+            else:
+                spectra = event.spectra
+
             # Skip events that do not have all picks, but print message in case
             try:
                 for stype in ['P', 'S', 'noise']:
-                    if not stype in event.spectra:
+                    if not stype in spectra:
                         raise ContinueI(f'Missing spectral {stype} picks in event {event.name}')
 
                     if len(event.spectra[stype]) == 0:
@@ -570,49 +575,49 @@ class Catalog:
 
             lw = 1.
 
-            # mask_P_1Hz = (event.spectra['P']['f'] > 0.86) * (event.spectra['P']['f'] < 1.14)
-            mask_P_1Hz = event.spectra['P']['f'] > 1000.
+            # mask_P_1Hz = (spectra['P'][f'f'] > 0.86) * # (spectra['P'][f'f'] < 1.14)
+            mask_P_1Hz = spectra['P'][f'f'] > 1000.
 
-            mask_P = event.spectra['P']['f'] < 1.3
-            mask_P += event.spectra['P']['f'] > fmax
-            peak = event.spectra['P'][f'p_{component}'][np.logical_not(mask_P)].max()
-            mask_P = event.spectra['P']['f'] < fmin
-            mask_P += event.spectra['P']['f'] > fmax
+            mask_P = spectra['P'][f'f'] < 1.3
+            mask_P += spectra['P'][f'f'] > fmax
+            peak = spectra['P'][f'p_{component}'][np.logical_not(mask_P)].max()
+            mask_P = spectra['P'][f'f'] < fmin
+            mask_P += spectra['P'][f'f'] > fmax
             mask_P += mask_P_1Hz
-            mask_P += event.spectra['P'][f'p_{component}'] < SNR * event.spectra['noise'][f'p_{component}']
-            msP = np.ma.masked_where(mask_P, event.spectra['P'][f'p_{component}'])
-            msPN = np.ma.masked_where(mask_P_1Hz, event.spectra['P'][f'p_{component}'])
+            mask_P += spectra['P'][f'p_{component}'] < SNR * spectra['noise'][f'p_{component}']
+            msP = np.ma.masked_where(mask_P, spectra['P'][f'p_{component}'])
+            msPN = np.ma.masked_where(mask_P_1Hz, spectra['P'][f'p_{component}'])
 
             msP /= peak
             msPN /= peak
 
-            l1, = plt.plot(event.spectra['P']['f'], 10 * np.log10(msP),
+            l1, = plt.plot(spectra['P'][f'f'], 10 * np.log10(msP),
                            color='C0', alpha=1., label=f'{event.name}, P',
                            lw=lw)
-            plt.plot(event.spectra['P']['f'], 10 * np.log10(msPN),
+            plt.plot(spectra['P'][f'f'], 10 * np.log10(msPN),
                      color='lightgray', zorder=-10, lw=lw,
                      label=f'{event.name}, P noise')
 
-            #mask_S_1Hz = (event.spectra['S']['f'] > 0.86) * (event.spectra['S']['f'] < 1.14)
-            mask_S_1Hz = event.spectra['S']['f'] > 1000.
+            #mask_S_1Hz = (spectra['S'][f'f'] > 0.86) * (spectra['S'][f'f'] < 1.14)
+            mask_S_1Hz = spectra['S'][f'f'] > 1000.
 
-            mask_S = event.spectra['S']['f'] < 1.3
-            mask_S += event.spectra['S']['f'] > fmax
-            peak = event.spectra['S'][f'p_{component}'][np.logical_not(mask_S)].max()
-            mask_S = event.spectra['S']['f'] < fmin
-            mask_S += event.spectra['S']['f'] > fmax
+            mask_S = spectra['S'][f'f'] < 1.3
+            mask_S += spectra['S'][f'f'] > fmax
+            peak = spectra['S'][f'p_{component}'][np.logical_not(mask_S)].max()
+            mask_S = spectra['S'][f'f'] < fmin
+            mask_S += spectra['S'][f'f'] > fmax
             mask_S += mask_S_1Hz
-            mask_S += event.spectra['S'][f'p_{component}'] < SNR * event.spectra['noise'][f'p_{component}']
-            msS = np.ma.masked_where(mask_S, event.spectra['S'][f'p_{component}'])
-            msSN = np.ma.masked_where(mask_S_1Hz, event.spectra['S'][f'p_{component}'])
+            mask_S += spectra['S'][f'p_{component}'] < SNR * spectra['noise'][f'p_{component}']
+            msS = np.ma.masked_where(mask_S, spectra['S'][f'p_{component}'])
+            msSN = np.ma.masked_where(mask_S_1Hz, spectra['S'][f'p_{component}'])
 
             msS /= peak
             msSN /= peak
 
-            l2, = plt.plot(event.spectra['S']['f'], 10 * np.log10(msS),
+            l2, = plt.plot(spectra['S'][f'f'], 10 * np.log10(msS),
                            color='C1', alpha=1., label=f'{event.name}, S',
                            lw=lw)
-            plt.plot(event.spectra['S']['f'], 10 * np.log10(msSN),
+            plt.plot(spectra['S'][f'f'], 10 * np.log10(msSN),
                      color='lightgray', zorder=-10, lw=lw,
                      label=f'{event.name}, S noise')
 
@@ -629,14 +634,11 @@ class Catalog:
                            ampfac=ampfac, f_c=f_c)
         spec3 = lorenz_att(f, A0=-13, f0=2.4, tstar=0.05, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        #spec4 = lorenz_att(f, A0=-5, f0=2.4, tstar=0.3, fw=0.3,
-        #                   ampfac=ampfac, f_c=f_c)
         spec4 = lorenz_att(f, A0=-2, f0=2.4, tstar=0.4, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
         l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
-        #l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.3')
         l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4')
 
         llabels = ['P', 'S'] + [l.get_label() for l in [l5, l3, l4, l6]]
@@ -651,10 +653,8 @@ class Catalog:
         ax.get_xaxis().set_major_locator(xmajor_locator)
         ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
-        plt.xlim(0.3, 8.)
+        plt.xlim(0.3, 10.)
         plt.ylim(-30., 7.)
-
-        #plt.title(f'Spectra for {len(cat)} events')
 
         if show:
             plt.show()
@@ -872,12 +872,12 @@ class Catalog:
 
         # kde_factor = len(d) ** (-0.2)  # Scott's rule
         kde = stats.gaussian_kde(d)
-        x = np.linspace(0., 50, 1000.)
+        x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
         plt.plot(x, pdf1, color=color, label=label)
 
         kde = stats.gaussian_kde(d, weights=1./d**2)
-        x = np.linspace(0., 50, 1000.)
+        x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
         plt.plot(x, pdf1, color=color, label=label + ' area weighted', ls='--')
 
