@@ -633,14 +633,20 @@ class Catalog:
         # plot lorenz with attenuation
         f = np.linspace(0.01, 10., 1000)
         f_c = 100.
-        ampfac = 30.
-        spec1 = lorenz_att(f, A0=-11.5, f0=2.4, tstar=0.1, fw=0.3,
+        if component == 'Z':
+            ampfac = 30.
+            delta_A0 = 0.
+        else:
+            ampfac = 10.
+            delta_A0 = 4.5
+
+        spec1 = lorenz_att(f, A0=-11.5 + delta_A0, f0=2.4, tstar=0.1, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        spec2 = lorenz_att(f, A0=-8.5, f0=2.4, tstar=0.2, fw=0.3,
+        spec2 = lorenz_att(f, A0=-8.5 + delta_A0, f0=2.4, tstar=0.2, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        spec3 = lorenz_att(f, A0=-13, f0=2.4, tstar=0.05, fw=0.3,
+        spec3 = lorenz_att(f, A0=-13 + delta_A0, f0=2.4, tstar=0.05, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        spec4 = lorenz_att(f, A0=-2, f0=2.4, tstar=0.4, fw=0.3,
+        spec4 = lorenz_att(f, A0=-2 + delta_A0, f0=2.4, tstar=0.4, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
@@ -1190,7 +1196,7 @@ class Catalog:
 
         write_html(self, fnam_out=fnam_out)
 
-    def get_event_count_table(self) -> str:
+    def get_event_count_table(self, style='html') -> str:
         """
         Create HTML event count table for catalog
         """
@@ -1209,6 +1215,13 @@ class Catalog:
         df = pd.DataFrame(data=data, columns=['total', 'A', 'B', 'C', 'D'])
         df.insert(loc=0, column='event type', value=EVENT_TYPES)
 
-        return ('<H1>MQS events until %s</H1><br>' %
-                utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
-                df.to_html(index=False, table_id='events_all', col_space=40))
+        if style == 'html':
+            return ('<H1>MQS events until %s</H1><br>' %
+                    utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
+                    df.to_html(index=False, table_id='events_all',
+                               col_space=40)
+                   )
+        elif style == 'latex':
+            return df.to_latex(index=False)
+        else:
+            raise ValueError()
