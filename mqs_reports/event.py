@@ -339,8 +339,11 @@ class Event:
                     'VBB_N': '??N',
                     'VBB_E': '??N'}
         for chan, seed in channels.items():
-            available[chan] = self.waveforms_VBB.select(
-                channel=seed)[0].stats.sampling_rate
+            if self.waveforms_VBB is None:
+                available[chan] = 0.0
+            else:
+                available[chan] = self.waveforms_VBB.select(
+                    channel=seed)[0].stats.sampling_rate
 
         channels = {'SP_Z': 'EHZ',
                     'SP_N': 'EHN',
@@ -440,6 +443,7 @@ class Event:
                            'tstar': None,
                            'A_24': None,
                            'f_24': None,
+                           'f_c': None,
                            'width_24': None}
 
         if 'noise' in self.spectra:
@@ -460,23 +464,16 @@ class Event:
                     break
             if amplitudes is not None:
                 self.amplitudes = amplitudes
-            # if self.spectra['S'] is not None:
-            #     sig_spec = self.spectra['S']['p_Z']
-            # elif 'noise' in self.spectra and 'all' in self.spectra:
-            #     sig_spec = self.spectra['all']['p_Z']
-            # self.amplitudes = \
-            #     fit_spectra(self.spectra['noise']['f'],
-            #                 sig_spec,
-            #                 self.spectra['noise']['p_Z'],
-            #                 type=self.mars_event_type_short)
-        # except KeyError:
-        #     print('Some time windows missing for event %s' % self.name)
-        #     print(self.spectra)
 
-        # compute horizontal spectra
+        # compute horizontal spectra on VBB 
         for signal in self.spectra.keys():
             self.spectra[signal]['p_H'] = \
                 self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
+
+        # compute horizontal spectra on SP
+        for signal in self.spectra_SP.keys():
+            self.spectra_SP[signal]['p_H'] = \
+                self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal]['p_E']
 
         self._spectra_available = True
 
@@ -505,7 +502,10 @@ class Event:
                                'Call Event.read_waveforms() first.')
 
         if instrument == 'VBB':
-            st_work = self.waveforms_VBB.copy()
+            if self.waveforms_VBB is None:
+                return None
+            else:
+                st_work = self.waveforms_VBB.copy()
         else:
             st_work = self.waveforms_SP.copy()
 
