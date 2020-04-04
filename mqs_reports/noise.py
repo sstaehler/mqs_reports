@@ -185,6 +185,7 @@ class Noise():
                         else:
                             std_press = 0.
 
+                        stds_press.append(std_press)
                         stds_HF.append(std_HF)
                         stds_LF.append(std_LF)
                         t0_lmst = solify(t0)
@@ -419,7 +420,9 @@ class Noise():
     #     plt.show()
 
     def plot_daystats(self, cat: mqs_reports.catalog.Catalog = None,
-                      sol_start: int = 80, sol_end: int = 500, data_apss=False):
+                      sol_start: int = 80, sol_end: int = 500, data_apss=False,
+                      fnam_out='noise_vs_eventamplitudes.png',
+                      metal=False):
         if self.sols_quant is None:
             self.calc_time_windows(sol_end, sol_start)
             self.save_quantiles(fnam='noise_quantiles.npz')
@@ -441,30 +444,37 @@ class Noise():
         # ax_HF = ax[1
         # ax_LF = ax[0]
         h_base = 0.09
-        w_base = 0.06
-        w_LF = 0.95
-        h_pad = 0.05
-        h_LF = 0.42
+        w_base = 0.05
+        w_LF = 0.85
+        h_pad = 0.06
+        h_LF = (0.97 - h_base - h_pad) / 2.
 
         if data_apss:
             h_apss = 0.2
-            h_LF -= h_apss / 2. + h_pad
+            h_LF = (0.97 - h_base - 2 * h_pad - h_apss) / 2.
+            # h_LF -= h_apss / 2. + h_pad
 
         ax_HF = fig.add_axes([w_base, h_base,
                               w_LF, h_LF])
-        ax_LF = fig.add_axes([w_base, h_base + h_LF + h_pad,
-                              w_LF, h_LF],
-                             sharex=ax_HF)
-
         if data_apss:
             ax_apss = fig.add_axes([w_base, h_base + h_LF * 2 + h_pad * 2,
                                     w_LF, h_apss],
                                    sharex=ax_HF)
+        else:
+            ax_apss = fig.add_axes([1.2, 1.2, 0.1, 0.1])
+
+        ax_LF = fig.add_axes([w_base, h_base + h_LF + h_pad,
+                              w_LF, h_LF],
+                             sharex=ax_HF)
 
         cols = ['black', 'darkgrey', 'grey', 'black']
         ls = ['dotted', 'dashed', 'dotted', 'dashed']
-        labels = ['quiet (1700-2230 LMST)', 'noisy night (2230-0600 LMST)',
-                  'morning (0600-0900 LMST)', 'day (0900-1700 LMST)']
+        if metal: 
+            labels = ['quiet\n(17-23 LMST)', 'NÖCTURNAL WAVEGÜIDE\n(23-5 LMST)',
+                      'SÜNRÏSE\n(5-9 LMST)', 'SËISMIC NÖISË\n(9-17 LMST)']
+        else:
+            labels = ['quiet\n(17-23 LMST)', 'noisy night\n(23-5 LMST)',
+                      'morning\n(5-9 LMST)', 'day\n(9-17 LMST)']
         for i in range(self.quantiles_LF.shape[1] - 1, -1, -1):
             ax_LF.plot(self.sols_quant - 1.,
                        10 * np.log10(self.quantiles_LF[:, i]),
@@ -497,10 +507,19 @@ class Noise():
         LF_times = []
         LF_amps = []
         LF_dists = []
+        symbols = {'24': 'O',
+                   'HF': '^',
+                   'VF': 's',
+                   'LF': 'v',
+                   'BB': 's'}
+        markers_HF = []
+        markers_LF = []
+
         if cat is not None:
             cmap = plt.cm.get_cmap('plasma_r')
             cmap.set_over('royalblue')
             for event in cat.select(event_type=['HF', 'VF', '24']):
+                markers_HF.append(symbols[event.mars_event_type_short])
                 if event.distance is None:
                     HF_dists.append(50.)
                 else:
@@ -510,6 +529,7 @@ class Noise():
                 HF_amps.append(event.amplitudes['A_24'])
 
             for event in cat.select(event_type=['LF', 'BB']):
+                markers_LF.append(symbols[event.mars_event_type_short])
                 if event.distance is None:
                     LF_dists.append(120.)
                 else:
@@ -532,25 +552,36 @@ class Noise():
                 LF_times.append(float(solify(event.starttime)) /
                                 SECONDS_PER_DAY)
                 LF_amps.append(20 * np.log10(amp))
-
-            sc = ax_LF.scatter(LF_times, LF_amps,
-                               c=LF_dists, vmin=25., vmax=100., cmap=cmap,
-                               edgecolors='k', linewidths=0.5,
-                               s=80., marker='.', zorder=100)
-            cax = plt.colorbar(sc, ax=ax_LF, use_gridspec=True)
-            cax.ax.set_ylabel('distance / degree', rotation=270.,
+            markers_LF = np.asarray(markers_LF) 
+            markers_HF = np.asarray(markers_HF) 
+            for i, m in enumerate(np.unique(markers_LF)): 
+                print(i, m)
+                print(np.asarray(markers_LF)==m)
+                print(np.asarray(markers_LF)==m)
+                if (np.asarray(markers_LF)==m).any():
+                    sc = ax_LF.scatter(LF_times[markers_LF==m], 
+                                       LF_amps[markers_LF==m],
+                                       c=LF_dists[markers_LF==m],  
+                                       vmin=25., vmax=100., cmap=cmap,
+                                       edgecolors='k', linewidths=0.5,
+                                       s=80., marker=m, zorder=100)
+            cax = fig.add_axes([w_LF + w_base + 0.02, h_base, 0.018, 0.72])
+            cb = plt.colorbar(sc, ax=ax_LF, cax=cax) # use_gridspec=True)
+            cb.ax.set_ylabel('distance / degree', rotation=270.,
                               labelpad=4.45)
-            sc = ax_HF.scatter(HF_times, HF_amps,
-                               c=HF_dists, vmin=5., vmax=30., cmap=cmap,
-                               edgecolors='k', linewidths=0.5,
-                               s=80., marker='.', zorder=100)
-            cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True)
-            cax.ax.set_ylabel('distance / degree', rotation=270.,
-                              labelpad=12.45)
-            if data_apss:
-                cax = plt.colorbar(sc, ax=ax_apss, use_gridspec=True)
-                cax.ax.set_ylabel('distance / degree', rotation=270.,
-                                  labelpad=12.45)
+            # sc = ax_HF.scatter(HF_times, HF_amps,
+            #                    c=HF_dists, vmin=15., vmax=100., cmap=cmap,
+            #                    edgecolors='k', linewidths=0.5,
+            #                    s=80., marker=markers_HF, zorder=100)
+            # cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True, 
+            #                    fraction=0.08)
+            # cax.ax.set_ylabel('distance / degree', rotation=270.,
+            #                   labelpad=12.45)
+            # if data_apss:
+            #     cax = plt.colorbar(sc, ax=ax_apss, use_gridspec=True)
+            #     cax.ax.set_ylabel('distance / degree', rotation=270.,
+            #                       labelpad=12.45)
+
         for a in [ax_HF, ax_LF, ax_apss]:
             a.grid(True)
             rect = Rectangle(xy=(267, -300), width=20., height=400, zorder=10,
@@ -562,28 +593,31 @@ class Noise():
                            c='royalblue', s=80., marker='.')
         ax_HF.set_xlabel('Sol number')
         ax_LF.set_ylabel('PSD, displ. %3.1f-%3.1f sec. [dB]' %
-                         (1. / self.fmin_LF, 1. / self.fmax_LF))
+                         (1. / self.fmax_LF, 1. / self.fmin_LF))
         ax_HF.set_ylabel('PSD, displ. %3.1f-%3.1f Hz. [dB]' %
                          (self.fmin_HF, self.fmax_HF))
 
         ax_LF.set_ylim(-210., -170.)
-        ax_LF.set_title('Noise %3.1f-%3.1f seconds and LF/BB events' %
+        ax_LF.set_title('Seismic power, low frequency,  %3.1f-%3.1f seconds and LF/BB events' %
                         (1. / self.fmax_LF, 1. / self.fmin_LF))
-        ax_HF.set_title('Noise %3.1f-%3.1f Hz and HF/2.4 Hz events' %
+        ax_HF.set_title('Seismic power, high frequency,  %3.1f-%3.1f Hz and HF/2.4 Hz events' %
                         (self.fmin_HF, self.fmax_HF))
         ax_HF.set_ylim(-225., -185.)
         ax_LF.set_xlim(sol_start, sol_end)
 
-        ax_HF.legend(loc='upper left')
+        # ax_HF.legend(loc='upper left')
+        l = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.8, 0.1, 0.2), 
+                         bbox_transform=fig.transFigure, framealpha=1.0)
+        l.set_zorder(50)
 
         if data_apss:
-            ax_apss.set_title('Pressure Noise %3.1f-%3.1f seconds' %
+            ax_apss.set_title('Pressure power %3.1f-%3.1f seconds' %
                               (1. / self.fmax_press, 1. / self.fmin_press))
-            ax_apss.set_ylabel('PSD, pressure. %3.1f-%4.1f sec. [dB]' %
+            ax_apss.set_ylabel('PSD, pressure.\n%3.1f-%4.1f sec. [dB]' %
                                (1. / self.fmax_press, 1. / self.fmin_press))
             ax_apss.set_ylim(-50, -25)
 
-        plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
+        plt.savefig(fnam_out, dpi=200)
 
     def read_quantiles(self, fnam):
         data = np.load(fnam)
@@ -601,8 +635,8 @@ class Noise():
 
     def calc_time_windows(self, sol_end, sol_start,
                           time_windows_hour=[[17, 22.5],
-                                             [22.5, 6.0],
-                                             [6.0, 9.0],
+                                             [22.5, 5.0],
+                                             [5.0, 9.0],
                                              [9.0, 17.]]):
 
         self.sols_quant = np.arange(sol_start, sol_end + 1)
@@ -708,7 +742,7 @@ class Noise():
 
 
 def read_noise(fnam):
-    data = np.load(fnam)
+    data = np.load(fnam, allow_pickle=True)
     data_read = dict()
     for name in data.files:
         data_read[name] = data[name]

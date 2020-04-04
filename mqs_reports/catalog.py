@@ -53,6 +53,12 @@ class Catalog:
         if events is None:
             if type_select == 'all':
                 type_des = EVENT_TYPES
+            elif type_select == 'noSF':
+                type_des = ['HIGH_FREQUENCY',
+                            'VERY_HIGH_FREQUENCY',
+                            'LOW_FREQUENCY',
+                            '2.4_HZ',
+                            'BROADBAND']
             elif type_select == 'higher':
                 type_des = ['HIGH_FREQUENCY',
                             'BROADBAND']
@@ -154,7 +160,7 @@ class Catalog:
         Criteria can either be given as string with wildcards or as tuple of
         allowed values.
         :param name: Name of the event ("SXXXXy")
-        :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF, "UF"
+        :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF, "SF"
         :param quality: A to D
         :return:
         """
@@ -542,7 +548,7 @@ class Catalog:
             return fig
 
     def plot_HF_spectra(self, SNR=2., tooltip=False, component='Z', fmin=0.7,
-                        fmax=7., fig=None, show=True):
+                        fmax=10., use_SP=False, fig=None, show=True):
         from mpldatacursor import datacursor
         if fig is None:
             fig = plt.figure()
@@ -556,10 +562,15 @@ class Catalog:
 
         for event in cat:
 
+            if use_SP:
+                spectra = event.spectra_SP
+            else:
+                spectra = event.spectra
+
             # Skip events that do not have all picks, but print message in case
             try:
                 for stype in ['P', 'S', 'noise']:
-                    if not stype in event.spectra:
+                    if not stype in spectra:
                         raise ContinueI(f'Missing spectral {stype} picks in event {event.name}')
 
                     if len(event.spectra[stype]) == 0:
@@ -570,49 +581,49 @@ class Catalog:
 
             lw = 1.
 
-            # mask_P_1Hz = (event.spectra['P']['f'] > 0.86) * (event.spectra['P']['f'] < 1.14)
-            mask_P_1Hz = event.spectra['P']['f'] > 1000.
+            # mask_P_1Hz = (spectra['P'][f'f'] > 0.86) * # (spectra['P'][f'f'] < 1.14)
+            mask_P_1Hz = spectra['P'][f'f'] > 1000.
 
-            mask_P = event.spectra['P']['f'] < 1.3
-            mask_P += event.spectra['P']['f'] > fmax
-            peak = event.spectra['P'][f'p_{component}'][np.logical_not(mask_P)].max()
-            mask_P = event.spectra['P']['f'] < fmin
-            mask_P += event.spectra['P']['f'] > fmax
+            mask_P = spectra['P'][f'f'] < 1.3
+            mask_P += spectra['P'][f'f'] > fmax
+            peak = spectra['P'][f'p_{component}'][np.logical_not(mask_P)].max()
+            mask_P = spectra['P'][f'f'] < fmin
+            mask_P += spectra['P'][f'f'] > fmax
             mask_P += mask_P_1Hz
-            mask_P += event.spectra['P'][f'p_{component}'] < SNR * event.spectra['noise'][f'p_{component}']
-            msP = np.ma.masked_where(mask_P, event.spectra['P'][f'p_{component}'])
-            msPN = np.ma.masked_where(mask_P_1Hz, event.spectra['P'][f'p_{component}'])
+            mask_P += spectra['P'][f'p_{component}'] < SNR * spectra['noise'][f'p_{component}']
+            msP = np.ma.masked_where(mask_P, spectra['P'][f'p_{component}'])
+            msPN = np.ma.masked_where(mask_P_1Hz, spectra['P'][f'p_{component}'])
 
             msP /= peak
             msPN /= peak
 
-            l1, = plt.plot(event.spectra['P']['f'], 10 * np.log10(msP),
+            l1, = plt.plot(spectra['P'][f'f'], 10 * np.log10(msP),
                            color='C0', alpha=1., label=f'{event.name}, P',
                            lw=lw)
-            plt.plot(event.spectra['P']['f'], 10 * np.log10(msPN),
+            plt.plot(spectra['P'][f'f'], 10 * np.log10(msPN),
                      color='lightgray', zorder=-10, lw=lw,
                      label=f'{event.name}, P noise')
 
-            #mask_S_1Hz = (event.spectra['S']['f'] > 0.86) * (event.spectra['S']['f'] < 1.14)
-            mask_S_1Hz = event.spectra['S']['f'] > 1000.
+            #mask_S_1Hz = (spectra['S'][f'f'] > 0.86) * (spectra['S'][f'f'] < 1.14)
+            mask_S_1Hz = spectra['S'][f'f'] > 1000.
 
-            mask_S = event.spectra['S']['f'] < 1.3
-            mask_S += event.spectra['S']['f'] > fmax
-            peak = event.spectra['S'][f'p_{component}'][np.logical_not(mask_S)].max()
-            mask_S = event.spectra['S']['f'] < fmin
-            mask_S += event.spectra['S']['f'] > fmax
+            mask_S = spectra['S'][f'f'] < 1.3
+            mask_S += spectra['S'][f'f'] > fmax
+            peak = spectra['S'][f'p_{component}'][np.logical_not(mask_S)].max()
+            mask_S = spectra['S'][f'f'] < fmin
+            mask_S += spectra['S'][f'f'] > fmax
             mask_S += mask_S_1Hz
-            mask_S += event.spectra['S'][f'p_{component}'] < SNR * event.spectra['noise'][f'p_{component}']
-            msS = np.ma.masked_where(mask_S, event.spectra['S'][f'p_{component}'])
-            msSN = np.ma.masked_where(mask_S_1Hz, event.spectra['S'][f'p_{component}'])
+            mask_S += spectra['S'][f'p_{component}'] < SNR * spectra['noise'][f'p_{component}']
+            msS = np.ma.masked_where(mask_S, spectra['S'][f'p_{component}'])
+            msSN = np.ma.masked_where(mask_S_1Hz, spectra['S'][f'p_{component}'])
 
             msS /= peak
             msSN /= peak
 
-            l2, = plt.plot(event.spectra['S']['f'], 10 * np.log10(msS),
+            l2, = plt.plot(spectra['S'][f'f'], 10 * np.log10(msS),
                            color='C1', alpha=1., label=f'{event.name}, S',
                            lw=lw)
-            plt.plot(event.spectra['S']['f'], 10 * np.log10(msSN),
+            plt.plot(spectra['S'][f'f'], 10 * np.log10(msSN),
                      color='lightgray', zorder=-10, lw=lw,
                      label=f'{event.name}, S noise')
 
@@ -622,21 +633,24 @@ class Catalog:
         # plot lorenz with attenuation
         f = np.linspace(0.01, 10., 1000)
         f_c = 100.
-        ampfac = 30.
-        spec1 = lorenz_att(f, A0=-11.5, f0=2.4, tstar=0.1, fw=0.3,
+        if component == 'Z':
+            ampfac = 30.
+            delta_A0 = 0.
+        else:
+            ampfac = 10.
+            delta_A0 = 4.5
+
+        spec1 = lorenz_att(f, A0=-11.5 + delta_A0, f0=2.4, tstar=0.1, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        spec2 = lorenz_att(f, A0=-8.5, f0=2.4, tstar=0.2, fw=0.3,
+        spec2 = lorenz_att(f, A0=-8.5 + delta_A0, f0=2.4, tstar=0.2, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        spec3 = lorenz_att(f, A0=-13, f0=2.4, tstar=0.05, fw=0.3,
+        spec3 = lorenz_att(f, A0=-13 + delta_A0, f0=2.4, tstar=0.05, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        #spec4 = lorenz_att(f, A0=-5, f0=2.4, tstar=0.3, fw=0.3,
-        #                   ampfac=ampfac, f_c=f_c)
-        spec4 = lorenz_att(f, A0=-2, f0=2.4, tstar=0.4, fw=0.3,
+        spec4 = lorenz_att(f, A0=-2 + delta_A0, f0=2.4, tstar=0.4, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
         l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
-        #l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.3')
         l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4')
 
         llabels = ['P', 'S'] + [l.get_label() for l in [l5, l3, l4, l6]]
@@ -651,10 +665,8 @@ class Catalog:
         ax.get_xaxis().set_major_locator(xmajor_locator)
         ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
-        plt.xlim(0.3, 8.)
+        plt.xlim(0.3, 10.)
         plt.ylim(-30., 7.)
-
-        #plt.title(f'Spectra for {len(cat)} events')
 
         if show:
             plt.show()
@@ -872,12 +884,12 @@ class Catalog:
 
         # kde_factor = len(d) ** (-0.2)  # Scott's rule
         kde = stats.gaussian_kde(d)
-        x = np.linspace(0., 50, 1000.)
+        x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
         plt.plot(x, pdf1, color=color, label=label)
 
         kde = stats.gaussian_kde(d, weights=1./d**2)
-        x = np.linspace(0., 50, 1000.)
+        x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
         plt.plot(x, pdf1, color=color, label=label + ' area weighted', ls='--')
 
@@ -1184,7 +1196,7 @@ class Catalog:
 
         write_html(self, fnam_out=fnam_out)
 
-    def get_event_count_table(self) -> str:
+    def get_event_count_table(self, style='html') -> str:
         """
         Create HTML event count table for catalog
         """
@@ -1203,6 +1215,13 @@ class Catalog:
         df = pd.DataFrame(data=data, columns=['total', 'A', 'B', 'C', 'D'])
         df.insert(loc=0, column='event type', value=EVENT_TYPES)
 
-        return ('<H1>MQS events until %s</H1><br>' %
-                utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
-                df.to_html(index=False, table_id='events_all', col_space=40))
+        if style == 'html':
+            return ('<H1>MQS events until %s</H1><br>' %
+                    utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
+                    df.to_html(index=False, table_id='events_all',
+                               col_space=40)
+                   )
+        elif style == 'latex':
+            return df.to_latex(index=False)
+        else:
+            raise ValueError()

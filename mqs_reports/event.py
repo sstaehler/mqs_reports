@@ -30,7 +30,7 @@ LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
 EVENT_TYPES_SHORT = {
-    'ULTRA_HIGH_FREQUENCY': 'UF',
+    'SUPER_HIGH_FREQUENCY': 'SF',
     'VERY_HIGH_FREQUENCY': 'VF',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
@@ -60,12 +60,16 @@ class Event:
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
 
-        self.duration = utct(utct(self.picks['end']) -
-                             utct(self.picks['start']))
-        self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
-        self.starttime = utct(utct(self.picks['start']))
-        self.endtime = utct(utct(self.picks['end']))
-        self.sol = solify(utct(self.picks['start'])).julday
+        try: 
+            self.sol = solify(utct(self.picks['start'])).julday
+            self.starttime = utct(utct(self.picks['start']))
+            self.endtime = utct(utct(self.picks['end']))
+            self.duration = utct(utct(self.picks['end']) -
+                                 utct(self.picks['start']))
+            self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
+        except TypeError:
+            print('incomplete picks for event %s' % self.name)
+            print(self.picks)
 
         self.amplitudes = dict()
 
@@ -97,7 +101,7 @@ class Event:
             self.distance_type = 'GUI'
 
         # Case that distance can be estimated from Pg/Sg arrivals
-        elif self.mars_event_type_short in ['HF', 'UF', 'VF', '24']:
+        elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
             self.distance = self.calc_distance()
             if self.distance is not None:
                 self.distance_type = 'PgSg'
@@ -335,8 +339,11 @@ class Event:
                     'VBB_N': '??N',
                     'VBB_E': '??N'}
         for chan, seed in channels.items():
-            available[chan] = self.waveforms_VBB.select(
-                channel=seed)[0].stats.sampling_rate
+            if self.waveforms_VBB is None:
+                available[chan] = 0.0
+            else:
+                available[chan] = self.waveforms_VBB.select(
+                    channel=seed)[0].stats.sampling_rate
 
         channels = {'SP_Z': 'EHZ',
                     'SP_N': 'EHN',
@@ -390,17 +397,16 @@ class Event:
             if self.waveforms_VBB is not None:
                 for chan in ['Z', 'N', 'E']:
                     st_sel = self.waveforms_VBB.select(
-                        channel='??' + chan)
+                        channel='??' + chan).copy()
                     tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
                     tr.trim(starttime=utct(twin[0]),
                             endtime=utct(twin[1]))
+
                     if tr.stats.npts > 0:
                         f, p = calc_PSD(tr, winlen_sec=winlen_sec)
                         spectrum_variable['p_' + chan] = p
-                    else:
-                        f = np.arange(0, 1, 0.1)
-                        p = np.zeros(10)
-                    spectrum_variable['f'] = f
+                        spectrum_variable['f'] = f
+
                 if len(spectrum_variable) > 0:
                     self.spectra[variable] = spectrum_variable
 
@@ -408,24 +414,20 @@ class Event:
                 spectrum_variable = dict()
                 for chan in ['Z', 'N', 'E']:
                     st_sel = self.waveforms_SP.select(
-                        channel='??' + chan)
+                        channel='??' + chan).copy()
                     if len(st_sel) > 0:
                         tr = detick(st_sel[0], detick_nfsamp=detick_nfsamp)
                         tr.trim(starttime=utct(twin[0]),
                                 endtime=utct(twin[1]))
+
                         if tr.stats.npts > 0:
                             f, p = calc_PSD(tr, winlen_sec=winlen_sec)
                             spectrum_variable['p_' + chan] = p
-                        else:
-                            f = np.arange(0, 1, 0.1)
-                            p = np.zeros(10)
-                            spectrum_variable['p_' + chan] = p
-                            spectrum_variable['f_' + chan] = f
+                            spectrum_variable['f'] = f
                     else:
                         # Case that only SP1==SPZ is switched on
                         spectrum_variable['p_' + chan] = \
                             np.zeros_like(p)
-                spectrum_variable['f'] = f
 
             if len(spectrum_variable) > 0:
                 self.spectra_SP[variable] = spectrum_variable
@@ -436,6 +438,7 @@ class Event:
                            'tstar': None,
                            'A_24': None,
                            'f_24': None,
+                           'f_c': None,
                            'width_24': None}
 
         if 'noise' in self.spectra:
@@ -444,7 +447,7 @@ class Event:
             for signal in ['S', 'P', 'all']:
                 amplitudes = None
                 if signal in self.spectra:
-                    if self.mars_event_type_short == 'UF':
+                    if self.mars_event_type_short == 'SF':
                         p_sig = self.spectra[signal]['p_N']
                     else:
                         p_sig = self.spectra[signal]['p_Z']
@@ -456,23 +459,21 @@ class Event:
                     break
             if amplitudes is not None:
                 self.amplitudes = amplitudes
-            # if self.spectra['S'] is not None:
-            #     sig_spec = self.spectra['S']['p_Z']
-            # elif 'noise' in self.spectra and 'all' in self.spectra:
-            #     sig_spec = self.spectra['all']['p_Z']
-            # self.amplitudes = \
-            #     fit_spectra(self.spectra['noise']['f'],
-            #                 sig_spec,
-            #                 self.spectra['noise']['p_Z'],
-            #                 type=self.mars_event_type_short)
-        # except KeyError:
-        #     print('Some time windows missing for event %s' % self.name)
-        #     print(self.spectra)
 
-        # compute horizontal spectra
+        # compute horizontal spectra on VBB 
         for signal in self.spectra.keys():
-            self.spectra[signal]['p_H'] = \
-                self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
+            if signal in self.spectra:
+                self.spectra[signal]['p_H'] = \
+                    self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
+            if signal in self.spectra_SP:
+                self.spectra_SP[signal]['p_H'] = \
+                    self.spectra_SP[signal]['p_N'] + \
+                    self.spectra_SP[signal]['p_E']
+
+        # compute horizontal spectra on SP
+        for signal in self.spectra_SP.keys():
+            self.spectra_SP[signal]['p_H'] = \
+                self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal]['p_E']
 
         self._spectra_available = True
 
@@ -501,7 +502,10 @@ class Event:
                                'Call Event.read_waveforms() first.')
 
         if instrument == 'VBB':
-            st_work = self.waveforms_VBB.copy()
+            if self.waveforms_VBB is None:
+                return None
+            else:
+                st_work = self.waveforms_VBB.copy()
         else:
             st_work = self.waveforms_SP.copy()
 
