@@ -23,7 +23,7 @@ from scipy import stats
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
+from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
@@ -1213,7 +1213,10 @@ class Catalog:
                                          e.quality == Q)])
 
         df = pd.DataFrame(data=data, columns=['total', 'A', 'B', 'C', 'D'])
-        df.insert(loc=0, column='event type', value=EVENT_TYPES)
+        df.insert(loc=0, column='abbr.',
+                  value=[f'{EVENT_TYPES_SHORT[e]}' for e in EVENT_TYPES])
+        df.insert(loc=0, column='event type',
+                  value=[f'{EVENT_TYPES_PRINT[e]}' for e in EVENT_TYPES])
 
         if style == 'html':
             return ('<H1>MQS events until %s</H1><br>' %
