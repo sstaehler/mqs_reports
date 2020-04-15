@@ -23,8 +23,8 @@ def calc_SNR(event: Event, fmin: float, fmax: float,
         comp = 'p_H'
     else:
         comp = 'p_Z'
-
-    if comp in spectra['noise']:
+    
+    if 'noise' in spectra and  comp in spectra['noise']:
         p_noise = spectra['noise'][comp]
         df_noise = spectra['noise']['f'][1]
         f_bool = np.array((spectra['noise']['f'] > fmin,

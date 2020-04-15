@@ -46,34 +46,36 @@ def make_report(event, chan, fnam_out, annotations):
                                  "font": {"size": 30}}})
 
     pio.write_html(fig, file=fnam_out,
-                   include_plotlyjs=True)
+                   full_html=True,
+                   include_plotlyjs='directory')
     event.fnam_report[chan] = fnam_out
 
 
 def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
-    tr = detick(event.waveforms_VBB.select(channel='??' + chan)[0],
-                detick_nfsamp=10)
-    tr.trim(starttime=utct(event.picks['start']) - 180.,
-            endtime=utct(event.picks['end']) + 180.)
+    if event.waveforms_VBB is not None:
+        tr = detick(event.waveforms_VBB.select(channel='??' + chan)[0],
+                    detick_nfsamp=10)
+        tr.trim(starttime=utct(event.picks['start']) - 180.,
+                endtime=utct(event.picks['end']) + 180.)
 
-    tr.differentiate()
-    tr.differentiate()
-    z, f, t = _calc_cwf(tr,
-                        fmin=fmin, fmax=fmax)
-    z = 10 * np.log10(z)
-    z[z < -220] = -220.
-    z[z > -150] = -150.
-    df = 2
-    dt = 4
-    data_heatmap = go.Heatmap(z=z[::df, ::dt],
-                              x=t[::dt], y=f[::df],
-                              colorscale='plasma')
-    data_heatmap.colorbar.len = 0.35
-    data_heatmap.colorbar.yanchor = 'bottom'
-    data_heatmap.colorbar.y = 0.0
-    data_heatmap.colorbar.title.text = '(m/s²)²/Hz [dB]'
-    fig.add_trace(data_heatmap,
-                  row=row, col=col)
+        tr.differentiate()
+        tr.differentiate()
+        z, f, t = _calc_cwf(tr,
+                            fmin=fmin, fmax=fmax)
+        z = 10 * np.log10(z)
+        z[z < -220] = -220.
+        z[z > -150] = -150.
+        df = 2
+        dt = 4
+        data_heatmap = go.Heatmap(z=z[::df, ::dt],
+                                  x=t[::dt], y=f[::df],
+                                  colorscale='plasma')
+        data_heatmap.colorbar.len = 0.35
+        data_heatmap.colorbar.yanchor = 'bottom'
+        data_heatmap.colorbar.y = 0.0
+        data_heatmap.colorbar.title.text = '(m/s²)²/Hz [dB]'
+        fig.add_trace(data_heatmap,
+                      row=row, col=col)
 
     for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
         if event.picks[pick] is not '':
@@ -253,94 +255,104 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
              'full': (1. / 15., 3.5)
              }
 
-    if event.waveforms_VBB is None:
-        tr = event.waveforms_SP.select(channel='??' + chan)[0].copy()
+    if ((event.waveforms_SP is None or len(event.waveforms_SP) == 0) 
+       and 
+       (event.waveforms_VBB is None or len(event.waveforms_VBB) == 0)):
+        print('SP:') 
+        print(event.waveforms_SP)        
+
+        print('VBB:') 
+        print(event.waveforms_VBB)        
+        print('No data for event %s' % event.name)
     else:
-        tr = event.waveforms_VBB.select(channel='??' + chan)[0].copy()
-    tr.decimate(2)
-    fmin = freqs[types[0]][0]
-    fmax = freqs[types[0]][1]
+        if event.waveforms_VBB is None:
+            tr = event.waveforms_SP.select(channel='??' + chan)[0].copy()
+        else:
+            tr = event.waveforms_VBB.select(channel='??' + chan)[0].copy()
+        tr.decimate(2)
+        fmin = freqs[types[0]][0]
+        fmax = freqs[types[0]][1]
 
-    tr.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
-    tr.trim(starttime=utct(event.picks['start']) - 180.,
-            endtime=utct(event.picks['end']) + 180.)
-    tr_env = envelope_smooth(envelope_window=60.,
-                             tr=tr)
-    tr_env.stats.starttime += 30.
-    tr_env.data *= 2.
-    timevec = _create_timevector(tr)
-    fig.add_trace(
-        go.Scatter(x=timevec,
-                   y=tr.data,
-                   name='time series %s' % types[0],
-                   line=go.scatter.Line(color="darkgrey"),
-                   mode="lines", **kwargs),
-        row=row, col=col)
-    timevec = _create_timevector(tr_env)
-    fig.add_trace(
-        go.Scatter(x=timevec,
-                   y=tr_env.data,
-                   name='envelope %s' % types[0],
-                   showlegend=False,
-                   line=go.scatter.Line(color="darkgrey", dash='dot'),
-                   mode="lines", **kwargs),
-        row=row, col=col)
+        tr.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
+        tr.trim(starttime=utct(event.picks['start']) - 180.,
+                endtime=utct(event.picks['end']) + 180.)
+        tr_env = envelope_smooth(envelope_window=60.,
+                                 tr=tr)
+        tr_env.stats.starttime += 30.
+        tr_env.data *= 2.
+        timevec = _create_timevector(tr)
+        fig.add_trace(
+            go.Scatter(x=timevec,
+                       y=tr.data,
+                       name='time series %s' % types[0],
+                       line=go.scatter.Line(color="darkgrey"),
+                       mode="lines", **kwargs),
+            row=row, col=col)
+        timevec = _create_timevector(tr_env)
+        fig.add_trace(
+            go.Scatter(x=timevec,
+                       y=tr_env.data,
+                       name='envelope %s' % types[0],
+                       showlegend=False,
+                       line=go.scatter.Line(color="darkgrey", dash='dot'),
+                       mode="lines", **kwargs),
+            row=row, col=col)
 
-    if annotations is not None:
-        annotations_event = annotations.select(
-            starttime=utct(event.picks['start']) - 180.,
-            endtime=utct(event.picks['end']) + 180.)
-        if len(annotations_event) > 0:
-            for times in annotations_event:
-                tmin = utct(times[0])
-                tmax = utct(times[1])
+        if annotations is not None:
+            annotations_event = annotations.select(
+                starttime=utct(event.picks['start']) - 180.,
+                endtime=utct(event.picks['end']) + 180.)
+            if len(annotations_event) > 0:
+                for times in annotations_event:
+                    tmin = utct(times[0])
+                    tmax = utct(times[1])
+                    tr_pick = tr.slice(starttime=tmin, endtime=tmax)
+                    timevec = _create_timevector(tr_pick)
+                    fig.add_trace(go.Scatter(x=timevec,
+                                             y=tr_pick.data,
+                                             showlegend=False,
+                                             mode="lines",
+                                             line=go.scatter.Line(
+                                                 color="lightgrey"),
+                                             **kwargs),
+                                  row=row, col=col)
+
+        for pick_type in types:
+            pick = pick_name[pick_type]
+            if event.picks[pick] is not "":
+                tmin = utct(event.picks[pick]) - 10.
+                tmax = utct(event.picks[pick]) + 10.
                 tr_pick = tr.slice(starttime=tmin, endtime=tmax)
                 timevec = _create_timevector(tr_pick)
                 fig.add_trace(go.Scatter(x=timevec,
                                          y=tr_pick.data,
-                                         showlegend=False,
+                                         name='pick window %s' % pick_type,
                                          mode="lines",
-                                         line=go.scatter.Line(
-                                             color="lightgrey"),
+                                         line=go.scatter.Line(color="red"),
                                          **kwargs),
                               row=row, col=col)
 
-    for pick_type in types:
-        pick = pick_name[pick_type]
-        if event.picks[pick] is not "":
-            tmin = utct(event.picks[pick]) - 10.
-            tmax = utct(event.picks[pick]) + 10.
-            tr_pick = tr.slice(starttime=tmin, endtime=tmax)
-            timevec = _create_timevector(tr_pick)
-            fig.add_trace(go.Scatter(x=timevec,
-                                     y=tr_pick.data,
-                                     name='pick window %s' % pick_type,
-                                     mode="lines",
-                                     line=go.scatter.Line(color="red"),
-                                     **kwargs),
-                          row=row, col=col)
-
-    for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
-        if event.picks[pick] is not '':
-            time_pick = utct(event.picks[pick]).datetime
-            ymax = np.max(abs(tr.data))
-            if pick not in ['start', 'end']:
-                text = pick
-                color = 'black'
-            else:
-                text = ''
-                color = 'darkgreen'
-            fig.add_trace(go.Scatter(x=[time_pick, time_pick],
-                                     y=[-ymax, ymax],
-                                     text=['', text],
-                                     showlegend=False,
-                                     textfont={'size': 20},
-                                     textposition='bottom right',
-                                     name=pick,
-                                     mode="lines+text",
-                                     line=go.scatter.Line(color=color),
-                                     **kwargs),
-                          row=row, col=col)
+        for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
+            if event.picks[pick] is not '':
+                time_pick = utct(event.picks[pick]).datetime
+                ymax = np.max(abs(tr.data))
+                if pick not in ['start', 'end']:
+                    text = pick
+                    color = 'black'
+                else:
+                    text = ''
+                    color = 'darkgreen'
+                fig.add_trace(go.Scatter(x=[time_pick, time_pick],
+                                         y=[-ymax, ymax],
+                                         text=['', text],
+                                         showlegend=False,
+                                         textfont={'size': 20},
+                                         textposition='bottom right',
+                                         name=pick,
+                                         mode="lines+text",
+                                         line=go.scatter.Line(color=color),
+                                         **kwargs),
+                              row=row, col=col)
 
     fig.update_yaxes(title_text='displacement / m', row=row, col=col)
 
