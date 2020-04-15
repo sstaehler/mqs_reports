@@ -37,6 +37,14 @@ EVENT_TYPES_SHORT = {
     'HIGH_FREQUENCY': 'HF',
     '2.4_HZ': '24'}
 
+EVENT_TYPES_PRINT = {
+    'SUPER_HIGH_FREQUENCY': 'super high frequency',
+    'VERY_HIGH_FREQUENCY': 'very high frequency',
+    'BROADBAND': 'broadband',
+    'LOW_FREQUENCY': 'low frequency',
+    'HIGH_FREQUENCY': 'high frequency',
+    '2.4_HZ': '2.4 Hz'}
+
 EVENT_TYPES = EVENT_TYPES_SHORT.keys()
 
 
@@ -60,7 +68,7 @@ class Event:
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
 
-        try: 
+        try:
             self.sol = solify(utct(self.picks['start'])).julday
             self.starttime = utct(utct(self.picks['start']))
             self.endtime = utct(utct(self.picks['end']))
