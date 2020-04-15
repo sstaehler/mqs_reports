@@ -122,19 +122,19 @@ def create_ZNE_HG(st: obspy.Stream,
             azi_v = chan_v.azimuth
             azi_w = chan_w.azimuth
 
-        # st.resample(sampling_rate=100)
         for tr_1 in st:
             for tr_2 in st:
                 tr_1.trim(starttime=tr_2.stats.starttime,
-                          endtime=tr_2.stats.endtime)
-        # st.decimate(5)
-
+                          endtime=tr_2.stats.endtime,
+                          nearest_sample=True)
         st_ZNE = obspy.Stream()
         try:
             for tr_1 in st:
                 for tr_2 in st:
                     # assert tr_1.stats.starttime == tr_2.stats.starttime
-                    assert tr_1.stats.npts == tr_2.stats.npts
+                    #assert tr_1.stats.npts == tr_2.stats.npts
+                    if not tr_1.stats.npts == tr_2.stats.npts:
+                        tr_1.data = tr_1.data[0:tr_2.stats.npts]
 
         except:
             print('Problem with rotating to ZNE:')
@@ -174,21 +174,25 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
     if len(glob.glob(fnam_complete)) > 0:
         st = obspy.read(fnam_complete,
                         starttime=twin[0] - 300.,
-                        endtime=twin[1] + 300
+                        endtime=twin[1] + 300,
+                        nearest_sample=False
                         )
+        # st = obspy.read(fnam_complete)
+        # st.trim(starttime=twin[0] - 300.,
+        #         endtime=twin[1] + 300)
         st_seis = st.select(channel='?[LH]?')
         st_seis.merge(method=1, fill_value='interpolate')
         st_seis.detrend(type='demean')
         st_seis.taper(0.1)
         st_seis.filter('highpass', zerophase=True, freq=fmin / 2.)
         st_seis.detrend()
-        correct_subsample_shift(st_seis)
+        # correct_subsample_shift(st_seis)
         if len(st_seis) > 0:
             if st_seis[0].stats.starttime < utct('20190418T12:24'):
                 correct_shift(st_seis.select(channel='??U')[0], nsamples=-1)
             for tr in st_seis:
                 fmax = tr.stats.sampling_rate * 0.5
-                pre_filt = (fmin / 2., fmin, fmax, fmax * 1.2)
+                pre_filt = (fmin / 2., fmin, fmax*1.2, fmax * 1.5)
                 remove_response_stable(tr, inv, output=kind,
                                        pre_filt=pre_filt)
 
