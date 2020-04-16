@@ -37,14 +37,17 @@ class Noise():
                  fmax_LF: float = 1. / 1.5,
                  fmin_HF: float = 2.2,
                  fmax_HF: float = 2.6,
-                 fmin_press: float = 1 / 10.,
-                 fmax_press: float = 1. / 2.
+                 fmin_HF_broad: float = 1.2,
+                 fmax_HF_broad: float = 3.0,
+                 fmin_press: float = 1. / 12.,
+                 fmax_press: float = 1. / 1.5
                  ):
         self.sols_quant = None
         if data is None:
             self.sc3_dir = sc3_dir
             self.winlen_sec = winlen_sec
 
+            self.stds_HF_broad = 0.
             self.stds_HF = 0.
             self.stds_LF = 0.
             self.stds_press = 0.
@@ -55,6 +58,8 @@ class Noise():
             self.fmax_LF = fmax_LF
             self.fmin_HF = fmin_HF
             self.fmax_HF = fmax_HF
+            self.fmin_HF_broad = fmin_HF_broad
+            self.fmax_HF_broad = fmax_HF_broad
             self.fmin_press = fmin_press
             self.fmax_press = fmax_press
             self._add_data(starttime=starttime,
@@ -64,6 +69,7 @@ class Noise():
         else:
             self.stds_HF = np.asarray(data['stds_HF'])
             self.stds_LF = np.asarray(data['stds_LF'])
+            self.stds_HF_broad = np.asarray(data['stds_HF_broad'])
             self.stds_press = np.asarray(data['stds_press'])
             self.times = np.asarray(data['times'])
             self.times_LMST = np.asarray(data['times_LMST'])
@@ -74,6 +80,8 @@ class Noise():
             self.fmax_HF = data['freqs'][3]
             self.fmin_press = data['freqs'][4]
             self.fmax_press = data['freqs'][5]
+            self.fmin_HF_broad = 1.2 #data['freqs'][6]
+            self.fmax_HF_broad = 3.0 #data['freqs'][7]
 
 
     def __str__(self):
@@ -102,6 +110,7 @@ class Noise():
         stds_HF = list()
         stds_LF = list()
         stds_press = list()
+        stds_HF_broad = list()
         times = list()
         times_LMST = list()
         sol = list()
@@ -152,6 +161,10 @@ class Noise():
                 st_filt_HF.filter('highpass', freq=self.fmin_HF, corners=16)
                 st_filt_HF.filter('lowpass', freq=self.fmax_HF, corners=16)
 
+                st_filt_HF_broad = st.copy()
+                st_filt_HF_broad.filter('highpass', freq=self.fmin_HF_broad, corners=16)
+                st_filt_HF_broad.filter('lowpass', freq=self.fmax_HF_broad, corners=16)
+
                 st_filt_LF = st.copy()
                 st_filt_LF.filter('highpass', freq=self.fmin_LF, corners=16)
                 st_filt_LF.filter('lowpass', freq=self.fmax_LF, corners=16)
@@ -169,6 +182,9 @@ class Noise():
                     t0 = utct('%04d%03d' % (year, jday % 365)) + t
                     t1 = t0 + self.winlen_sec
                     st_win = st.slice(starttime=t0, endtime=t1)
+                    st_filt_HF_broad_win = st_filt_HF_broad.slice(
+                                                      starttime=t0,
+                                                      endtime=t1)
                     st_filt_HF_win = st_filt_HF.slice(starttime=t0,
                                                       endtime=t1)
                     st_filt_LF_win = st_filt_LF.slice(starttime=t0,
@@ -176,6 +192,7 @@ class Noise():
 
                     st_press_win = st_press.slice(starttime=t0, endtime=t1)
                     if len(st_win) > 0 and st_win[0].stats.npts > 10:
+                        std_HF_broad = st_filt_HF_broad_win[0].std()
                         std_HF = st_filt_HF_win[0].std()
                         std_LF = st_filt_LF_win[0].std()
 
@@ -186,6 +203,7 @@ class Noise():
                             std_press = 0.
 
                         stds_press.append(std_press)
+                        stds_HF_broad.append(std_HF_broad)
                         stds_HF.append(std_HF)
                         stds_LF.append(std_LF)
                         t0_lmst = solify(t0)
@@ -194,6 +212,7 @@ class Noise():
                         times_LMST.append(float(t0_lmst) / SECONDS_PER_DAY)
                         sol.append(int(float(t0_lmst) / SECONDS_PER_DAY))
 
+        self.stds_HF_broad = np.asarray(stds_HF_broad)
         self.stds_HF = np.asarray(stds_HF)
         self.stds_LF = np.asarray(stds_LF)
         self.stds_press = np.asarray(stds_press)
@@ -203,6 +222,7 @@ class Noise():
 
     def save(self, fnam):
         np.savez(fnam,
+                 stds_HF_broad=self.stds_HF_broad,
                  stds_HF=self.stds_HF,
                  stds_LF=self.stds_LF,
                  stds_press=self.stds_press,
@@ -211,7 +231,8 @@ class Noise():
                  sol=self.sol,
                  freqs=[self.fmin_LF, self.fmax_LF,
                         self.fmin_HF, self.fmax_HF,
-                        self.fmin_press, self.fmax_press],
+                        self.fmin_press, self.fmax_press,
+                        self.fmin_HF_broad, self.fmax_HF_broad],
                  winlen_sec=self.winlen_sec)
 
 
@@ -255,174 +276,42 @@ class Noise():
         p_HF = np.cumsum(power_HF) * binwidth
         return bins, p_LF, p_HF
 
-    # def calc_noise_quantiles(self, qs,
-    #                          sol_start=80, sol_end=None):
-    #     if sol_end is None:
-    #         # Now
-    #         sol_end = float(solify(utct())) // 86400
+    def calc_noise_quantiles(self, qs,
+                             sol_start=80, sol_end=None):
+        if sol_end is None:
+            # Now
+            sol_end = float(solify(utct())) // 86400
 
-    #     quantiles_HF = []
-    #     quantiles_LF = []
-    #     for q in qs:
-    #         bol_LF = np.array([np.isfinite(self.stds_LF),
-    #                            self.sol > sol_start,
-    #                            self.sol < sol_end]).all(axis=0)
-    #         quantiles_LF.append(
-    #             np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
-    #             )
-    #         bol_HF = np.array([np.isfinite(self.stds_HF),
-    #                            self.sol > sol_start,
-    #                            self.sol < sol_end]).all(axis=0)
-    #         quantiles_HF.append(
-    #             np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
-    #             )
+        quantiles_HF = []
+        quantiles_LF = []
+        for q in qs:
+            bol_LF = np.array([np.isfinite(self.stds_LF),
+                               self.sol > sol_start,
+                               self.sol < sol_end]).all(axis=0)
+            quantiles_LF.append(
+                np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
+                )
+            bol_HF = np.array([np.isfinite(self.stds_HF),
+                               self.sol > sol_start,
+                               self.sol < sol_end]).all(axis=0)
+            quantiles_HF.append(
+                np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
+                )
 
-    #     return quantiles_LF, quantiles_HF
+        return np.asarray(quantiles_LF), np.asarray(quantiles_HF)
 
-    # def plot_daystats_apss(self,
-    #                        cat: mqs_reports.catalog.Catalog = None,
-    #                        sol_start: int = 80,
-    #                        sol_end: int = 400):
-    #     qs = [0.1, 0.25, 0.5, 0.9]
-    #     if self.sols_quant is None:
-    #         # self.calc_quantiles(sol_end, sol_start, qs=qs)
-    #         self.calc_time_windows(sol_end, sol_start)
-    #         self.save_quantiles(fnam='noise_quantiles.npz')
-
-    #     verts_LF = []
-    #     verts_HF = []
-
-    #     for i, isol in enumerate(self.sols_quant):
-    #         if self.quantiles_LF[i, 0] > 0:
-    #             verts_LF.append([isol, 10 * np.log10(self.quantiles_LF[i, 0])])
-    #         if self.quantiles_HF[i, 0] > 0:
-    #             verts_HF.append([isol, 10 * np.log10(self.quantiles_HF[i, 0])])
-    #     verts_LF.append([verts_LF[-1][0], -300])
-    #     verts_HF.append([verts_HF[-1][0], -300])
-    #     verts_HF.append([self.sols_quant[0], -300])
-    #     verts_LF.append([self.sols_quant[0], -300])
-
-    #     fig, ax = plt.subplots(3, 1, figsize=(16, 9), sharex='all')
-    #     ax_HF = ax[2]
-    #     ax_LF = ax[1]
-
-    #     ax_methane = ax[0].twiny()
-
-    #     methane = np.loadtxt(
-    #         '/home/staehler/CloudStation/InSight/seismicity/apss'
-    #         '/methane_median.csv', delimiter=',')
-    #     sc = ax_methane.scatter(methane[:, 0], methane[:, 1],
-    #                             s=80, vmin=0, vmax=2.,
-    #                             c=np.ones(methane.shape[0]))
-    #     ax_methane.set_xlim(calc_Ls(utct(sol_start * SECONDS_PER_DAY)) - 360,
-    #                         calc_Ls(utct(sol_end * SECONDS_PER_DAY)))
-    #     cax = plt.colorbar(sc, ax=ax_methane, use_gridspec=True)
-
-    #     poly = Polygon(verts_LF, facecolor='0.9', edgecolor='0.5')
-    #     ax_LF.add_patch(poly)
-    #     poly = Polygon(verts_HF, facecolor='0.9', edgecolor='0.5')
-    #     ax_HF.add_patch(poly)
-
-    #     rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
-    #                      facecolor='darkgrey', edgecolor='black')
-    #     ax_LF.add_patch(rect)
-    #     rect = Rectangle(xy=(267, -300), width=21.5, height=200, zorder=10,
-    #                      facecolor='darkgrey', edgecolor='black')
-    #     ax_HF.add_patch(rect)
-    #     cols = ['black', 'darkgrey', 'grey', 'darkgrey']
-    #     ls = ['dashed', 'dashed', 'dashed', 'dashed']
-    #     for i, q in enumerate(qs):
-    #         ax_LF.plot(self.sols_quant, 10 * np.log10(self.quantiles_LF[:, i]),
-    #                    label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
-
-    #     for i, q in enumerate(qs):
-    #         ax_HF.plot(self.sols_quant, 10 * np.log10(self.quantiles_HF[:, i]),
-    #                    label='%d%% of Sol' % (q * 100), c=cols[i], ls=ls[i])
-    #     ax_HF.set_xlabel('Sol number')
-    #     ax_LF.set_ylabel('PSD, displ. 2-6 sec. [dB]')
-    #     ax_HF.set_ylabel('PSD, displ. 2-3 Hz [dB]')
-    #     HF_times = []
-    #     HF_amps = []
-    #     HF_dists = []
-    #     LF_times = []
-    #     LF_amps = []
-    #     LF_dists = []
-    #     if cat is not None:
-    #         cmap = plt.cm.get_cmap('plasma_r')
-    #         cmap.set_over('royalblue')
-    #         for event in cat.select(event_type=['HF', 'VF', '24']):
-    #             if event.distance is None:
-    #                 HF_dists.append(50.)
-    #             else:
-    #                 HF_dists.append(event.distance)
-    #             HF_times.append(solify(event.starttime).julday +
-    #                             solify(event.starttime).hour / 60.)
-    #             HF_amps.append(event.amplitudes['A_24'])
-
-    #         for event in cat.select(event_type=['LF', 'BB']):
-    #             if event.distance is None:
-    #                 LF_dists.append(120.)
-    #             else:
-    #                 LF_dists.append(event.distance)
-    #             amp_P = event.pick_amplitude(
-    #                 pick='Peak_MbP',
-    #                 comp='vertical',
-    #                 fmin=1. / 6.,
-    #                 fmax=1. / 1.5,
-    #                 instrument='VBB'
-    #                 )
-    #             amp_S = event.pick_amplitude(
-    #                 pick='Peak_MbS',
-    #                 comp='vertical',
-    #                 fmin=1. / 6.,
-    #                 fmax=1. / 1.5,
-    #                 instrument='VBB'
-    #                 )
-    #             amp = max(i for i in (amp_P, amp_S, 0.0) if i is not None)
-    #             LF_times.append(solify(event.starttime).julday +
-    #                             solify(event.starttime).hour / 60.)
-    #             LF_amps.append(20 * np.log10(amp))
-
-    #         sc = ax_LF.scatter(LF_times, LF_amps,
-    #                            c=LF_dists, vmin=25., vmax=100., cmap=cmap,
-    #                            edgecolors='k', linewidths=0.5,
-    #                            s=80., marker='.', zorder=100)
-    #         cax = plt.colorbar(sc, ax=ax_LF, use_gridspec=True)
-    #         cax.ax.set_ylabel('distance / degree', rotation=270.,
-    #                           labelpad=4.45)
-    #         sc = ax_HF.scatter(HF_times, HF_amps,
-    #                            c=HF_dists, vmin=5., vmax=30., cmap=cmap,
-    #                            edgecolors='k', linewidths=0.5,
-    #                            s=80., marker='.', zorder=100)
-    #         cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True)
-    #         cax.ax.set_ylabel('distance / degree', rotation=270.,
-    #                           labelpad=12.45)
-
-    #     sc = ax_HF.scatter(0, -300, label='Marsquake',
-    #                        edgecolors='k', linewidths=0.5,
-    #                        c='royalblue', s=80., marker='.')
-    #     ax_LF.set_ylim(-210., -170.)
-    #     ax_LF.set_title('Noise 2-8 seconds and LF/BB events')
-    #     ax_HF.set_title('Noise 2-3 Hz and HF/2.4 Hz events')
-    #     ax_HF.set_ylim(-225., -185.)
-    #     ax_LF.set_xlim(sol_start, sol_end)
-    #     ax_LF.text(1.05, -0.5, s='Data from Sol %d to %d' % (sol_start,
-    #                                                          sol_end),
-    #                rotation=90.,
-    #                horizontalalignment='center',
-    #                verticalalignment='center', transform=ax_LF.transAxes)
-    #     for a in [ax_HF, ax_LF]:
-    #         a.grid('on')
-    #     plt.legend(loc='lower left')
-    #     # plt.tight_layout()
-    #     # plt.savefig('noise_vs_eventamplitudes.pdf')
-    #     plt.savefig('noise_vs_eventamplitudes.png', dpi=200)
-    #     plt.show()
 
     def plot_daystats(self, cat: mqs_reports.catalog.Catalog = None,
                       sol_start: int = 80, sol_end: int = 500, data_apss=False,
-                      fnam_out='noise_vs_eventamplitudes.png',
-                      metal=False):
+                      fnam_out='noise_vs_eventamplitudes.png', extra_data=None,
+                      cmap_dist='plasma_r', tau_data=None, metal=False):
+
+        def make_patch_spines_invisible(ax):
+            ax.set_frame_on(True)
+            ax.patch.set_visible(False)
+            for sp in ax.spines.values():
+                sp.set_visible(False)
+
         if self.sols_quant is None:
             self.calc_time_windows(sol_end, sol_start)
             self.save_quantiles(fnam='noise_quantiles.npz')
@@ -460,6 +349,42 @@ class Noise():
             ax_apss = fig.add_axes([w_base, h_base + h_LF * 2 + h_pad * 2,
                                     w_LF, h_apss],
                                    sharex=ax_HF)
+            if extra_data is not None:
+                ax_extra = ax_apss.twinx()
+                m = 's'
+                ax_extra.plot(extra_data[0], extra_data[1],
+                              markeredgecolor='k', markerfacecolor='C0',
+                              marker=m, ls=None, lw=0., ms=4.,
+                              label='DuDes per Sol\n(A. Spiga)')
+                ax_extra.set_ylim(0, 60)
+                ax_extra.set_ylabel('number of DuDes')
+                ax_extra.yaxis.label.set_color('C0')
+                ax_extra.tick_params(axis='y', colors='C0')
+                ax_extra.legend(loc='upper left')
+                if tau_data is not None:
+                    ax_tau = ax_apss.twinx()
+                    # Offset the right spine of par2.  The ticks and label have
+                    # already been
+                    # placed on the right by twinx above.
+                    ax_tau.spines["right"].set_position(("axes", 1.05))
+                    # Having been created by twinx, par2 has its frame off, so
+                    # the line of its
+                    # detached spine is invisible.  First, activate the frame
+                    # but make the patch
+                    # and spines invisible.
+                    make_patch_spines_invisible(ax_tau)
+                    # Second, show the right spine.
+                    ax_tau.spines["right"].set_visible(True)
+                    m = 'o'
+                    ax_tau.plot(tau_data[0], tau_data[1],
+                                  markeredgecolor='k', markerfacecolor='orange',
+                                  marker=m, ls=None, lw=0., ms=6.,
+                                  label='tau\n(M. Lemmon)')
+                    ax_tau.set_ylim(0, 1.2)
+                    ax_tau.set_ylabel('tau')
+                    ax_tau.yaxis.label.set_color('orange')
+                    ax_tau.tick_params(axis='y', colors='orange')
+                    ax_tau.legend()
         else:
             ax_apss = fig.add_axes([1.2, 1.2, 0.1, 0.1])
 
@@ -470,10 +395,10 @@ class Noise():
         cols = ['black', 'darkgrey', 'grey', 'black']
         ls = ['dotted', 'dashed', 'dotted', 'dashed']
         if metal: 
-            labels = ['quiet\n(17-23 LMST)', 'NÖCTURNAL WAVEGÜIDE\n(23-5 LMST)',
+            labels = ['quiet\n(17-22 LMST)', 'NÖCTURNAL WAVEGÜIDE\n(22-5 LMST)',
                       'SÜNRÏSE\n(5-9 LMST)', 'SËISMIC NÖISË\n(9-17 LMST)']
         else:
-            labels = ['quiet\n(17-23 LMST)', 'noisy night\n(23-5 LMST)',
+            labels = ['quiet\n(17-22 LMST)', 'noisy night\n(22-5 LMST)',
                       'morning\n(5-9 LMST)', 'day\n(9-17 LMST)']
         for i in range(self.quantiles_LF.shape[1] - 1, -1, -1):
             ax_LF.plot(self.sols_quant - 1.,
@@ -507,19 +432,19 @@ class Noise():
         LF_times = []
         LF_amps = []
         LF_dists = []
-        symbols = {'24': 'O',
-                   'HF': '^',
-                   'VF': 's',
-                   'LF': 'v',
-                   'BB': 's'}
+        symbols = {'2.4_HZ': '>',
+                   'HIGH_FREQUENCY': 'v',
+                   'VERY_HIGH_FREQUENCY': '^',
+                   'LOW_FREQUENCY': 's',
+                   'BROADBAND': 'D'}
         markers_HF = []
         markers_LF = []
 
         if cat is not None:
-            cmap = plt.cm.get_cmap('plasma_r')
+            cmap = plt.cm.get_cmap(cmap_dist)
             cmap.set_over('royalblue')
             for event in cat.select(event_type=['HF', 'VF', '24']):
-                markers_HF.append(symbols[event.mars_event_type_short])
+                markers_HF.append(symbols[event.mars_event_type])
                 if event.distance is None:
                     HF_dists.append(50.)
                 else:
@@ -529,7 +454,7 @@ class Noise():
                 HF_amps.append(event.amplitudes['A_24'])
 
             for event in cat.select(event_type=['LF', 'BB']):
-                markers_LF.append(symbols[event.mars_event_type_short])
+                markers_LF.append(symbols[event.mars_event_type])
                 if event.distance is None:
                     LF_dists.append(120.)
                 else:
@@ -552,27 +477,33 @@ class Noise():
                 LF_times.append(float(solify(event.starttime)) /
                                 SECONDS_PER_DAY)
                 LF_amps.append(20 * np.log10(amp))
-            markers_LF = np.asarray(markers_LF) 
-            markers_HF = np.asarray(markers_HF) 
-            for i, m in enumerate(np.unique(markers_LF)): 
-                print(i, m)
-                print(np.asarray(markers_LF)==m)
-                print(np.asarray(markers_LF)==m)
-                if (np.asarray(markers_LF)==m).any():
-                    sc = ax_LF.scatter(LF_times[markers_LF==m], 
-                                       LF_amps[markers_LF==m],
-                                       c=LF_dists[markers_LF==m],  
-                                       vmin=25., vmax=100., cmap=cmap,
+
+
+            # for i, m in enumerate(np.unique(markers_LF)): 
+            for event_type, m in symbols.items():
+                bol = np.array(markers_LF) == m
+                if len(bol) > 0:
+                    sc = ax_LF.scatter(x=np.array(LF_times)[bol], 
+                                       y=np.array(LF_amps)[bol],
+                                       c=np.array(LF_dists)[bol],  
+                                       vmin=15., vmax=100., cmap=cmap,
                                        edgecolors='k', linewidths=0.5,
                                        s=80., marker=m, zorder=100)
-            cax = fig.add_axes([w_LF + w_base + 0.02, h_base, 0.018, 0.72])
+            cax = fig.add_axes([w_LF + w_base + 0.02, h_base + 0.1, 
+                                0.018, 1 - h_base - 0.5])
             cb = plt.colorbar(sc, ax=ax_LF, cax=cax) # use_gridspec=True)
             cb.ax.set_ylabel('distance / degree', rotation=270.,
                               labelpad=4.45)
-            # sc = ax_HF.scatter(HF_times, HF_amps,
-            #                    c=HF_dists, vmin=15., vmax=100., cmap=cmap,
-            #                    edgecolors='k', linewidths=0.5,
-            #                    s=80., marker=markers_HF, zorder=100)
+            # for i, m in enumerate(np.unique(markers_HF)): 
+            for event_type, m in symbols.items():
+                bol = np.array(markers_HF) == m
+                if len(bol) > 0:
+                    sc = ax_HF.scatter(x=np.array(HF_times)[bol], 
+                                       y=np.array(HF_amps)[bol],
+                                       c=np.array(HF_dists)[bol],  
+                                       vmin=15., vmax=100., cmap=cmap,
+                                       edgecolors='k', linewidths=0.5,
+                                       s=40., marker=m, zorder=100)
             # cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True, 
             #                    fraction=0.08)
             # cax.ax.set_ylabel('distance / degree', rotation=270.,
@@ -605,8 +536,24 @@ class Noise():
         ax_HF.set_ylim(-225., -185.)
         ax_LF.set_xlim(sol_start, sol_end)
 
-        # ax_HF.legend(loc='upper left')
-        l = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.8, 0.1, 0.2), 
+
+        ax_HF.text(0.7, -0.12, s=str(self),
+                   transform=ax_HF.transAxes)
+
+        # Daytimes legend
+        l = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.6, 0.1, 0.2),
+                         bbox_transform=fig.transFigure, framealpha=1.0)
+        l.set_zorder(50)
+
+        handles = []
+        labels = []
+        for event_type, m in symbols.items():
+            h, = ax_HF.plot(-100, -100, markeredgecolor='k', markerfacecolor='white', 
+                            marker=m, ls=None, lw=0., ms=8.)
+            handles.append(h)
+            labels.append(event_type)
+        l = ax_HF.legend(handles=handles, labels=labels,
+                         bbox_to_anchor=(w_LF + w_base, h_base, 0.1, 0.1), 
                          bbox_transform=fig.transFigure, framealpha=1.0)
         l.set_zorder(50)
 
@@ -634,8 +581,8 @@ class Noise():
                  sols=self.sols_quant)
 
     def calc_time_windows(self, sol_end, sol_start,
-                          time_windows_hour=[[17, 22.5],
-                                             [22.5, 5.0],
+                          time_windows_hour=[[17, 22.0],
+                                             [22.0, 5.0],
                                              [5.0, 9.0],
                                              [9.0, 17.]]):
 
@@ -668,10 +615,6 @@ class Noise():
                             (time_window[0] < times_this_sol),
                             (times_this_sol < time_window[1]))).any(axis=0)
 
-                    # disp_LF = np.ma.masked_less_equal(
-                    #     x=self.stds_LF[bol_sol], value=0.0) ** 2. / df_LF
-                    # disp_HF = np.ma.masked_less_equal(
-                    #     x=self.stds_HF[bol_sol], value=0.0) ** 2. / df_HF
                     disp_LF = self.stds_LF[bol_sol] ** 2. / df_LF
                     disp_HF = self.stds_HF[bol_sol] ** 2. / df_HF
                     disp_press = self.stds_press[bol_sol] ** 2. / df_press
@@ -679,13 +622,14 @@ class Noise():
                     values_HF[iwindow] = np.nanmedian(disp_HF[bol_hours])
                     values_press[iwindow] = np.nanmedian(disp_press[bol_hours])
 
-                # if np.isfinite(values_HF).all():
                 self.quantiles_HF[i, :] = np.nan_to_num(values_HF)
-                # if np.isfinite(values_LF).all():
                 self.quantiles_LF[i, :] = np.nan_to_num(values_LF)
-                # if np.isfinite(values_press).all():
                 self.quantiles_press[i, :] = np.nan_to_num(values_press)
             i += 1
+
+        # self.quantiles_LF, self.quantiles_HF = self.calc_noise_quantiles(
+        #         qs=[0.05, 0.25, 0.5, 0.9], sol_start=sol_start, sol_end=sol_end)
+
         # Mask outliers
         self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-23)
         self.quantiles_HF = np.ma.masked_less(self.quantiles_HF, value=1e-23)
