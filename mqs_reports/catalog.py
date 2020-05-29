@@ -389,7 +389,7 @@ class Catalog:
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C3'},
          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
-         llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
+         #llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
          linewidth=None,
          show=True):
 
@@ -408,6 +408,11 @@ class Catalog:
                 print('One or more picks missing for event %s' % (event.name))
             else:
                 events.append(event)
+
+        llabels = []
+        for et in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+            if et in [e.mars_event_type for e in events]:
+                llabels.append(et)
 
         # compute TP - TS to sort by distance
         tt_PgSg = np.array([(utct(event.picks['Sg']) -
@@ -529,13 +534,12 @@ class Catalog:
             #bla = 0.5
             #plt.plot([200 * bla, 400 * bla], [200, 400], color='C6')
             #plt.plot([150, 150], [50, 400], color='C7')
-            pass
 
         if legend:
             # legend
             lcolors = [colors[l] for l in llabels]
             llines = [Line2D([0], [0], color=c) for c in lcolors]
-            plt.legend(llines, llabels)
+            plt.legend(llines, [EVENT_TYPES_PRINT[l] for l in llabels])
 
         # lable, limit, ticks
         plt.xlabel(f'time after {"S" if shift_to_S else "P"}g / s')
@@ -648,12 +652,12 @@ class Catalog:
                            ampfac=ampfac, f_c=f_c)
         spec4 = lorenz_att(f, A0=-2 + delta_A0, f0=2.4, tstar=0.4, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
-        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
-        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
-        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4')
+        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1 s')
+        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2 s')
+        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05 s')
+        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4 s')
 
-        llabels = ['P', 'S'] + [l.get_label() for l in [l5, l3, l4, l6]]
+        llabels = ['Pg', 'Sg'] + [l.get_label() for l in [l5, l3, l4, l6]]
         plt.legend([l1, l2, l5, l3, l4, l6], llabels)
         plt.xlabel('frequency / Hz')
         plt.ylabel('Amplitude relative to 2.4 peak / dB')
@@ -726,7 +730,7 @@ class Catalog:
 
                 scatter_annot(tt, A, s=S, fig=fig, names=names,
                               marker=markers[event_type],
-                              label=f'{event_type}, {quality}',
+                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
                               **colorargs)
 
 
@@ -794,7 +798,7 @@ class Catalog:
 
                 scatter_annot(dist, M, s=S, fig=fig, names=names,
                               marker=markers[event_type],
-                              label=f'{event_type}, {quality}',
+                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
                               **colorargs)
 
         dist = np.linspace(3, 50)
@@ -891,7 +895,7 @@ class Catalog:
         kde = stats.gaussian_kde(d, weights=1./d**2)
         x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
-        plt.plot(x, pdf1, color=color, label=label + ' area weighted', ls='--')
+        plt.plot(x, pdf1, color=color, label=label + ' (area weighted)', ls='--')
 
         # kde = stats.gaussian_kde(np.log10(d), weights=1./d**2)
         # x = np.linspace(1., 50, 1000.)
