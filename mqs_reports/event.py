@@ -389,8 +389,6 @@ class Event:
                     available[chan] = None
         return available
 
-
-
     def calc_spectra(self, winlen_sec, detick_nfsamp=0):
         """
         Add spectra to event object.
@@ -471,7 +469,7 @@ class Event:
                            'width_24': None}
 
         if 'noise' in self.spectra:
-            f = self.spectra['noise']['f']
+            f_noise = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
             for signal in ['S', 'P', 'all']:
                 amplitudes = None
@@ -480,7 +478,9 @@ class Event:
                         p_sig = self.spectra[signal]['p_N']
                     else:
                         p_sig = self.spectra[signal]['p_Z']
-                    amplitudes = fit_spectra(f=f,
+                    f_sig = self.spectra[signal]['f']
+                    amplitudes = fit_spectra(f_sig=f_sig,
+                                             f_noise=f_noise,
                                              p_sig=p_sig,
                                              p_noise=p_noise,
                                              event_type=self.mars_event_type_short)
@@ -512,6 +512,7 @@ class Event:
                        fmin: float,
                        fmax: float,
                        instrument: str = 'VBB',
+                       twin_sec: float = 10.,
                        unit: str = 'm') -> Union[float, None]:
         """
         Pick amplitude from waveform
@@ -523,8 +524,10 @@ class Event:
         :param fmin: minimum frequency for pre-picking bandpass
         :param fmax: maximum frequency for pre-picking bandpass
         :param instrument: 'VBB' (default) or 'SP'
+        :param twin_sec: time window around amplitude pick in which to look
+                         for maximum amplitude.
         :param unit: 'm', 'nm', 'pm', 'fm'
-        :return: amplitude in 5 sec time window around pick time
+        :return: amplitude in time window around pick time
         """
         if not self._waveforms_read:
             raise RuntimeError('waveforms not read in Event object\n' +
@@ -557,8 +560,8 @@ class Event:
         if self.picks[pick] == '':
             return None
         else:
-            tmin = utct(self.picks[pick]) - 10.
-            tmax = utct(self.picks[pick]) + 10.
+            tmin = utct(self.picks[pick]) - twin_sec
+            tmax = utct(self.picks[pick]) + twin_sec
             st_work.trim(starttime=tmin, endtime=tmax)
             if comp in ['Z', 'N', 'E']:
                 return abs(st_work.select(channel='??' + comp)[0].data).max() \
