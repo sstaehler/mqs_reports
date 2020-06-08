@@ -680,3 +680,63 @@ class Event:
                     f.write(f'    uncertainty_upper: {dt}\n')
                     f.write(f'    uncertainty_model: uniform\n')
                     f.write('\n')
+
+    def rotation_plot(self, angles, fmin, fmax):
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+        fig, ax = plt.subplots(nrows=1, ncols=2, sharex='all', sharey='all',
+                               figsize=(10, 6))
+
+        nangles = len(angles)
+        st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        st_work.decimate(5)
+        st_work.filter('highpass', freq=fmin, corners=6)
+        st_work.filter('lowpass', freq=fmax, corners=6)
+        st_work.trim(starttime=utct(self.origin_time) - 50.,
+                     endtime=utct(self.origin_time) + 850.)
+
+        for iangle, angle in enumerate(angles):
+
+            st_rot: obspy.Stream = st_work.copy()
+            st_rot.rotate('NE->RT', back_azimuth=angle)
+
+            tr_R_env = envelope_smooth(tr=st_rot.select(channel='BHR')[0],
+                                       envelope_window_in_sec=10.)
+            tr_T_env = envelope_smooth(tr=st_rot.select(channel='BHT')[0],
+                                       envelope_window_in_sec=10.)
+            tr_Z_env = envelope_smooth(tr=st_rot.select(channel='BHZ')[0],
+                                       envelope_window_in_sec=10.)
+            maxfac = np.quantile(tr_Z_env.data, q=0.98)
+            for itr, tr in enumerate((tr_R_env, tr_T_env)):
+                xvec = tr_Z_env.times() + float(tr_Z_env.stats.starttime - \
+                                                utct(self.picks['P']))
+                ax[itr].plot(xvec,
+                             iangle + tr_Z_env.data / maxfac, c='grey',
+                             lw=1)
+                ax[itr].fill_between(x=xvec,
+                                     y1=iangle + tr_Z_env.data / maxfac,
+                                     y2=iangle, color='darkgrey')
+                ax[itr].plot(xvec,
+                             iangle + tr.data / maxfac, c='k', lw=1.5,
+                             zorder=50)
+
+        for a in ax:
+            for pick in ['P', 'S']:
+                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
+                          c='darkred', ls='dashed')
+            for pick in ['start', 'end']:
+                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
+                          c='darkgreen', ls='dashed')
+        ax[0].set_yticks(range(0, nangles))
+        ax[0].set_yticklabels(angles)
+        ax[0].set_xlim(-50, 550)
+        ax[0].set_ylim(-1, nangles * 1.15)
+        ax[0].set_xlabel('time after P-wave')
+        ax[0].set_ylabel('Rotation angle')
+        ax[0].set_title('Radial component')
+        ax[1].set_title('Transversal component')
+        fig.suptitle('Event %s (%5.3f-%5.3f Hz)' %
+                     (self.name, fmin, fmax))
+        fig.savefig('rotations_%s_%3.1f_%3.1f_sec.pdf' %
+                    (self.name, 1. / fmax, 1. / fmin))
+        # plt.show()
