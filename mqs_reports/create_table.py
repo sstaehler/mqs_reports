@@ -260,7 +260,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
             extras=sortkey,
             fmts=formats)
 
-    except (KeyError, AttributeError):
+    except ValueError: # KeyError: #, AttributeError) as e:
         link_lmst = '<a href="%s" target="_blank">%s</a>' % (
             path_dailyspec, lmst_time)
         sortkey = (ievent,

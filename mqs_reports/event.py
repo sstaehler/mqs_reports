@@ -37,6 +37,14 @@ EVENT_TYPES_SHORT = {
     'HIGH_FREQUENCY': 'HF',
     '2.4_HZ': '24'}
 
+EVENT_TYPES_PRINT = {
+    'SUPER_HIGH_FREQUENCY': 'super high frequency',
+    'VERY_HIGH_FREQUENCY': 'very high frequency',
+    'BROADBAND': 'broadband',
+    'LOW_FREQUENCY': 'low frequency',
+    'HIGH_FREQUENCY': 'high frequency',
+    '2.4_HZ': '2.4 Hz'}
+
 EVENT_TYPES = EVENT_TYPES_SHORT.keys()
 
 
@@ -60,7 +68,7 @@ class Event:
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
 
-        try: 
+        try:
             self.sol = solify(utct(self.picks['start'])).julday
             self.starttime = utct(utct(self.picks['start']))
             self.endtime = utct(utct(self.picks['end']))
@@ -461,6 +469,19 @@ class Event:
             if self.waveforms_VBB is None and self.waveforms_SP is not None:
                 self.spectra[variable] = spectrum_variable
 
+        # compute horizontal spectra on VBB
+        for signal in self.spectra.keys():
+            if signal in self.spectra:
+                self.spectra[signal]['p_H'] = \
+                    self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
+
+        # compute horizontal spectra on SP
+        for signal in self.spectra_SP.keys():
+            if signal in self.spectra:
+                self.spectra_SP[signal]['p_H'] = \
+                    self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal]['p_E']
+
+
         self.amplitudes = {'A0': None,
                            'tstar': None,
                            'A_24': None,
@@ -475,34 +496,26 @@ class Event:
                 amplitudes = None
                 if signal in self.spectra:
                     if self.mars_event_type_short == 'SF':
-                        p_sig = self.spectra[signal]['p_N']
+                        comp = 'p_H'
                     else:
-                        p_sig = self.spectra[signal]['p_Z']
-                    f_sig = self.spectra[signal]['f']
+                        comp = 'p_Z'
+
+                    p_sig = None
+                    if comp in self.spectra[signal]:
+                        p_sig = self.spectra[signal][comp]
+                    elif comp in self.spectra_SP[signal]:
+                        p_sig = self.spectra_SP[signal][comp]
+                    if p_sig is not None:
+                        f_sig = self.spectra[signal]['f']
                     amplitudes = fit_spectra(f_sig=f_sig,
                                              f_noise=f_noise,
-                                             p_sig=p_sig,
-                                             p_noise=p_noise,
-                                             event_type=self.mars_event_type_short)
+                                                 p_sig=p_sig,
+                                                 p_noise=p_noise,
+                                                 event_type=self.mars_event_type_short)
                 if amplitudes is not None:
                     break
             if amplitudes is not None:
                 self.amplitudes = amplitudes
-
-        # compute horizontal spectra on VBB 
-        for signal in self.spectra.keys():
-            if signal in self.spectra:
-                self.spectra[signal]['p_H'] = \
-                    self.spectra[signal]['p_N'] + self.spectra[signal]['p_E']
-            if signal in self.spectra_SP:
-                self.spectra_SP[signal]['p_H'] = \
-                    self.spectra_SP[signal]['p_N'] + \
-                    self.spectra_SP[signal]['p_E']
-
-        # compute horizontal spectra on SP
-        for signal in self.spectra_SP.keys():
-            self.spectra_SP[signal]['p_H'] = \
-                self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal]['p_E']
 
         self._spectra_available = True
 

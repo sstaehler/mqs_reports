@@ -12,6 +12,7 @@ from os.path import join as pjoin
 from typing import Union
 
 import matplotlib.ticker
+import matplotlib.pylab as pl
 import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
@@ -22,8 +23,7 @@ from scipy import stats
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES, RADIUS_MARS, CRUST_VS, \
-    CRUST_VP
+from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.snr import calc_stalta
@@ -391,7 +391,7 @@ class Catalog:
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C3'},
          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
-         llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
+         #llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
          linewidth=None,
          show=True):
 
@@ -410,6 +410,11 @@ class Catalog:
                 print('One or more picks missing for event %s' % (event.name))
             else:
                 events.append(event)
+
+        llabels = []
+        for et in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+            if et in [e.mars_event_type for e in events]:
+                llabels.append(et)
 
         # compute TP - TS to sort by distance
         tt_PgSg = np.array([(utct(event.picks['Sg']) -
@@ -531,28 +536,27 @@ class Catalog:
             #bla = 0.5
             #plt.plot([200 * bla, 400 * bla], [200, 400], color='C6')
             #plt.plot([150, 150], [50, 400], color='C7')
-            pass
 
         if legend:
             # legend
             lcolors = [colors[l] for l in llabels]
             llines = [Line2D([0], [0], color=c) for c in lcolors]
-            plt.legend(llines, llabels)
+            plt.legend(llines, [EVENT_TYPES_PRINT[l] for l in llabels])
 
         # lable, limit, ticks
         plt.xlabel(f'time after {"S" if shift_to_S else "P"}g / s')
         plt.xlim(-pre_time - 300, None)
-        # plt.yticks([], [])
+        #plt.yticks([], [])
 
         if show:
             plt.show()
         else:
             return fig
 
-    def plot_HF_spectra(self, SNR=2., tooltip=False, component='Z',
+    def plot_HF_spectra(self, SNR=2., tooltip=False, component='Z', fmin=0.7,
                         quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY',
                                                  'VERY_HIGH_FREQUENCY'],
-                        fmin=0.7, fmax=10., use_SP=False, fig=None, show=True):
+                        fmax=10., use_SP=False, fig=None, show=True):
         from mpldatacursor import datacursor
         if fig is None:
             fig = plt.figure()
@@ -651,12 +655,12 @@ class Catalog:
                            ampfac=ampfac, f_c=f_c)
         spec4 = lorenz_att(f, A0=-2 + delta_A0, f0=2.4, tstar=0.4, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
-        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
-        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
-        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4')
+        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1 s')
+        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2 s')
+        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05 s')
+        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4 s')
 
-        llabels = ['P', 'S'] + [l.get_label() for l in [l5, l3, l4, l6]]
+        llabels = ['Pg', 'Sg'] + [l.get_label() for l in [l5, l3, l4, l6]]
         plt.legend([l1, l2, l5, l3, l4, l6], llabels)
         plt.xlabel('frequency / Hz')
         plt.ylabel('Amplitude relative to 2.4 peak / dB')
@@ -729,7 +733,7 @@ class Catalog:
 
                 scatter_annot(tt, A, s=S, fig=fig, names=names,
                               marker=markers[event_type],
-                              label=f'{event_type}, {quality}',
+                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
                               **colorargs)
 
 
@@ -811,14 +815,15 @@ class Catalog:
         else:
             return fig
 
+
     def plot_magnitude_distance(
-            self, mag_type='m2.4',
-            colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
-                    'VERY_HIGH_FREQUENCY': 'C0'},
-            markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
-                     'VERY_HIGH_FREQUENCY': '^'},
-            xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP / CRUST_VS:3.1f}]',
-            markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+         self, mag_type='m2.4',
+         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+                 'VERY_HIGH_FREQUENCY': 'C0'},
+         markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
+                  'VERY_HIGH_FREQUENCY': '^'},
+         xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP/CRUST_VS:3.1f}]',
+         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
          markerfill={'A': True, 'B': True, 'C': False, 'D': False},
          fig=None, show=True):
 
@@ -856,7 +861,7 @@ class Catalog:
 
                 scatter_annot(dist, M, s=S, fig=fig, names=names,
                               marker=markers[event_type],
-                              label=f'{event_type}, {quality}',
+                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
                               **colorargs)
 
         dist = np.linspace(3, 50)
@@ -953,7 +958,7 @@ class Catalog:
         kde = stats.gaussian_kde(d, weights=1./d**2)
         x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
-        plt.plot(x, pdf1, color=color, label=label + ' area weighted', ls='--')
+        plt.plot(x, pdf1, color=color, label=label + ' (area weighted)', ls='--')
 
         # kde = stats.gaussian_kde(np.log10(d), weights=1./d**2)
         # x = np.linspace(1., 50, 1000.)
@@ -1275,7 +1280,10 @@ class Catalog:
                                          e.quality == Q)])
 
         df = pd.DataFrame(data=data, columns=['total', 'A', 'B', 'C', 'D'])
-        df.insert(loc=0, column='event type', value=EVENT_TYPES)
+        df.insert(loc=0, column='abbr.',
+                  value=[f'{EVENT_TYPES_SHORT[e]}' for e in EVENT_TYPES])
+        df.insert(loc=0, column='event type',
+                  value=[f'{EVENT_TYPES_PRINT[e]}' for e in EVENT_TYPES])
 
         if style == 'html':
             return ('<H1>MQS events until %s</H1><br>' %

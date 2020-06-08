@@ -97,22 +97,52 @@ def _remove_singles(array):
 
 def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
     from scipy.optimize import curve_fit
+    tstar_max = 10.0
+
+    # Central frequency of the 2.4 Hz mode (in Hz)
+    f0_min = 2.25
+    f0_max = 2.5
+
+    # Amplification factor of the 2.4 Hz mode (not in dB!)
+    ampfac_min = 10.
+    ampfac_max = 400.
+
+    # Width of the 2.4 Hz mode
+    fw_min = 0.05
+    fw_max = 0.4
     # noinspection PyTypeChecker
     popt, pcov = curve_fit(lorenz_att, f, 10. * np.log10(p),
-                           bounds=((-240, 2.25, 0.8, tstar_min, 0.05, 10.),
-                                   (A0_max, 2.5, 10.0, 10.0, 0.4, 30.)),
+                           bounds=(
+                               (-240, 
+                                f0_min,
+                                0.8, 
+                                tstar_min,
+                                fw_min,
+                                ampfac_min),
+                               (A0_max, 
+                                f0_max,
+                                10.0, 
+                                tstar_max,
+                                fw_max,
+                                ampfac_max)),
                            sigma=f * 10.,
-                           p0=(A0_max - 5, 2.4, 3., 2., 0.25, 10.))
+                           p0=(A0_max - 5, 2.4, 3., 2., 0.25, ampfac_min))
     return popt
 
 
 def fit_peak(f, p):
     from scipy.optimize import curve_fit
+    # Central frequency of the 2.4 Hz mode (in Hz)
+    f0_min = 2.25
+    f0_max = 2.5
+    # Width of the 2.4 Hz mode
+    fw_min = 0.05
+    fw_max = 0.4
     try:
         # noinspection PyTypeChecker
         popt, pcov = curve_fit(lorenz, f, 10 * np.log10(p),
-                               bounds=((-240, 2.3, 0.2),
-                                       (-180, 2.5, 0.4)),
+                               bounds=((-240, f0_min, fw_min),
+                                       (-180, f0_max, fw_max)),
                                p0=(-210, 2.4, 0.25))
     except ValueError:
         popt = [-250, 2.4, 1.0]
