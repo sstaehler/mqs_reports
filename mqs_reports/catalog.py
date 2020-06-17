@@ -385,13 +385,12 @@ class Catalog:
     def plot_24_alignment(
          self, pre_time=120., post_time=120., fmax_filt=2.7, fmin_filt=2.1,
          envelope_window=100., amp_fac=2., show_picks=True, shift_to_S=False,
-         regular_spacing=True, label=True, fill=True,
+         regular_spacing=True, spacing=1., label=True, fill=True,
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C3'},
          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
          #llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
-         linewidth=None,
-         show=True):
+         linewidth=None, fig=None, cax=None, show=True):
 
         events = []
         for event in self:
@@ -419,7 +418,8 @@ class Catalog:
                              utct(event.picks['Pg'])) for event in events])
         sorted_ids = np.argsort(tt_PgSg)
 
-        fig = plt.figure()
+        if fig is None:
+            fig = plt.figure()
 
         for k, i in enumerate(sorted_ids):
             event = events[i]
@@ -471,13 +471,16 @@ class Catalog:
             #Y = trZ_env.data * amp_fac + k
             #Y0 = np.median(trZ_noise_env.data) * amp_fac + k
             if regular_spacing:
-                Y0 = k
+                Y0 = k * spacing
                 #Y0 = 0.
             else:
                 Y0 = tt_PgSg[i]
                 #Y0 = 0.
 
-            Y = (trZ_env.data - np.median(trZ_noise_env.data)) * amp_fac + Y0
+            if regular_spacing and spacing == 0.:
+                Y = trZ_env.data * amp_fac
+            else:
+                Y = (trZ_env.data - np.median(trZ_noise_env.data)) * amp_fac + Y0
             #Y = (np.log10(trZ_env.data) -
             #     np.log10(np.median(trZ_noise_env.data))) * amp_fac + Y0
             #Y = np.log10(trZ_env.data) * amp_fac + Y0
@@ -487,8 +490,10 @@ class Catalog:
             X = X[::10]
             Y = Y[::10]
 
-            color = colors[event.mars_event_type]
-            #color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
+            if spacing == 0.:
+                color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
+            else:
+                color = colors[event.mars_event_type]
             plt.plot(X, Y, color=color,
                      ls=linestyle[event.quality], zorder=1000-k, lw=linewidth)
 
@@ -545,6 +550,28 @@ class Catalog:
         plt.xlabel(f'time after {"S" if shift_to_S else "P"}g / s')
         plt.xlim(-pre_time - 300, None)
         #plt.yticks([], [])
+
+        if regular_spacing and spacing == 0.:
+            import matplotlib as mpl
+
+            #plt.tick_params(axis='y', which='both', left=False, right=False,
+            #                labelleft=False)
+
+            cmap = mpl.cm.jet
+            norm = mpl.colors.Normalize(vmin=tt_PgSg.min(), vmax=tt_PgSg.max())
+
+            if cax is None:
+                cax = fig.add_axes([0.35, 0.92, 0.6, 0.03])
+                orientation = 'horizontal'
+            else:
+                orientation = 'vertical'
+
+            cb1 = mpl.colorbar.ColorbarBase(cax, cmap=cmap,
+                                            norm=norm,
+                                            orientation=orientation)
+            cb1.set_label('Pg - Sg time / s')
+
+
 
         if show:
             plt.show()
