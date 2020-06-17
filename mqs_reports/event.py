@@ -107,6 +107,7 @@ class Event:
             self.origin_time = utct(sso_origin_time)
             self.distance = sso_distance
             self.distance_type = 'GUI'
+            self.baz = None
 
         # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
@@ -114,10 +115,12 @@ class Event:
             if self.distance is not None:
                 self.distance_type = 'PgSg'
             self.origin_time = utct(origin_time)
+            self.baz = None
 
         else:
             self.origin_time = utct(origin_time)
             self.distance = None
+            self.baz = None
 
         self._waveforms_read = False
         self._spectra_available = False
@@ -145,20 +148,25 @@ class Event:
         return string.format(**dict(inspect.getmembers(self)))
 
     def load_distance_manual(self,
-                             fnam_csv: str) -> None:
+                             fnam_csv: str,
+                             overwrite=False) -> None:
         """
         Load distance of event from CSV file. Can be used for "aligned"
         distances that are not in the database
         :param: fnam_csv: path to CSV file with distances
+        :param: overwrite: Overwrite existing location from BED?
         """
         from csv import DictReader
         with open(fnam_csv, 'r') as csv_file:
             csv_reader = DictReader(csv_file)
             for row in csv_reader:
-                if self.distance is None:
+                if overwrite or (self.distance is None):
                     if self.name == row['name']:
                         self.distance = float(row['distance'])
+                        self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
+                        print('Found aligned distance %f for event %s' %
+                              (self.distance, self.name))
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
@@ -175,17 +183,15 @@ class Event:
             distance_km = deltat / (1. / vs - 1. / vp)
             return kilometers2degrees(distance_km, radius=RADIUS_MARS)
         else:
-            deltat = float(utct(self.picks['end']) - utct(self.picks['start']))
-            # map duration to Ts - Tp
-            deltat /= 3.
-            distance_km = deltat / (1. / vs - 1. / vp)
-            return kilometers2degrees(distance_km, radius=RADIUS_MARS)
+            return None
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
                        sc3dir: str,
                        event_tmp_dir='./events',
-                       kind: str = 'DISP') -> None:
+                       kind: str = 'DISP',
+                       fmin_SP: float = 0.5,
+                       fmin_VBB: float = 1. / 30.) -> None:
         """
         Wrapper to check whether local copy of corrected waveform exists and
         read it from sc3dir otherwise (and create local copy)
@@ -195,10 +201,28 @@ class Event:
                      expect the data to be in displacement
         """
         if not self.read_data_local(dir_cache=event_tmp_dir):
-            self.read_data_from_sc3dir(inv, sc3dir, kind)
+            self.read_data_from_sc3dir(inv, sc3dir, kind,
+                                       fmin_SP=fmin_SP,
+                                       fmin_VBB=fmin_VBB)
             self.write_data_local(dir_cache=event_tmp_dir)
+
+        if self.baz is not None:
+            self.add_rotated_traces()
         self._waveforms_read = True
         self.kind = 'DISP'
+
+    def add_rotated_traces(self):
+        # Add rotated phases to waveform objects
+        st_rot = self.waveforms_VBB.copy()
+        st_rot.rotate('NE->RT', back_azimuth=self.baz)
+        for chan in ['?HT', '?HR']:
+            self.waveforms_VBB += st_rot.select(channel=chan)[0]
+
+        if self.waveforms_SP is not None:
+            st_rot = self.waveforms_SP.copy()
+            st_rot.rotate('NE->RT', back_azimuth=self.baz)
+            for chan in ['?HT', '?HR']:
+                self.waveforms_SP += st_rot.select(channel=chan)[0]
 
     def read_data_local(self, dir_cache: str = 'events') -> bool:
         """
@@ -256,6 +280,8 @@ class Event:
                               inv: obspy.Inventory,
                               sc3dir: str,
                               kind: str,
+                              fmin_SP=0.5,
+                              fmin_VBB=1. / 30.,
                               tpre_SP: float = 100,
                               tpre_VBB: float = 1200.) -> None:
         """
@@ -290,7 +316,7 @@ class Event:
             self.waveforms_SP = read_data(fnam_SP, inv=inv, kind=kind,
                                           twin=[twin_start - tpre_SP,
                                                 twin_end + tpre_SP],
-                                          fmin=0.5)
+                                          fmin=fmin_SP)
         else:
             self.waveforms_SP = None
 
@@ -303,6 +329,7 @@ class Event:
         if len(glob(fnam_VBB)) % 3 == 0:
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
+                                           fmin=fmin_VBB,
                                            twin=[twin_start - tpre_VBB,
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
@@ -316,6 +343,7 @@ class Event:
                 sc3dir=sc3dir, time=self.picks['start'])
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
+                                           fmin=fmin_VBB,
                                            twin=[twin_start - tpre_VBB,
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
@@ -329,6 +357,7 @@ class Event:
                 sc3dir=sc3dir, time=self.picks['start'])
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
+                                           fmin=fmin_VBB,
                                            twin=[twin_start - tpre_VBB,
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
@@ -367,8 +396,6 @@ class Event:
                 else:
                     available[chan] = None
         return available
-
-
 
     def calc_spectra(self, winlen_sec, detick_nfsamp=0):
         """
@@ -442,7 +469,7 @@ class Event:
             if self.waveforms_VBB is None and self.waveforms_SP is not None:
                 self.spectra[variable] = spectrum_variable
 
-        # compute horizontal spectra on VBB 
+        # compute horizontal spectra on VBB
         for signal in self.spectra.keys():
             if signal in self.spectra:
                 self.spectra[signal]['p_H'] = \
@@ -463,7 +490,7 @@ class Event:
                            'width_24': None}
 
         if 'noise' in self.spectra:
-            f = self.spectra['noise']['f']
+            f_noise = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
             for signal in ['S', 'P', 'all']:
                 amplitudes = None
@@ -472,14 +499,16 @@ class Event:
                         comp = 'p_H'
                     else:
                         comp = 'p_Z'
- 
+
                     p_sig = None
                     if comp in self.spectra[signal]:
                         p_sig = self.spectra[signal][comp]
                     elif comp in self.spectra_SP[signal]:
                         p_sig = self.spectra_SP[signal][comp]
                     if p_sig is not None:
-                        amplitudes = fit_spectra(f=f,
+                        f_sig = self.spectra[signal]['f']
+                    amplitudes = fit_spectra(f_sig=f_sig,
+                                             f_noise=f_noise,
                                                  p_sig=p_sig,
                                                  p_noise=p_noise,
                                                  event_type=self.mars_event_type_short)
@@ -496,6 +525,7 @@ class Event:
                        fmin: float,
                        fmax: float,
                        instrument: str = 'VBB',
+                       twin_sec: float = 10.,
                        unit: str = 'm') -> Union[float, None]:
         """
         Pick amplitude from waveform
@@ -507,8 +537,10 @@ class Event:
         :param fmin: minimum frequency for pre-picking bandpass
         :param fmax: maximum frequency for pre-picking bandpass
         :param instrument: 'VBB' (default) or 'SP'
+        :param twin_sec: time window around amplitude pick in which to look
+                         for maximum amplitude.
         :param unit: 'm', 'nm', 'pm', 'fm'
-        :return: amplitude in 5 sec time window around pick time
+        :return: amplitude in time window around pick time
         """
         if not self._waveforms_read:
             raise RuntimeError('waveforms not read in Event object\n' +
@@ -541,8 +573,8 @@ class Event:
         if self.picks[pick] == '':
             return None
         else:
-            tmin = utct(self.picks[pick]) - 10.
-            tmax = utct(self.picks[pick]) + 10.
+            tmin = utct(self.picks[pick]) - twin_sec
+            tmax = utct(self.picks[pick]) + twin_sec
             st_work.trim(starttime=tmin, endtime=tmax)
             if comp in ['Z', 'N', 'E']:
                 return abs(st_work.select(channel='??' + comp)[0].data).max() \
@@ -648,3 +680,63 @@ class Event:
                     f.write(f'    uncertainty_upper: {dt}\n')
                     f.write(f'    uncertainty_model: uniform\n')
                     f.write('\n')
+
+    def rotation_plot(self, angles, fmin, fmax):
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+        fig, ax = plt.subplots(nrows=1, ncols=2, sharex='all', sharey='all',
+                               figsize=(10, 6))
+
+        nangles = len(angles)
+        st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        st_work.decimate(5)
+        st_work.filter('highpass', freq=fmin, corners=6)
+        st_work.filter('lowpass', freq=fmax, corners=6)
+        st_work.trim(starttime=utct(self.origin_time) - 50.,
+                     endtime=utct(self.origin_time) + 850.)
+
+        for iangle, angle in enumerate(angles):
+
+            st_rot: obspy.Stream = st_work.copy()
+            st_rot.rotate('NE->RT', back_azimuth=angle)
+
+            tr_R_env = envelope_smooth(tr=st_rot.select(channel='BHR')[0],
+                                       envelope_window_in_sec=10.)
+            tr_T_env = envelope_smooth(tr=st_rot.select(channel='BHT')[0],
+                                       envelope_window_in_sec=10.)
+            tr_Z_env = envelope_smooth(tr=st_rot.select(channel='BHZ')[0],
+                                       envelope_window_in_sec=10.)
+            maxfac = np.quantile(tr_Z_env.data, q=0.98)
+            for itr, tr in enumerate((tr_R_env, tr_T_env)):
+                xvec = tr_Z_env.times() + float(tr_Z_env.stats.starttime - \
+                                                utct(self.picks['P']))
+                ax[itr].plot(xvec,
+                             iangle + tr_Z_env.data / maxfac, c='grey',
+                             lw=1)
+                ax[itr].fill_between(x=xvec,
+                                     y1=iangle + tr_Z_env.data / maxfac,
+                                     y2=iangle, color='darkgrey')
+                ax[itr].plot(xvec,
+                             iangle + tr.data / maxfac, c='k', lw=1.5,
+                             zorder=50)
+
+        for a in ax:
+            for pick in ['P', 'S']:
+                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
+                          c='darkred', ls='dashed')
+            for pick in ['start', 'end']:
+                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
+                          c='darkgreen', ls='dashed')
+        ax[0].set_yticks(range(0, nangles))
+        ax[0].set_yticklabels(angles)
+        ax[0].set_xlim(-50, 550)
+        ax[0].set_ylim(-1, nangles * 1.15)
+        ax[0].set_xlabel('time after P-wave')
+        ax[0].set_ylabel('Rotation angle')
+        ax[0].set_title('Radial component')
+        ax[1].set_title('Transversal component')
+        fig.suptitle('Event %s (%5.3f-%5.3f Hz)' %
+                     (self.name, fmin, fmax))
+        fig.savefig('rotations_%s_%3.1f_%3.1f_sec.pdf' %
+                    (self.name, 1. / fmax, 1. / fmin))
+        # plt.show()

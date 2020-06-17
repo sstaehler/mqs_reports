@@ -26,6 +26,7 @@ from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
+from mqs_reports.snr import calc_stalta
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
 
 
@@ -213,9 +214,10 @@ class Catalog:
             events.append(event)
         return self.__class__(events=events)
 
-    def load_distances(self, fnam_csv):
+    def load_distances(self, fnam_csv, overwrite=False):
         for event in self:
-            event.load_distance_manual(fnam_csv)
+            event.load_distance_manual(fnam_csv,
+                                       overwrite=overwrite)
 
     def calc_spectra(self, winlen_sec: float, detick_nfsamp=0) -> None:
         """
@@ -579,17 +581,18 @@ class Catalog:
             return fig
 
     def plot_HF_spectra(self, SNR=2., tooltip=False, component='Z', fmin=0.7,
+                        quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY',
+                                                 'VERY_HIGH_FREQUENCY'],
                         fmax=10., use_SP=False, fig=None, show=True):
         from mpldatacursor import datacursor
         if fig is None:
             fig = plt.figure()
         ax = fig.gca()
 
-        cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY',
-                                                   'VERY_HIGH_FREQUENCY'])
+        cat = self.select(quality=quality, event_type=event_type)
 
         class ContinueI(Exception):
-                pass
+            pass
 
         for event in cat:
 
@@ -779,6 +782,66 @@ class Catalog:
             plt.show()
         else:
             return fig
+
+    def plot_snr_dist(
+            self, mag_type='m2.4',
+            colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+                    'VERY_HIGH_FREQUENCY': 'C0'},
+            xlabel='distance / degree [vs = 2 km/s, vp/vs = 1.7]',
+            markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+            markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+            fig=None, show=True):
+
+        if fig is None:
+            fig = plt.figure()
+
+        legend_elements = []
+
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+            for quality in 'ABCD':
+                cat = self.select(quality=quality, event_type=event_type)
+
+                if len(cat) == 0:
+                    continue
+
+                # collect properties for plotting
+                M, dist = np.array([
+                    (  # event.magnitude(mag_type=mag_type,
+                        # distance=event.distance),
+                        calc_stalta(event, fmin=2.2, fmax=2.8),
+                        event.distance) for event in cat]).T.astype(float)
+
+                S = np.array([markersize[event.quality] for event in cat])
+                names = np.array(
+                    [f'{event.name} {event.duration_s:.0f}' for event in cat])
+
+                mask = np.logical_not(np.isnan(M))
+                M = M[mask]
+                dist = dist[mask]
+                S = S[mask]
+                names = names[mask]
+
+                if markerfill[quality]:
+                    colorargs = {'c': colors[event_type]}
+                else:
+                    colorargs = {'edgecolors': colors[event_type],
+                                 'facecolor': 'none'}
+
+                scatter_annot(dist, M, s=S, fig=fig, names=names,
+                              label=f'{event_type}, {quality}',
+                              **colorargs)
+
+        dist = np.linspace(3, 50)
+
+        plt.xlabel(xlabel)
+        plt.ylabel('SNR of event')
+        plt.legend()
+
+        if show:
+            plt.show()
+        else:
+            return fig
+
 
     def plot_magnitude_distance(
          self, mag_type='m2.4',

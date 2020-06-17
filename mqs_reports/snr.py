@@ -8,6 +8,8 @@
     None
 '''
 
+from typing import Tuple
+
 import numpy as np
 
 from mqs_reports.event import Event

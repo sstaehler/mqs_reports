@@ -150,13 +150,15 @@ def fit_peak(f, p):
     return popt
 
 
-def fit_spectra(f, p_sig, p_noise, event_type, df_mute=1.05):
-    if len(p_sig) < len(f):
-        f_dec = np.linspace(f[0], f[-1], len(p_sig)) 
-        p_sig = np.interp(x=f, xp=f_dec, fp=p_sig)
-    if len(p_noise) < len(f):
-        f_dec = np.linspace(f[0], f[-1], len(p_noise)) 
-        p_sig = np.interp(x=f, xp=f_dec, fp=p_noise)
+def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
+    len_spec = len(f_noise)
+    if len(p_sig) != len_spec:
+        f_dec = np.linspace(f_noise[0], f_noise[-1], len_spec)
+        p_sig = np.interp(x=f_noise, xp=f_sig, fp=p_sig)
+    # if len(p_noise) != len_spec:
+    #     f_dec = np.linspace(f[0], f[-1], len_spec)
+    #     p_noise = np.interp(x=f, xp=f_dec, fp=p_noise)
+    f = f_noise
     fmin = 0.1
     fmax = 6.0
     if event_type in ['LF', 'BB']:
