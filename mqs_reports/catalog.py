@@ -764,7 +764,7 @@ class Catalog:
                               **colorargs)
 
 
-        plt.xlabel('TP - TS / s')
+        plt.xlabel('TSg - TPg / s')
         plt.ylabel('A2.4 / dB')
 
         vs = CRUST_VS
