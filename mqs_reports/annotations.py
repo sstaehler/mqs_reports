@@ -18,7 +18,7 @@ class Annotations:
                  fnam_csv,
                  starttime=None,
                  endtime=None,
-                 type='ONE-SIDED_PULSE_MULTIPLE_COMPONENTS'):
+                 type='ONE-SIDED_PULSE'):
         self.glitches = []
 
         if starttime is None:
@@ -26,7 +26,14 @@ class Annotations:
         if endtime is None:
             endtime = utct('2030-01-01')
         with open(fnam_csv, mode='r') as csv_file:
-            csv_reader = csv.DictReader(csv_file)
+            csv_reader = csv.DictReader(csv_file,
+                                        fieldnames=['starttime',
+                                                    'endtime',
+                                                    'author',
+                                                    'type',
+                                                    'comment',
+                                                    'annotation'
+                                                    ])
             for row in csv_reader:
                 if type in row['type'] and \
                         len(row['endtime']) > 0 and \
