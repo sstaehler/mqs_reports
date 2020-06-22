@@ -817,8 +817,8 @@ class Event:
                          all=self.endtime)
         if normwindow == 'S' and len(tstart_norm[normwindow]) == 0:
             normwindow = 'P'
-            # if normwindow == 'P' and len(tstart_norm[normwindow]) == 0:
-            #     normwindow = 'all'
+            if len(tstart_norm[normwindow]) == 0:
+                normwindow = 'all'
         tstart_norm = utct(tstart_norm[normwindow])
         tend_norm = utct(tend_norm[normwindow])
 
@@ -956,6 +956,8 @@ class Event:
                 a.set_xlabel('time after start time')
             a.grid(b=True, which='both', axis='x', lw=0.2, alpha=0.3)
             a.grid(b=True, which='major', axis='y', lw=0.2, alpha=0.3)
+            a.axhline(y=np.argmin(abs(freqs - 1.)),
+                      ls='dashed', lw=1.0, c='k')
         ax[0].set_xlim(tmin_plot, tmax_plot)
         ax[0].set_ylim(-1.5, nfreqs + 1.5)
         ax[0].set_ylabel('frequency')
