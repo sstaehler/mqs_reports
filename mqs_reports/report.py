@@ -45,9 +45,12 @@ def make_report(event, chan, fnam_out, annotations):
                                          (event.name, chan),
                                  "font": {"size": 30}}})
 
-    pio.write_html(fig, file=fnam_out,
+    pio.write_html(fig, file=fnam_out + '.html',
                    full_html=True,
                    include_plotlyjs='directory')
+
+    fig.write_image(file=fnam_out + '.pdf', 
+                    width=1200, height=int(900 * 0.75))
     event.fnam_report[chan] = fnam_out
 
 
@@ -129,6 +132,7 @@ def plot_spec(event,
                         go.Scatter(x=f[bol_1Hz_mask],
                                    y=10 * np.log10(p[bol_1Hz_mask]),
                                    name=kind,
+                                   legendgroup=kind,
                                    line=go.scatter.Line(color=color),
                                    mode="lines", **kwargs),
                         row=row, col=col)
@@ -285,6 +289,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
             go.Scatter(x=timevec,
                        y=tr.data,
                        name='time series %s' % types[0],
+                       showlegend=False,
                        line=go.scatter.Line(color="darkgrey"),
                        mode="lines", **kwargs),
             row=row, col=col)
@@ -316,7 +321,8 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                                                  color="lightgrey"),
                                              **kwargs),
                                   row=row, col=col)
-
+        # cols = dict(mb_P='red',
+        #         mb_S=
         for pick_type in types:
             pick = pick_name[pick_type]
             if event.picks[pick] is not "":
@@ -328,7 +334,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                                          y=tr_pick.data,
                                          name='pick window %s' % pick_type,
                                          mode="lines",
-                                         line=go.scatter.Line(color="red"),
+                                         line=go.scatter.Line(),
                                          **kwargs),
                               row=row, col=col)
 

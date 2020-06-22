@@ -923,7 +923,7 @@ class Catalog:
         for event in tqdm(self):
             for chan in ['Z', 'N', 'E']:
                 fnam_report = pjoin(dir_out,
-                                    'mag_report_%s_%s.html' %
+                                    'mag_report_%s_%s' %
                                     (event.name, chan))
                 if not pexists(fnam_report):
                     event.make_report(fnam_out=fnam_report,

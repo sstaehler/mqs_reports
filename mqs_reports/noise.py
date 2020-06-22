@@ -442,7 +442,7 @@ class Noise():
 
         if cat is not None:
             cmap = plt.cm.get_cmap(cmap_dist)
-            cmap.set_over('royalblue')
+            cmap.set_over('white')
             for event in cat.select(event_type=['HF', 'VF', '24']):
                 markers_HF.append(symbols[event.mars_event_type])
                 if event.distance is None:
