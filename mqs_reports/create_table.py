@@ -150,6 +150,16 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                                      event.name,
                                      '%s_polarization.png' %
                                      event.name)
+    event.fnam_report['fb_local'] = pjoin(path_images_local,
+                                          'filterbank',
+                                          event.name,
+                                          'filterbank_%s_all.png' %
+                                          event.name)
+    event.fnam_report['fb'] = pjoin(path_images,
+                                    'filterbank',
+                                    event.name,
+                                    'filterbank_%s_all.png' %
+                                    event.name)
     path_dailyspec = pjoin(path_images,
                            'spectrograms/by_channels/02.BHZ/',
                            'Sol%04d.Spectrogram_LF-02.BHZ__HF-02.BHZ.png'
@@ -219,6 +229,9 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
             link_report += ' <a href="{pol:s}" target="_blank">Pol</a>'.format(
                 **event.fnam_report)
 
+        link_duration = '<a href="%s" target="_blank">%s</a>' % (
+            event.fnam_report['fb'], duration)
+
         link_lmst = '<a href="%s" target="_blank">%s</a>' % (
             path_dailyspec, lmst_time)
 
@@ -229,7 +242,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
              event.quality,
              time_string[event.distance_type] % utc_time,
              link_lmst,
-             duration,
+             link_duration,
              dist_string[event.distance_type] % event.distance,
              snr_string,
              event.pick_amplitude('Peak_MbP',
@@ -375,5 +388,6 @@ if __name__ == '__main__':
         catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
     catalog.calc_spectra(winlen_sec=20., detick_nfsamp=10)
 
+    catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
     catalog.make_report(dir_out='reports', annotations=ann)
     catalog.write_table(fnam_out='./overview.html')

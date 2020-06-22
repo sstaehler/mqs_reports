@@ -20,6 +20,7 @@ from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
+from mqs_reports.annotations import Annotations
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick
 
@@ -74,7 +75,8 @@ class Event:
             self.endtime = utct(utct(self.picks['end']))
             self.duration = utct(utct(self.picks['end']) -
                                  utct(self.picks['start']))
-            self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
+            self.duration_s = utct(self.picks['end']) - utct(
+                self.picks['start'])
         except TypeError:
             print('incomplete picks for event %s' % self.name)
             print(self.picks)
@@ -479,8 +481,8 @@ class Event:
         for signal in self.spectra_SP.keys():
             if signal in self.spectra:
                 self.spectra_SP[signal]['p_H'] = \
-                    self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal]['p_E']
-
+                    self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal][
+                        'p_E']
 
         self.amplitudes = {'A0': None,
                            'tstar': None,
@@ -509,9 +511,9 @@ class Event:
                         f_sig = self.spectra[signal]['f']
                     amplitudes = fit_spectra(f_sig=f_sig,
                                              f_noise=f_noise,
-                                                 p_sig=p_sig,
-                                                 p_noise=p_noise,
-                                                 event_type=self.mars_event_type_short)
+                                             p_sig=p_sig,
+                                             p_noise=p_noise,
+                                             event_type=self.mars_event_type_short)
                 if amplitudes is not None:
                     break
             if amplitudes is not None:
@@ -720,13 +722,7 @@ class Event:
                              iangle + tr.data / maxfac, c='k', lw=1.5,
                              zorder=50)
 
-        for a in ax:
-            for pick in ['P', 'S']:
-                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
-                          c='darkred', ls='dashed')
-            for pick in ['start', 'end']:
-                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
-                          c='darkgreen', ls='dashed')
+        self.mark_phases(ax, tref=utct(self.picks['P']))
         ax[0].set_yticks(range(0, nangles))
         ax[0].set_yticklabels(angles)
         ax[0].set_xlim(-50, 550)
@@ -742,11 +738,40 @@ class Event:
                     dpi=200)
         # plt.show()
 
-    def plot_filterbank(self, fmin=1. / 64, fmax=4., df=np.sqrt(2), log=False,
-                        waveforms=False, normwindow='all', annotations=None,
-                        tmin_plot=None, tmax_plot=None, timemarkers=None,
-                        starttime=None, endtime=None, fnam=None):
-        def mark_glitch(ax, x0, x1, ymin=-2, height=50., **kwargs):
+    def mark_phases(self, ax, tref):
+        for a in ax:
+            for pick in ['P', 'S', 'Pg', 'Sg']:
+                try:
+                    a.axvline(utct(self.picks[pick]) - tref,
+                              c='darkred', ls='dashed')
+                except TypeError:
+                    pass
+            for pick in ['start', 'end']:
+                a.axvline(utct(self.picks[pick]) - tref,
+                          c='darkgreen', ls='dashed')
+
+    def plot_filterbank(self,
+                        fmin: float = 1. / 64,
+                        fmax: float = 4.,
+                        df: float = 2 ** 0.5,
+                        log: bool = False,
+                        waveforms: bool = False,
+                        normwindow: str = 'all',
+                        annotations: Annotations = None,
+                        tmin_plot: float = None,
+                        tmax_plot: float = None,
+                        timemarkers: dict = None,
+                        starttime: obspy.UTCDateTime = None,
+                        endtime: obspy.UTCDateTime = None,
+                        instrument: str = 'VBB',
+                        fnam: str = None):
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+
+        def mark_glitch(ax: list,
+                        x0: float, x1: float,
+                        ymin: float = -2.,
+                        height: float = 50., **kwargs):
             from matplotlib.patches import Rectangle
             xy = [x0, ymin]
             width = x1 - x0
@@ -754,13 +779,28 @@ class Event:
                 rect = Rectangle(xy=xy, width=width, height=height, **kwargs)
                 a.add_patch(rect)
 
-        import matplotlib.pyplot as plt
-        from mqs_reports.utils import envelope_smooth
         fig, ax = plt.subplots(nrows=1, ncols=3, sharex='all', sharey='all',
                                figsize=(10, 6))
+
+        # Determine frequencies
         nfreqs = int(np.round(np.log(fmax / fmin) / np.log(df), decimals=0) + 1)
         freqs = np.geomspace(fmin, fmax + 0.001, nfreqs)
-        st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+
+        # Reference time
+        if 'P' in self.picks and len(self.picks['P']) > 0:
+            t_ref = utct(self.picks['P'])
+            t_ref_type = 'P'
+        else:
+            t_ref = self.starttime
+            t_ref_type = 'start time'
+
+        if instrument == 'VBB':
+            st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        elif instrument == 'SP':
+            st_work = self.waveforms_SP.select(channel='??[ENZ]').copy()
+        else:
+            raise ValueError(f'Invalid value for instrument: {instrument}')
+
         try:
             st_work.rotate('NE->RT', back_azimuth=self.baz)
         except:
@@ -768,21 +808,27 @@ class Event:
         else:
             rotated = True
 
-        tstart_norm = utct(dict(P=self.picks['P_spectral_start'],
-                                S=self.picks['S_spectral_start'],
-                                all=self.starttime)[normwindow])
-        tend_norm = utct(dict(P=self.picks['P_spectral_end'],
-                              S=self.picks['S_spectral_end'],
-                              all=self.endtime)[normwindow])
+        tstart_norm = dict(P=self.picks['P_spectral_start'],
+                           S=self.picks['S_spectral_start'],
+                           all=self.starttime)
+        tend_norm = dict(P=self.picks['P_spectral_end'],
+                         S=self.picks['S_spectral_end'],
+                         all=self.endtime)
+        if normwindow == 'S' and len(tstart_norm[normwindow]) == 0:
+            normwindow = 'P'
+            # if normwindow == 'P' and len(tstart_norm[normwindow]) == 0:
+            #     normwindow = 'all'
+        tstart_norm = utct(tstart_norm[normwindow])
+        tend_norm = utct(tend_norm[normwindow])
 
         if starttime is None:
             starttime = self.starttime - 100.
         if endtime is None:
             endtime = self.endtime + 100.
         if tmin_plot is None:
-            tmin_plot = starttime - utct(self.picks['P'])
+            tmin_plot = starttime - t_ref
         if tmax_plot is None:
-            tmax_plot = endtime - utct(self.picks['P'])
+            tmax_plot = endtime - t_ref
 
         st_work.trim(starttime=utct(starttime) - 1. / fmin,
                      endtime=utct(endtime) + 1. / fmin)
@@ -791,23 +837,22 @@ class Event:
             f0 = fcenter / df
             f1 = fcenter * df
             st_filt = st_work.copy()
-            st_filt.filter('highpass', freq=f0, corners=8)
-            st_filt.filter('lowpass', freq=f1, corners=8)
+            st_filt.filter('bandpass', freqmin=f0, freqmax=f1, corners=8)
 
             st_filt.trim(starttime=utct(starttime),
                          endtime=utct(endtime))
 
             if rotated:
-                tr_3 = st_filt.select(channel='BHT')[0]
-                tr_2 = st_filt.select(channel='BHR')[0]
+                tr_3 = st_filt.select(channel='?HT')[0]
+                tr_2 = st_filt.select(channel='?HR')[0]
             else:
-                tr_2 = st_filt.select(channel='BHN')[0]
-                tr_3 = st_filt.select(channel='BHE')[0]
+                tr_2 = st_filt.select(channel='?HN')[0]
+                tr_3 = st_filt.select(channel='?HE')[0]
             tr_2_env = envelope_smooth(tr=tr_2, mode='same',
                                        envelope_window_in_sec=10.)
             tr_3_env = envelope_smooth(tr=tr_3, mode='same',
                                        envelope_window_in_sec=10.)
-            tr_Z = st_filt.select(channel='BHZ')[0]
+            tr_Z = st_filt.select(channel='?HZ')[0]
             tr_Z_env = envelope_smooth(tr=tr_Z, mode='same',
                                        envelope_window_in_sec=10.)
 
@@ -826,9 +871,9 @@ class Event:
                     offset = np.quantile(tr_norm.data, q=0.1)
 
                 xvec_env = tr_Z_env.times() + float(tr_Z_env.stats.starttime - \
-                                                    utct(self.picks['P']))
+                                                    t_ref)
                 xvec = tr_Z.times() + float(tr_Z.stats.starttime - \
-                                            utct(self.picks['P']))
+                                            t_ref)
                 # ax[itr].plot(xvec_env,
                 #              iangle + tr_Z_env.data / maxfac, c='grey',
                 #              lw=1)
@@ -861,13 +906,7 @@ class Event:
                             ax[itr].axvline(x=time, ls='dashed')
                             ax[itr].text(x=time, y=nfreqs, s=phase)
 
-        for a in ax:
-            for pick in ['P', 'S']:
-                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
-                          c='darkred', ls='dashed')
-            for pick in ['start', 'end']:
-                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
-                          c='darkgreen', ls='dashed')
+        self.mark_phases(ax, tref=t_ref)
 
         if annotations is not None:
             annotations_event = annotations.select(
@@ -880,16 +919,16 @@ class Event:
                     tmin_glitch = utct(times[0])
                     tmax_glitch = utct(times[1])
                     x0s.append(
-                        float(tmin_glitch) - float(utct(self.picks['P'])))
+                        float(tmin_glitch) - float(t_ref))
                     x1s.append(
-                        float(tmax_glitch) - float(utct(self.picks['P'])))
+                        float(tmax_glitch) - float(t_ref))
 
             for x0, x1 in zip(x0s, x1s):
                 mark_glitch(ax, x0, x1, fc='lightgrey',
                             zorder=-3, alpha=0.8)
             mark_glitch(ax,
-                        x0=tstart_norm - float(utct(self.picks['P'])),
-                        x1=tend_norm - float(utct(self.picks['P'])),
+                        x0=tstart_norm - float(t_ref),
+                        x1=tend_norm - float(t_ref),
                         ymin=-1, height=0.3, fc='grey', alpha=0.8
                         )
         ax[0].set_yticks(range(0, nfreqs))
@@ -897,14 +936,17 @@ class Event:
         ticklabels = []
         for freq in freqs:
             if freq > 1:
-                ticklabels.append(f'{freq:.1f} Hz')
+                ticklabels.append(f'{freq:.1f}Hz')
             else:
-                ticklabels.append(f'1/{1. / freq:.1f}s')
+                ticklabels.append(f'1/{1. / freq:.1f}Hz')
         ax[0].set_yticklabels(ticklabels)
         for a in ax:
             # a.set_xticks(np.arange(-300, 1000, 100), minor=False)
             a.set_xticks(np.arange(-300, 3000, 25), minor=True)
-            a.set_xlabel('time after P-wave')
+            if t_ref_type == 'P':
+                a.set_xlabel('time after P-wave')
+            else:
+                a.set_xlabel('time after start time')
             a.grid(b=True, which='both', axis='x', lw=0.2, alpha=0.3)
             a.grid(b=True, which='major', axis='y', lw=0.2, alpha=0.3)
         ax[0].set_xlim(tmin_plot, tmax_plot)

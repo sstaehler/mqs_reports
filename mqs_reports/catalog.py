@@ -8,11 +8,11 @@
     None
 """
 
-from os.path import join as pjoin
+from os.path import join as pjoin, exists as pexists
 from typing import Union
 
-import matplotlib.ticker
 import matplotlib.pylab as pl
+import matplotlib.ticker
 import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
@@ -23,7 +23,8 @@ from scipy import stats
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
+from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
+    EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.snr import calc_stalta
@@ -1013,7 +1014,6 @@ class Catalog:
         :param annotations: Annotations object; used to mark glitches,
                             if available
         """
-        from os.path import exists as pexists
         for event in tqdm(self):
             for chan in ['Z', 'N', 'E']:
                 fnam_report = pjoin(dir_out,
@@ -1025,6 +1025,80 @@ class Catalog:
                                       annotations=annotations)
                 else:
                     event.fnam_report[chan] = fnam_report
+
+    def plot_filterbanks(self,
+                         dir_out: str = 'filterbanks',
+                         annotations: Annotations = None,
+                         instrument: str = None,
+                         fmax_LF: float = 8.,
+                         fmin_LF: float = 1. / 32.,
+                         fmax_HF: float = 16.,
+                         fmin_HF: float = 1. / 2.,
+                         df_LF: float = 2. ** 0.5,
+                         df_HF: float = 2. ** 0.25
+                         ):
+
+        for event in tqdm(self):
+            if event.mars_event_type_short in ['LF', 'BB']:
+                if instrument is None:
+                    instrument = 'VBB'
+                if len(event.picks['S']) * len(event.picks['P']) > 0:
+                    t_S = utct(event.picks['S'])
+                    t_P = utct(event.picks['P'])
+                else:
+                    t_P = utct(event.starttime)
+                    t_S = None
+                fmin = fmin_LF
+                fmax = fmax_LF
+                df = df_LF
+            else:
+                if instrument is None:
+                    instrument = 'SP'
+                if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                    t_S = utct(event.picks['Sg'])
+                    t_P = utct(event.picks['Pg'])
+                else:
+                    t_P = utct(event.starttime)
+                    t_S = None
+                fmin = fmin_HF
+                fmax = fmax_HF
+                df = df_HF
+
+            fnam = pjoin(dir_out,
+                         'filterbank_%s_all.png' % event.name)
+            if not pexists(fnam):
+                event.plot_filterbank(normwindow='all', annotations=annotations,
+                                      starttime=event.starttime - 300.,
+                                      endtime=event.endtime + 300.,
+                                      instrument=instrument,
+                                      fnam=fnam, fmin=fmin, fmax=fmax, df=df)
+
+            if event.quality in ['A', 'B', 'C']:
+                fnam = pjoin(dir_out,
+                             'filterbank_%s_zoom.png' % event.name)
+                if not pexists(fnam):
+                    event.plot_filterbank(starttime=t_P - 300.,
+                                          endtime=t_P + 1100.,
+                                          normwindow='S',
+                                          annotations=annotations,
+                                          tmin_plot=-240., tmax_plot=900.,
+                                          fnam=fnam,
+                                          instrument=instrument,
+                                          fmin=fmin, fmax=fmax, df=df)
+
+                if t_S is not None:
+                    fnam = pjoin(dir_out,
+                                 'filterbank_%s_phases.png' % event.name)
+                    if not pexists(fnam):
+                        event.plot_filterbank(starttime=t_P - 120.,
+                                              endtime=t_S + 240.,
+                                              normwindow='S',
+                                              annotations=annotations,
+                                              tmin_plot=-50.,
+                                              tmax_plot=t_S - t_P + 200.,
+                                              fnam=fnam,
+                                              instrument=instrument,
+                                              fmin=fmin, fmax=fmax, df=df)
 
     def plot_spectra(self,
                      ymin: float = -240.,
