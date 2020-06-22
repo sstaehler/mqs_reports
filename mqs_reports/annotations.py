@@ -35,12 +35,13 @@ class Annotations:
                                                     'annotation'
                                                     ])
             for row in csv_reader:
-                if type in row['type'] and \
-                        len(row['endtime']) > 0 and \
-                        utct(row['starttime']) > starttime and \
-                        utct(row['endtime']) < endtime:
-                    self.glitches.append([utct(row['starttime']),
-                                          utct(row['endtime'])])
+                if row['starttime'][0] != '#':
+                    if type in row['type'] and \
+                       len(row['endtime']) > 0 and \
+                       utct(row['starttime']) > starttime and \
+                       utct(row['endtime']) < endtime:
+                        self.glitches.append([utct(row['starttime']),
+                                              utct(row['endtime'])])
 
     def select(self,
                starttime=None,
