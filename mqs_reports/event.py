@@ -737,6 +737,197 @@ class Event:
         ax[1].set_title('Transversal component')
         fig.suptitle('Event %s (%5.3f-%5.3f Hz)' %
                      (self.name, fmin, fmax))
-        fig.savefig('rotations_%s_%3.1f_%3.1f_sec.pdf' %
-                    (self.name, 1. / fmax, 1. / fmin))
+        fig.savefig('rotations_%s_%3.1f_%3.1f_sec.png' %
+                    (self.name, 1. / fmax, 1. / fmin),
+                    dpi=200)
         # plt.show()
+
+    def plot_filterbank(self, fmin=1. / 64, fmax=4., df=np.sqrt(2), log=False,
+                        waveforms=False, normwindow='all', annotations=None,
+                        tmin_plot=None, tmax_plot=None, timemarkers=None,
+                        starttime=None, endtime=None, fnam=None):
+        def mark_glitch(ax, x0, x1, ymin=-2, height=50., **kwargs):
+            from matplotlib.patches import Rectangle
+            xy = [x0, ymin]
+            width = x1 - x0
+            for a in ax:
+                rect = Rectangle(xy=xy, width=width, height=height, **kwargs)
+                a.add_patch(rect)
+
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+        fig, ax = plt.subplots(nrows=1, ncols=3, sharex='all', sharey='all',
+                               figsize=(10, 6))
+        nfreqs = int(np.round(np.log(fmax / fmin) / np.log(df), decimals=0) + 1)
+        freqs = np.geomspace(fmin, fmax + 0.001, nfreqs)
+        st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        try:
+            st_work.rotate('NE->RT', back_azimuth=self.baz)
+        except:
+            rotated = False
+        else:
+            rotated = True
+
+        tstart_norm = utct(dict(P=self.picks['P_spectral_start'],
+                                S=self.picks['S_spectral_start'],
+                                all=self.starttime)[normwindow])
+        tend_norm = utct(dict(P=self.picks['P_spectral_end'],
+                              S=self.picks['S_spectral_end'],
+                              all=self.endtime)[normwindow])
+
+        if starttime is None:
+            starttime = self.starttime - 100.
+        if endtime is None:
+            endtime = self.endtime + 100.
+        if tmin_plot is None:
+            tmin_plot = starttime - utct(self.picks['P'])
+        if tmax_plot is None:
+            tmax_plot = endtime - utct(self.picks['P'])
+
+        st_work.trim(starttime=utct(starttime) - 1. / fmin,
+                     endtime=utct(endtime) + 1. / fmin)
+
+        for ifreq, fcenter in enumerate(freqs):
+            f0 = fcenter / df
+            f1 = fcenter * df
+            st_filt = st_work.copy()
+            st_filt.filter('highpass', freq=f0, corners=8)
+            st_filt.filter('lowpass', freq=f1, corners=8)
+
+            st_filt.trim(starttime=utct(starttime),
+                         endtime=utct(endtime))
+
+            if rotated:
+                tr_3 = st_filt.select(channel='BHT')[0]
+                tr_2 = st_filt.select(channel='BHR')[0]
+            else:
+                tr_2 = st_filt.select(channel='BHN')[0]
+                tr_3 = st_filt.select(channel='BHE')[0]
+            tr_2_env = envelope_smooth(tr=tr_2, mode='same',
+                                       envelope_window_in_sec=10.)
+            tr_3_env = envelope_smooth(tr=tr_3, mode='same',
+                                       envelope_window_in_sec=10.)
+            tr_Z = st_filt.select(channel='BHZ')[0]
+            tr_Z_env = envelope_smooth(tr=tr_Z, mode='same',
+                                       envelope_window_in_sec=10.)
+
+            tr_real = [tr_Z, tr_2, tr_3]
+            for itr, tr in enumerate((tr_Z_env, tr_2_env, tr_3_env)):
+                if log:
+                    tr_norm = tr.slice(starttime=tstart_norm,
+                                       endtime=tend_norm)
+                    maxfac = np.quantile(tr_norm.data, q=0.9)
+                    offset = np.quantile(tr_norm.data, q=0.1)
+                else:
+                    tr_norm = tr.slice(starttime=tstart_norm,
+                                       endtime=tend_norm,
+                                       nearest_sample=True)
+                    maxfac = np.quantile(tr_norm.data, q=0.9)
+                    offset = np.quantile(tr_norm.data, q=0.1)
+
+                xvec_env = tr_Z_env.times() + float(tr_Z_env.stats.starttime - \
+                                                    utct(self.picks['P']))
+                xvec = tr_Z.times() + float(tr_Z.stats.starttime - \
+                                            utct(self.picks['P']))
+                # ax[itr].plot(xvec_env,
+                #              iangle + tr_Z_env.data / maxfac, c='grey',
+                #              lw=1)
+                # ax[itr].fill_between(x=xvec_env,
+                #                      y1=iangle + tr_Z_env.data / maxfac,
+                #                      y2=iangle, color='darkgrey')
+                if log:
+                    ax[itr].plot(xvec_env,
+                                 ifreq + np.log(tr.data / maxfac) / 3,
+                                 lw=1.0, zorder=50)
+                else:
+                    if waveforms:
+                        color = 'k'
+                    else:
+                        color = 'C%d' % (ifreq % 10)
+
+                    ax[itr].plot(xvec_env,
+                                 ifreq + (tr.data - offset) / maxfac,
+                                 c=color,
+                                 lw=0.5, zorder=80)
+                    if waveforms:
+                        ax[itr].plot(xvec,
+                                     ifreq + tr_real[itr].data / maxfac,
+                                     c='C%d' % (ifreq % 10),
+                                     lw=0.5, zorder=50 - ifreq)
+
+                if timemarkers is not None:
+                    for phase, time in timemarkers.items():
+                        if tmin_plot < time < tmax_plot:
+                            ax[itr].axvline(x=time, ls='dashed')
+                            ax[itr].text(x=time, y=nfreqs, s=phase)
+
+        for a in ax:
+            for pick in ['P', 'S']:
+                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
+                          c='darkred', ls='dashed')
+            for pick in ['start', 'end']:
+                a.axvline(utct(self.picks[pick]) - utct(self.picks['P']),
+                          c='darkgreen', ls='dashed')
+
+        if annotations is not None:
+            annotations_event = annotations.select(
+                starttime=utct(self.picks['start']) - 180.,
+                endtime=utct(self.picks['end']) + 180.)
+            if len(annotations_event) > 0:
+                x0s = []
+                x1s = []
+                for times in annotations_event:
+                    tmin_glitch = utct(times[0])
+                    tmax_glitch = utct(times[1])
+                    x0s.append(
+                        float(tmin_glitch) - float(utct(self.picks['P'])))
+                    x1s.append(
+                        float(tmax_glitch) - float(utct(self.picks['P'])))
+
+            for x0, x1 in zip(x0s, x1s):
+                mark_glitch(ax, x0, x1, fc='lightgrey',
+                            zorder=-3, alpha=0.8)
+            mark_glitch(ax,
+                        x0=tstart_norm - float(utct(self.picks['P'])),
+                        x1=tend_norm - float(utct(self.picks['P'])),
+                        ymin=-1, height=0.3, fc='grey', alpha=0.8
+                        )
+        ax[0].set_yticks(range(0, nfreqs))
+        np.set_printoptions(precision=3)
+        ticklabels = []
+        for freq in freqs:
+            if freq > 1:
+                ticklabels.append(f'{freq:.1f} Hz')
+            else:
+                ticklabels.append(f'1/{1. / freq:.1f}s')
+        ax[0].set_yticklabels(ticklabels)
+        for a in ax:
+            # a.set_xticks(np.arange(-300, 1000, 100), minor=False)
+            a.set_xticks(np.arange(-300, 3000, 25), minor=True)
+            a.set_xlabel('time after P-wave')
+            a.grid(b=True, which='both', axis='x', lw=0.2, alpha=0.3)
+            a.grid(b=True, which='major', axis='y', lw=0.2, alpha=0.3)
+        ax[0].set_xlim(tmin_plot, tmax_plot)
+        ax[0].set_ylim(-1.5, nfreqs + 1.5)
+        ax[0].set_ylabel('frequency')
+        ax[0].set_title('Vertical')
+        if rotated:
+            ax[1].set_title('Radial')
+            ax[2].set_title('Transverse')
+        else:
+            ax[1].set_title('North/South')
+            ax[2].set_title('East/West')
+        fig.suptitle('Event %s (%5.3f-%5.3f Hz)' %
+                     (self.name, fmin, fmax))
+        plt.subplots_adjust(top=0.911,
+                            bottom=0.097,
+                            left=0.089,
+                            right=0.972,
+                            hspace=0.2,
+                            wspace=0.116)
+        if fnam is None:
+            plt.show()
+        else:
+            fig.savefig(fnam,
+                        dpi=200)
+        plt.close()
