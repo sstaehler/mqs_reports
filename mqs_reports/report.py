@@ -280,7 +280,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
         tr.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
         tr.trim(starttime=utct(event.picks['start']) - 180.,
                 endtime=utct(event.picks['end']) + 180.)
-        tr_env = envelope_smooth(envelope_window=60.,
+        tr_env = envelope_smooth(envelope_window_in_sec=60.,
                                  tr=tr)
         tr_env.stats.starttime += 30.
         tr_env.data *= 2.
