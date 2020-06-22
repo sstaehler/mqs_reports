@@ -78,7 +78,7 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
                       row=row, col=col)
 
     for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
-        if event.picks[pick] is not '':
+        if event.picks[pick] != '':
             time_pick = utct(event.picks[pick]).datetime
             if pick not in ['start', 'end']:
                 text = pick
@@ -319,7 +319,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
 
         for pick_type in types:
             pick = pick_name[pick_type]
-            if event.picks[pick] is not "":
+            if event.picks[pick] != '':
                 tmin = utct(event.picks[pick]) - 10.
                 tmax = utct(event.picks[pick]) + 10.
                 tr_pick = tr.slice(starttime=tmin, endtime=tmax)
@@ -333,7 +333,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                               row=row, col=col)
 
         for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
-            if event.picks[pick] is not '':
+            if event.picks[pick] != '':
                 time_pick = utct(event.picks[pick]).datetime
                 ymax = np.max(abs(tr.data))
                 if pick not in ['start', 'end']:

@@ -766,6 +766,7 @@ class Event:
                         instrument: str = 'VBB',
                         fnam: str = None):
         import matplotlib.pyplot as plt
+        import warnings
         from mqs_reports.utils import envelope_smooth
 
         def mark_glitch(ax: list,
@@ -838,7 +839,10 @@ class Event:
             f1 = fcenter * df
             st_filt = st_work.copy()
             try:
-                st_filt.filter('bandpass', freqmin=f0, freqmax=f1, corners=8)
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    st_filt.filter('bandpass', freqmin=f0, freqmax=f1,
+                                   corners=8)
             except ValueError:  # If f0 is above Nyquist
                 print('No 20sps data available for event %s' % self.name)
             else:
