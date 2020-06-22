@@ -75,7 +75,7 @@ def pred_spec(freqs, ds, Qm, amp, dist, mag, phase, vs=5.e3):
 # def pred_spec(freqs, ds, Qm, amp, dist, mag, phase='S', vp=7.5e3, vs=4.2e3):
 #     stf_amp = 1 / (1 + (freqs / f_c(M0=M0(mag),
 #                                     vs=2.8e3, ds=ds)
-#                         ))
+#                         )                    filenam_pressure = 'XB.ELYSE.02.MDO.D.%d.%03d')
 #     A = attenuation_term(freqs, Qm=Qm, x=dist, phase=phase, vp=vp, vs=vs)
 #     return 20 * np.log10(A * stf_amp) + amp
 
@@ -207,7 +207,8 @@ def read_data(fnam_complete, inv, kind, twin, fmin=1. / 20.):
                                       endtime=twin[1] + 900)[0]
                     fmax = tr_Z.stats.sampling_rate * 0.45
                     tr_Z.remove_response(inv,
-                                         pre_filt=(0.005, 0.01, fmax, fmax * 1.2),
+                                         pre_filt=(
+                                             0.005, 0.01, fmax, fmax * 1.2),
                                          output=kind)
                     st_tmp = st_rot.copy()
                     st_rot = obspy.Stream()
@@ -445,13 +446,13 @@ def plot_spectrum(ax, ax_all, df_mute, iax, ichan_in, spectrum,
             ichan += 1
 
 
-def envelope_smooth(envelope_window, tr):
+def envelope_smooth(envelope_window_in_sec, tr, mode='valid'):
     tr_env = tr.copy()
     tr_env.data = envelope(tr_env.data)
 
-    w = np.ones(int(envelope_window / tr.stats.delta))
+    w = np.ones(int(envelope_window_in_sec / tr.stats.delta))
     w /= w.sum()
-    tr_env.data = np.convolve(tr_env.data, w, 'valid')
+    tr_env.data = np.convolve(tr_env.data, w, mode=mode)
 
     return tr_env
 
@@ -510,62 +511,73 @@ def phase_ac(x, Fs, maxlag_sec=8., nu=2.5):
         plusterm = np.abs(A + B)
         minusterm = np.abs(A - B)
 
-        ac[i] = 1. / (2 * len(x)) * np.sum(plusterm ** nu - minusterm ** nu)
+        ac[i] = 1. / (2 * len(x)) * np.sum(plusterm ** nu - minusterm ** nu) * \
+                np.sqrt(ilag / Fs)
         i += 1
     return ac
 
 
 def autocorrelation(st, starttime, endtime, fmin=1.2, fmax=3.5, max_lag_sec=40):
     # st.decimate(2)
-    st.filter('highpass', freq=fmin, zerophase=True)
-    st.filter('lowpass', freq=fmax, zerophase=True)
-    st.trim(starttime=starttime,
-            endtime=endtime)
-    st.taper(max_percentage=0.05)
+
     Fs = int(st[0].stats.sampling_rate)
     max_lag = max_lag_sec * Fs
-    acsum = np.zeros(max_lag)
-    acsum2 = np.zeros(st[0].stats.npts)
 
-    fig, ax = plt.subplots(nrows=2, ncols=1, sharex='all', figsize=(15, 8))
+    fig, ax = plt.subplots(nrows=4, ncols=1, sharey='all', sharex='all',
+                           figsize=(15, 8))
 
-    for tr in st:  # .select(channel='BHZ'):
-        data = whiten(tr.data)
-        data = filt(data, Fs=tr.stats.sampling_rate,
-                    freqs=(fmin, fmax))
-        ac = phase_ac(data,
-                      Fs=tr.stats.sampling_rate,
-                      maxlag_sec=max_lag_sec)
-        ax[0].plot(np.arange(0, len(ac)) / Fs,
-                   filt(ac, Fs=tr.stats.sampling_rate,
-                        freqs=(fmin, fmax)),
-                   lw=2, label=tr.stats.channel)
-        acsum += ac
+    freqs = [[1.1, 3.5],
+             [1.1, 5.0],
+             [1.1, 8.0],
+             [3.0, 6.0]]
+    for i, freq in enumerate(freqs):
+        print(freq)
+        st_work = st.copy()
+        st_work.filter('highpass', freq=1. / 10., zerophase=True)
+        st_work.filter('lowpass', freq=8., zerophase=True)
+        st_work.trim(starttime=starttime,
+                     endtime=endtime)
+        st_work.taper(max_percentage=0.05)
+        acsum = np.zeros((max_lag, 4))
+        for tr in st_work:  # .select(channel='BHZ'):
+            data = whiten(tr.data)
+            data = filt(data, Fs=tr.stats.sampling_rate,
+                        freqs=(freq[0], freq[1]))
+            ac = phase_ac(data,
+                          Fs=tr.stats.sampling_rate,
+                          maxlag_sec=max_lag_sec)
+            t_ac = np.arange(0, len(ac)) / Fs
+            ax[i].plot(t_ac,
+                       filt(ac, Fs=tr.stats.sampling_rate,
+                            freqs=(fmin, fmax)),
+                       lw=2, label=tr.stats.channel)
+            acsum[:, i] += filt(ac, Fs=tr.stats.sampling_rate,
+                                freqs=(fmin, fmax))
 
-        ac = np.correlate(tr.data, tr.data, mode='same') \
-             / (np.sum(tr.data * tr.data))
-        ax[1].plot(np.arange(-len(ac) / 2, len(ac) / 2) / Fs,
-                   ac, lw=2, label=tr.stats.channel)
-        acsum2 += ac
-    ax[0].plot(np.arange(0, len(acsum)) / Fs, acsum, lw=2, c='k',
-               label='Sum')
+            # ac_CC = np.correlate(tr.data, tr.data, mode='same') \
+            #         / (np.sum(tr.data * tr.data))
+            # ax[1].plot(np.arange(-len(ac_CC) / 2, len(ac_CC) / 2) / Fs,
+            #            ac_CC, lw=2, label=tr.stats.channel)
+            # acsum_CC += ac_CC
+        ax[i].plot(t_ac, acsum[:, i], lw=2, c='k',
+                   label='Sum')
     # ax[0].plot(np.arange(0, len(acsum)) / Fs, abs(hilbert(acsum)),
     #            label='Env. of Sum',
     #            lw=2, c='r')
     ax[0].legend()
-    ax[1].plot(np.arange(-len(acsum2) / 2, len(acsum2) / 2) / Fs,
-               acsum2, lw=2, c='k')
-    ax[1].plot(np.arange(-len(acsum2) / 2, len(acsum2) / 2) / Fs,
-               abs(hilbert(acsum2)), lw=2, c='r')
+    # ax[1].plot(np.arange(-len(acsum_CC) / 2, len(acsum_CC) / 2) / Fs,
+    #            acsum_CC, lw=2, c='k')
+    # ax[1].plot(np.arange(-len(acsum_CC) / 2, len(acsum_CC) / 2) / Fs,
+    #            abs(hilbert(acsum_CC)), lw=2, c='r')
     ax[1].set_xlabel('seconds')
-    ax[0].set_ylim(-0.8, 0.8)
-    ax[1].set_ylim(-0.8, 0.8)
-    ax[0].set_xlim((0, max_lag_sec * 0.8))
+    ax[0].set_ylim(-1.2, 1.2)
+    ax[1].set_ylim(-1.2, 1.2)
+    ax[0].set_xlim((0, 20))
     for a in ax:
         a.set_xticks(np.arange(0, 30), minor=True)
         a.grid('on', which='major')
         a.grid('on', which='minor', ls='dashed', color='grey')
 
     ax[0].set_title('Phase autocorrelation')
-    ax[1].set_title('CC autocorrelation')
-    return fig
+    # ax[1].set_title('CC autocorrelation')
+    return fig, ax

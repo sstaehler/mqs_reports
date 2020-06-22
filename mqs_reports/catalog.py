@@ -8,11 +8,11 @@
     None
 """
 
-from os.path import join as pjoin
+from os.path import join as pjoin, exists as pexists
 from typing import Union
 
-import matplotlib.ticker
 import matplotlib.pylab as pl
+import matplotlib.ticker
 import numpy as np
 from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
@@ -23,9 +23,11 @@ from scipy import stats
 from tqdm import tqdm
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
+from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
+    EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
+from mqs_reports.snr import calc_stalta
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
 
 
@@ -213,9 +215,10 @@ class Catalog:
             events.append(event)
         return self.__class__(events=events)
 
-    def load_distances(self, fnam_csv):
+    def load_distances(self, fnam_csv, overwrite=False):
         for event in self:
-            event.load_distance_manual(fnam_csv)
+            event.load_distance_manual(fnam_csv,
+                                       overwrite=overwrite)
 
     def calc_spectra(self, winlen_sec: float, detick_nfsamp=0) -> None:
         """
@@ -385,13 +388,12 @@ class Catalog:
     def plot_24_alignment(
          self, pre_time=120., post_time=120., fmax_filt=2.7, fmin_filt=2.1,
          envelope_window=100., amp_fac=2., show_picks=True, shift_to_S=False,
-         regular_spacing=True, label=True, fill=True,
+         regular_spacing=True, spacing=1., label=True, fill=True,
          colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
                  'VERY_HIGH_FREQUENCY': 'C3'},
          linestyle={'A': '-', 'B': '-', 'C': '--', 'D': ':'}, legend=True,
-         llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
-         linewidth=None,
-         show=True):
+         #llabels=['VERY_HIGH_FREQUENCY', 'HIGH_FREQUENCY', '2.4_HZ'],
+         linewidth=None, fig=None, cax=None, show=True):
 
         events = []
         for event in self:
@@ -409,12 +411,18 @@ class Catalog:
             else:
                 events.append(event)
 
+        llabels = []
+        for et in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+            if et in [e.mars_event_type for e in events]:
+                llabels.append(et)
+
         # compute TP - TS to sort by distance
         tt_PgSg = np.array([(utct(event.picks['Sg']) -
                              utct(event.picks['Pg'])) for event in events])
         sorted_ids = np.argsort(tt_PgSg)
 
-        fig = plt.figure()
+        if fig is None:
+            fig = plt.figure()
 
         for k, i in enumerate(sorted_ids):
             event = events[i]
@@ -466,13 +474,16 @@ class Catalog:
             #Y = trZ_env.data * amp_fac + k
             #Y0 = np.median(trZ_noise_env.data) * amp_fac + k
             if regular_spacing:
-                Y0 = k
+                Y0 = k * spacing
                 #Y0 = 0.
             else:
                 Y0 = tt_PgSg[i]
                 #Y0 = 0.
 
-            Y = (trZ_env.data - np.median(trZ_noise_env.data)) * amp_fac + Y0
+            if regular_spacing and spacing == 0.:
+                Y = trZ_env.data * amp_fac
+            else:
+                Y = (trZ_env.data - np.median(trZ_noise_env.data)) * amp_fac + Y0
             #Y = (np.log10(trZ_env.data) -
             #     np.log10(np.median(trZ_noise_env.data))) * amp_fac + Y0
             #Y = np.log10(trZ_env.data) * amp_fac + Y0
@@ -482,8 +493,10 @@ class Catalog:
             X = X[::10]
             Y = Y[::10]
 
-            color = colors[event.mars_event_type]
-            #color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
+            if spacing == 0.:
+                color = pl.cm.jet((tt_PgSg[i] - tt_PgSg.min()) / tt_PgSg.ptp())
+            else:
+                color = colors[event.mars_event_type]
             plt.plot(X, Y, color=color,
                      ls=linestyle[event.quality], zorder=1000-k, lw=linewidth)
 
@@ -529,18 +542,39 @@ class Catalog:
             #bla = 0.5
             #plt.plot([200 * bla, 400 * bla], [200, 400], color='C6')
             #plt.plot([150, 150], [50, 400], color='C7')
-            pass
 
         if legend:
             # legend
             lcolors = [colors[l] for l in llabels]
             llines = [Line2D([0], [0], color=c) for c in lcolors]
-            plt.legend(llines, llabels)
+            plt.legend(llines, [EVENT_TYPES_PRINT[l] for l in llabels])
 
         # lable, limit, ticks
         plt.xlabel(f'time after {"S" if shift_to_S else "P"}g / s')
         plt.xlim(-pre_time - 300, None)
         #plt.yticks([], [])
+
+        if regular_spacing and spacing == 0.:
+            import matplotlib as mpl
+
+            #plt.tick_params(axis='y', which='both', left=False, right=False,
+            #                labelleft=False)
+
+            cmap = mpl.cm.jet
+            norm = mpl.colors.Normalize(vmin=tt_PgSg.min(), vmax=tt_PgSg.max())
+
+            if cax is None:
+                cax = fig.add_axes([0.35, 0.92, 0.6, 0.03])
+                orientation = 'horizontal'
+            else:
+                orientation = 'vertical'
+
+            cb1 = mpl.colorbar.ColorbarBase(cax, cmap=cmap,
+                                            norm=norm,
+                                            orientation=orientation)
+            cb1.set_label('Pg - Sg time / s')
+
+
 
         if show:
             plt.show()
@@ -548,17 +582,18 @@ class Catalog:
             return fig
 
     def plot_HF_spectra(self, SNR=2., tooltip=False, component='Z', fmin=0.7,
+                        quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY',
+                                                 'VERY_HIGH_FREQUENCY'],
                         fmax=10., use_SP=False, fig=None, show=True):
         from mpldatacursor import datacursor
         if fig is None:
             fig = plt.figure()
         ax = fig.gca()
 
-        cat = self.select(quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY',
-                                                   'VERY_HIGH_FREQUENCY'])
+        cat = self.select(quality=quality, event_type=event_type)
 
         class ContinueI(Exception):
-                pass
+            pass
 
         for event in cat:
 
@@ -648,12 +683,12 @@ class Catalog:
                            ampfac=ampfac, f_c=f_c)
         spec4 = lorenz_att(f, A0=-2 + delta_A0, f0=2.4, tstar=0.4, fw=0.3,
                            ampfac=ampfac, f_c=f_c)
-        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1')
-        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2')
-        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05')
-        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4')
+        l3, = plt.plot(f, spec1, color='k', label='t* = 0.1 s')
+        l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2 s')
+        l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05 s')
+        l6, = plt.plot(f, spec4, color='k', ls=':', label='t* = 0.4 s')
 
-        llabels = ['P', 'S'] + [l.get_label() for l in [l5, l3, l4, l6]]
+        llabels = ['Pg', 'Sg'] + [l.get_label() for l in [l5, l3, l4, l6]]
         plt.legend([l1, l2, l5, l3, l4, l6], llabels)
         plt.xlabel('frequency / Hz')
         plt.ylabel('Amplitude relative to 2.4 peak / dB')
@@ -726,11 +761,11 @@ class Catalog:
 
                 scatter_annot(tt, A, s=S, fig=fig, names=names,
                               marker=markers[event_type],
-                              label=f'{event_type}, {quality}',
+                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
                               **colorargs)
 
 
-        plt.xlabel('TP - TS / s')
+        plt.xlabel('TSg - TPg / s')
         plt.ylabel('A2.4 / dB')
 
         vs = CRUST_VS
@@ -748,6 +783,66 @@ class Catalog:
             plt.show()
         else:
             return fig
+
+    def plot_snr_dist(
+            self, mag_type='m2.4',
+            colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+                    'VERY_HIGH_FREQUENCY': 'C0'},
+            xlabel='distance / degree [vs = 2 km/s, vp/vs = 1.7]',
+            markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+            markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+            fig=None, show=True):
+
+        if fig is None:
+            fig = plt.figure()
+
+        legend_elements = []
+
+        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+            for quality in 'ABCD':
+                cat = self.select(quality=quality, event_type=event_type)
+
+                if len(cat) == 0:
+                    continue
+
+                # collect properties for plotting
+                M, dist = np.array([
+                    (  # event.magnitude(mag_type=mag_type,
+                        # distance=event.distance),
+                        calc_stalta(event, fmin=2.2, fmax=2.8),
+                        event.distance) for event in cat]).T.astype(float)
+
+                S = np.array([markersize[event.quality] for event in cat])
+                names = np.array(
+                    [f'{event.name} {event.duration_s:.0f}' for event in cat])
+
+                mask = np.logical_not(np.isnan(M))
+                M = M[mask]
+                dist = dist[mask]
+                S = S[mask]
+                names = names[mask]
+
+                if markerfill[quality]:
+                    colorargs = {'c': colors[event_type]}
+                else:
+                    colorargs = {'edgecolors': colors[event_type],
+                                 'facecolor': 'none'}
+
+                scatter_annot(dist, M, s=S, fig=fig, names=names,
+                              label=f'{event_type}, {quality}',
+                              **colorargs)
+
+        dist = np.linspace(3, 50)
+
+        plt.xlabel(xlabel)
+        plt.ylabel('SNR of event')
+        plt.legend()
+
+        if show:
+            plt.show()
+        else:
+            return fig
+
 
     def plot_magnitude_distance(
          self, mag_type='m2.4',
@@ -794,7 +889,7 @@ class Catalog:
 
                 scatter_annot(dist, M, s=S, fig=fig, names=names,
                               marker=markers[event_type],
-                              label=f'{event_type}, {quality}',
+                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
                               **colorargs)
 
         dist = np.linspace(3, 50)
@@ -891,7 +986,7 @@ class Catalog:
         kde = stats.gaussian_kde(d, weights=1./d**2)
         x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
-        plt.plot(x, pdf1, color=color, label=label + ' area weighted', ls='--')
+        plt.plot(x, pdf1, color=color, label=label + ' (area weighted)', ls='--')
 
         # kde = stats.gaussian_kde(np.log10(d), weights=1./d**2)
         # x = np.linspace(1., 50, 1000.)
@@ -919,7 +1014,6 @@ class Catalog:
         :param annotations: Annotations object; used to mark glitches,
                             if available
         """
-        from os.path import exists as pexists
         for event in tqdm(self):
             for chan in ['Z', 'N', 'E']:
                 fnam_report = pjoin(dir_out,
@@ -931,6 +1025,80 @@ class Catalog:
                                       annotations=annotations)
                 else:
                     event.fnam_report[chan] = fnam_report
+
+    def plot_filterbanks(self,
+                         dir_out: str = 'filterbanks',
+                         annotations: Annotations = None,
+                         instrument: str = None,
+                         fmax_LF: float = 8.,
+                         fmin_LF: float = 1. / 32.,
+                         fmax_HF: float = 16.,
+                         fmin_HF: float = 1. / 2.,
+                         df_LF: float = 2. ** 0.5,
+                         df_HF: float = 2. ** 0.25
+                         ):
+
+        for event in tqdm(self):
+            if event.mars_event_type_short in ['LF', 'BB']:
+                if instrument is None:
+                    instrument = 'VBB'
+                if len(event.picks['S']) * len(event.picks['P']) > 0:
+                    t_S = utct(event.picks['S'])
+                    t_P = utct(event.picks['P'])
+                else:
+                    t_P = utct(event.starttime)
+                    t_S = None
+                fmin = fmin_LF
+                fmax = fmax_LF
+                df = df_LF
+            else:
+                if instrument is None:
+                    instrument = 'SP'
+                if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                    t_S = utct(event.picks['Sg'])
+                    t_P = utct(event.picks['Pg'])
+                else:
+                    t_P = utct(event.starttime)
+                    t_S = None
+                fmin = fmin_HF
+                fmax = fmax_HF
+                df = df_HF
+
+            fnam = pjoin(dir_out,
+                         'filterbank_%s_all.png' % event.name)
+            if not pexists(fnam):
+                event.plot_filterbank(normwindow='all', annotations=annotations,
+                                      starttime=event.starttime - 300.,
+                                      endtime=event.endtime + 300.,
+                                      instrument=instrument,
+                                      fnam=fnam, fmin=fmin, fmax=fmax, df=df)
+
+            if event.quality in ['A', 'B', 'C']:
+                fnam = pjoin(dir_out,
+                             'filterbank_%s_zoom.png' % event.name)
+                if not pexists(fnam):
+                    event.plot_filterbank(starttime=t_P - 300.,
+                                          endtime=t_P + 1100.,
+                                          normwindow='S',
+                                          annotations=annotations,
+                                          tmin_plot=-240., tmax_plot=900.,
+                                          fnam=fnam,
+                                          instrument=instrument,
+                                          fmin=fmin, fmax=fmax, df=df)
+
+                if t_S is not None:
+                    fnam = pjoin(dir_out,
+                                 'filterbank_%s_phases.png' % event.name)
+                    if not pexists(fnam):
+                        event.plot_filterbank(starttime=t_P - 120.,
+                                              endtime=t_S + 240.,
+                                              normwindow='S',
+                                              annotations=annotations,
+                                              tmin_plot=-50.,
+                                              tmax_plot=t_S - t_P + 200.,
+                                              fnam=fnam,
+                                              instrument=instrument,
+                                              fmin=fmin, fmax=fmax, df=df)
 
     def plot_spectra(self,
                      ymin: float = -240.,

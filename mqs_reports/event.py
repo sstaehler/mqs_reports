@@ -20,6 +20,7 @@ from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
+from mqs_reports.annotations import Annotations
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick
 
@@ -74,7 +75,8 @@ class Event:
             self.endtime = utct(utct(self.picks['end']))
             self.duration = utct(utct(self.picks['end']) -
                                  utct(self.picks['start']))
-            self.duration_s = utct(self.picks['end']) - utct(self.picks['start'])
+            self.duration_s = utct(self.picks['end']) - utct(
+                self.picks['start'])
         except TypeError:
             print('incomplete picks for event %s' % self.name)
             print(self.picks)
@@ -107,6 +109,7 @@ class Event:
             self.origin_time = utct(sso_origin_time)
             self.distance = sso_distance
             self.distance_type = 'GUI'
+            self.baz = None
 
         # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
@@ -114,10 +117,12 @@ class Event:
             if self.distance is not None:
                 self.distance_type = 'PgSg'
             self.origin_time = utct(origin_time)
+            self.baz = None
 
         else:
             self.origin_time = utct(origin_time)
             self.distance = None
+            self.baz = None
 
         self._waveforms_read = False
         self._spectra_available = False
@@ -145,20 +150,25 @@ class Event:
         return string.format(**dict(inspect.getmembers(self)))
 
     def load_distance_manual(self,
-                             fnam_csv: str) -> None:
+                             fnam_csv: str,
+                             overwrite=False) -> None:
         """
         Load distance of event from CSV file. Can be used for "aligned"
         distances that are not in the database
         :param: fnam_csv: path to CSV file with distances
+        :param: overwrite: Overwrite existing location from BED?
         """
         from csv import DictReader
         with open(fnam_csv, 'r') as csv_file:
             csv_reader = DictReader(csv_file)
             for row in csv_reader:
-                if self.distance is None:
+                if overwrite or (self.distance is None):
                     if self.name == row['name']:
                         self.distance = float(row['distance'])
+                        self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
+                        print('Found aligned distance %f for event %s' %
+                              (self.distance, self.name))
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
@@ -175,17 +185,15 @@ class Event:
             distance_km = deltat / (1. / vs - 1. / vp)
             return kilometers2degrees(distance_km, radius=RADIUS_MARS)
         else:
-            deltat = float(utct(self.picks['end']) - utct(self.picks['start']))
-            # map duration to Ts - Tp
-            deltat /= 3.
-            distance_km = deltat / (1. / vs - 1. / vp)
-            return kilometers2degrees(distance_km, radius=RADIUS_MARS)
+            return None
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
                        sc3dir: str,
                        event_tmp_dir='./events',
-                       kind: str = 'DISP') -> None:
+                       kind: str = 'DISP',
+                       fmin_SP: float = 0.5,
+                       fmin_VBB: float = 1. / 30.) -> None:
         """
         Wrapper to check whether local copy of corrected waveform exists and
         read it from sc3dir otherwise (and create local copy)
@@ -195,10 +203,28 @@ class Event:
                      expect the data to be in displacement
         """
         if not self.read_data_local(dir_cache=event_tmp_dir):
-            self.read_data_from_sc3dir(inv, sc3dir, kind)
+            self.read_data_from_sc3dir(inv, sc3dir, kind,
+                                       fmin_SP=fmin_SP,
+                                       fmin_VBB=fmin_VBB)
             self.write_data_local(dir_cache=event_tmp_dir)
+
+        if self.baz is not None:
+            self.add_rotated_traces()
         self._waveforms_read = True
         self.kind = 'DISP'
+
+    def add_rotated_traces(self):
+        # Add rotated phases to waveform objects
+        st_rot = self.waveforms_VBB.copy()
+        st_rot.rotate('NE->RT', back_azimuth=self.baz)
+        for chan in ['?HT', '?HR']:
+            self.waveforms_VBB += st_rot.select(channel=chan)[0]
+
+        if self.waveforms_SP is not None:
+            st_rot = self.waveforms_SP.copy()
+            st_rot.rotate('NE->RT', back_azimuth=self.baz)
+            for chan in ['?HT', '?HR']:
+                self.waveforms_SP += st_rot.select(channel=chan)[0]
 
     def read_data_local(self, dir_cache: str = 'events') -> bool:
         """
@@ -256,6 +282,8 @@ class Event:
                               inv: obspy.Inventory,
                               sc3dir: str,
                               kind: str,
+                              fmin_SP=0.5,
+                              fmin_VBB=1. / 30.,
                               tpre_SP: float = 100,
                               tpre_VBB: float = 1200.) -> None:
         """
@@ -290,7 +318,7 @@ class Event:
             self.waveforms_SP = read_data(fnam_SP, inv=inv, kind=kind,
                                           twin=[twin_start - tpre_SP,
                                                 twin_end + tpre_SP],
-                                          fmin=0.5)
+                                          fmin=fmin_SP)
         else:
             self.waveforms_SP = None
 
@@ -303,6 +331,7 @@ class Event:
         if len(glob(fnam_VBB)) % 3 == 0:
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
+                                           fmin=fmin_VBB,
                                            twin=[twin_start - tpre_VBB,
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
@@ -316,6 +345,7 @@ class Event:
                 sc3dir=sc3dir, time=self.picks['start'])
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
+                                           fmin=fmin_VBB,
                                            twin=[twin_start - tpre_VBB,
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
@@ -329,6 +359,7 @@ class Event:
                 sc3dir=sc3dir, time=self.picks['start'])
             self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
                                            kind=kind,
+                                           fmin=fmin_VBB,
                                            twin=[twin_start - tpre_VBB,
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
@@ -367,8 +398,6 @@ class Event:
                 else:
                     available[chan] = None
         return available
-
-
 
     def calc_spectra(self, winlen_sec, detick_nfsamp=0):
         """
@@ -442,7 +471,7 @@ class Event:
             if self.waveforms_VBB is None and self.waveforms_SP is not None:
                 self.spectra[variable] = spectrum_variable
 
-        # compute horizontal spectra on VBB 
+        # compute horizontal spectra on VBB
         for signal in self.spectra.keys():
             if signal in self.spectra:
                 self.spectra[signal]['p_H'] = \
@@ -452,8 +481,8 @@ class Event:
         for signal in self.spectra_SP.keys():
             if signal in self.spectra:
                 self.spectra_SP[signal]['p_H'] = \
-                    self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal]['p_E']
-
+                    self.spectra_SP[signal]['p_N'] + self.spectra_SP[signal][
+                        'p_E']
 
         self.amplitudes = {'A0': None,
                            'tstar': None,
@@ -463,7 +492,7 @@ class Event:
                            'width_24': None}
 
         if 'noise' in self.spectra:
-            f = self.spectra['noise']['f']
+            f_noise = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
             for signal in ['S', 'P', 'all']:
                 amplitudes = None
@@ -472,17 +501,19 @@ class Event:
                         comp = 'p_H'
                     else:
                         comp = 'p_Z'
- 
+
                     p_sig = None
                     if comp in self.spectra[signal]:
                         p_sig = self.spectra[signal][comp]
                     elif comp in self.spectra_SP[signal]:
                         p_sig = self.spectra_SP[signal][comp]
                     if p_sig is not None:
-                        amplitudes = fit_spectra(f=f,
-                                                 p_sig=p_sig,
-                                                 p_noise=p_noise,
-                                                 event_type=self.mars_event_type_short)
+                        f_sig = self.spectra[signal]['f']
+                    amplitudes = fit_spectra(f_sig=f_sig,
+                                             f_noise=f_noise,
+                                             p_sig=p_sig,
+                                             p_noise=p_noise,
+                                             event_type=self.mars_event_type_short)
                 if amplitudes is not None:
                     break
             if amplitudes is not None:
@@ -496,6 +527,7 @@ class Event:
                        fmin: float,
                        fmax: float,
                        instrument: str = 'VBB',
+                       twin_sec: float = 10.,
                        unit: str = 'm') -> Union[float, None]:
         """
         Pick amplitude from waveform
@@ -507,8 +539,10 @@ class Event:
         :param fmin: minimum frequency for pre-picking bandpass
         :param fmax: maximum frequency for pre-picking bandpass
         :param instrument: 'VBB' (default) or 'SP'
+        :param twin_sec: time window around amplitude pick in which to look
+                         for maximum amplitude.
         :param unit: 'm', 'nm', 'pm', 'fm'
-        :return: amplitude in 5 sec time window around pick time
+        :return: amplitude in time window around pick time
         """
         if not self._waveforms_read:
             raise RuntimeError('waveforms not read in Event object\n' +
@@ -541,8 +575,8 @@ class Event:
         if self.picks[pick] == '':
             return None
         else:
-            tmin = utct(self.picks[pick]) - 10.
-            tmax = utct(self.picks[pick]) + 10.
+            tmin = utct(self.picks[pick]) - twin_sec
+            tmax = utct(self.picks[pick]) + twin_sec
             st_work.trim(starttime=tmin, endtime=tmax)
             if comp in ['Z', 'N', 'E']:
                 return abs(st_work.select(channel='??' + comp)[0].data).max() \
@@ -648,3 +682,294 @@ class Event:
                     f.write(f'    uncertainty_upper: {dt}\n')
                     f.write(f'    uncertainty_model: uniform\n')
                     f.write('\n')
+
+    def rotation_plot(self, angles, fmin, fmax):
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+        fig, ax = plt.subplots(nrows=1, ncols=2, sharex='all', sharey='all',
+                               figsize=(10, 6))
+
+        nangles = len(angles)
+        st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        st_work.decimate(5)
+        st_work.filter('highpass', freq=fmin, corners=6)
+        st_work.filter('lowpass', freq=fmax, corners=6)
+        st_work.trim(starttime=utct(self.origin_time) - 50.,
+                     endtime=utct(self.origin_time) + 850.)
+
+        for iangle, angle in enumerate(angles):
+
+            st_rot: obspy.Stream = st_work.copy()
+            st_rot.rotate('NE->RT', back_azimuth=angle)
+
+            tr_R_env = envelope_smooth(tr=st_rot.select(channel='BHR')[0],
+                                       envelope_window_in_sec=10.)
+            tr_T_env = envelope_smooth(tr=st_rot.select(channel='BHT')[0],
+                                       envelope_window_in_sec=10.)
+            tr_Z_env = envelope_smooth(tr=st_rot.select(channel='BHZ')[0],
+                                       envelope_window_in_sec=10.)
+            maxfac = np.quantile(tr_Z_env.data, q=0.98)
+            for itr, tr in enumerate((tr_R_env, tr_T_env)):
+                xvec = tr_Z_env.times() + float(tr_Z_env.stats.starttime - \
+                                                utct(self.picks['P']))
+                ax[itr].plot(xvec,
+                             iangle + tr_Z_env.data / maxfac, c='grey',
+                             lw=1)
+                ax[itr].fill_between(x=xvec,
+                                     y1=iangle + tr_Z_env.data / maxfac,
+                                     y2=iangle, color='darkgrey')
+                ax[itr].plot(xvec,
+                             iangle + tr.data / maxfac, c='k', lw=1.5,
+                             zorder=50)
+
+        self.mark_phases(ax, tref=utct(self.picks['P']))
+        ax[0].set_yticks(range(0, nangles))
+        ax[0].set_yticklabels(angles)
+        ax[0].set_xlim(-50, 550)
+        ax[0].set_ylim(-1, nangles * 1.15)
+        ax[0].set_xlabel('time after P-wave')
+        ax[0].set_ylabel('Rotation angle')
+        ax[0].set_title('Radial component')
+        ax[1].set_title('Transversal component')
+        fig.suptitle('Event %s (%5.3f-%5.3f Hz)' %
+                     (self.name, fmin, fmax))
+        fig.savefig('rotations_%s_%3.1f_%3.1f_sec.png' %
+                    (self.name, 1. / fmax, 1. / fmin),
+                    dpi=200)
+        # plt.show()
+
+    def mark_phases(self, ax, tref):
+        for a in ax:
+            for pick in ['P', 'S', 'Pg', 'Sg']:
+                try:
+                    a.axvline(utct(self.picks[pick]) - tref,
+                              c='darkred', ls='dashed')
+                except TypeError:
+                    pass
+            for pick in ['start', 'end']:
+                a.axvline(utct(self.picks[pick]) - tref,
+                          c='darkgreen', ls='dashed')
+
+    def plot_filterbank(self,
+                        fmin: float = 1. / 64,
+                        fmax: float = 4.,
+                        df: float = 2 ** 0.5,
+                        log: bool = False,
+                        waveforms: bool = False,
+                        normwindow: str = 'all',
+                        annotations: Annotations = None,
+                        tmin_plot: float = None,
+                        tmax_plot: float = None,
+                        timemarkers: dict = None,
+                        starttime: obspy.UTCDateTime = None,
+                        endtime: obspy.UTCDateTime = None,
+                        instrument: str = 'VBB',
+                        fnam: str = None):
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+
+        def mark_glitch(ax: list,
+                        x0: float, x1: float,
+                        ymin: float = -2.,
+                        height: float = 50., **kwargs):
+            from matplotlib.patches import Rectangle
+            xy = [x0, ymin]
+            width = x1 - x0
+            for a in ax:
+                rect = Rectangle(xy=xy, width=width, height=height, **kwargs)
+                a.add_patch(rect)
+
+        fig, ax = plt.subplots(nrows=1, ncols=3, sharex='all', sharey='all',
+                               figsize=(10, 6))
+
+        # Determine frequencies
+        nfreqs = int(np.round(np.log(fmax / fmin) / np.log(df), decimals=0) + 1)
+        freqs = np.geomspace(fmin, fmax + 0.001, nfreqs)
+
+        # Reference time
+        if 'P' in self.picks and len(self.picks['P']) > 0:
+            t_ref = utct(self.picks['P'])
+            t_ref_type = 'P'
+        else:
+            t_ref = self.starttime
+            t_ref_type = 'start time'
+
+        if instrument == 'VBB':
+            st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        elif instrument == 'SP':
+            st_work = self.waveforms_SP.select(channel='??[ENZ]').copy()
+        else:
+            raise ValueError(f'Invalid value for instrument: {instrument}')
+
+        try:
+            st_work.rotate('NE->RT', back_azimuth=self.baz)
+        except:
+            rotated = False
+        else:
+            rotated = True
+
+        tstart_norm = dict(P=self.picks['P_spectral_start'],
+                           S=self.picks['S_spectral_start'],
+                           all=self.starttime)
+        tend_norm = dict(P=self.picks['P_spectral_end'],
+                         S=self.picks['S_spectral_end'],
+                         all=self.endtime)
+        if normwindow == 'S' and len(tstart_norm[normwindow]) == 0:
+            normwindow = 'P'
+            # if normwindow == 'P' and len(tstart_norm[normwindow]) == 0:
+            #     normwindow = 'all'
+        tstart_norm = utct(tstart_norm[normwindow])
+        tend_norm = utct(tend_norm[normwindow])
+
+        if starttime is None:
+            starttime = self.starttime - 100.
+        if endtime is None:
+            endtime = self.endtime + 100.
+        if tmin_plot is None:
+            tmin_plot = starttime - t_ref
+        if tmax_plot is None:
+            tmax_plot = endtime - t_ref
+
+        st_work.trim(starttime=utct(starttime) - 1. / fmin,
+                     endtime=utct(endtime) + 1. / fmin)
+
+        for ifreq, fcenter in enumerate(freqs):
+            f0 = fcenter / df
+            f1 = fcenter * df
+            st_filt = st_work.copy()
+            st_filt.filter('bandpass', freqmin=f0, freqmax=f1, corners=8)
+
+            st_filt.trim(starttime=utct(starttime),
+                         endtime=utct(endtime))
+
+            if rotated:
+                tr_3 = st_filt.select(channel='?HT')[0]
+                tr_2 = st_filt.select(channel='?HR')[0]
+            else:
+                tr_2 = st_filt.select(channel='?HN')[0]
+                tr_3 = st_filt.select(channel='?HE')[0]
+            tr_2_env = envelope_smooth(tr=tr_2, mode='same',
+                                       envelope_window_in_sec=10.)
+            tr_3_env = envelope_smooth(tr=tr_3, mode='same',
+                                       envelope_window_in_sec=10.)
+            tr_Z = st_filt.select(channel='?HZ')[0]
+            tr_Z_env = envelope_smooth(tr=tr_Z, mode='same',
+                                       envelope_window_in_sec=10.)
+
+            tr_real = [tr_Z, tr_2, tr_3]
+            for itr, tr in enumerate((tr_Z_env, tr_2_env, tr_3_env)):
+                if log:
+                    tr_norm = tr.slice(starttime=tstart_norm,
+                                       endtime=tend_norm)
+                    maxfac = np.quantile(tr_norm.data, q=0.9)
+                    offset = np.quantile(tr_norm.data, q=0.1)
+                else:
+                    tr_norm = tr.slice(starttime=tstart_norm,
+                                       endtime=tend_norm,
+                                       nearest_sample=True)
+                    maxfac = np.quantile(tr_norm.data, q=0.9)
+                    offset = np.quantile(tr_norm.data, q=0.1)
+
+                xvec_env = tr_Z_env.times() + float(tr_Z_env.stats.starttime - \
+                                                    t_ref)
+                xvec = tr_Z.times() + float(tr_Z.stats.starttime - \
+                                            t_ref)
+                # ax[itr].plot(xvec_env,
+                #              iangle + tr_Z_env.data / maxfac, c='grey',
+                #              lw=1)
+                # ax[itr].fill_between(x=xvec_env,
+                #                      y1=iangle + tr_Z_env.data / maxfac,
+                #                      y2=iangle, color='darkgrey')
+                if log:
+                    ax[itr].plot(xvec_env,
+                                 ifreq + np.log(tr.data / maxfac) / 3,
+                                 lw=1.0, zorder=50)
+                else:
+                    if waveforms:
+                        color = 'k'
+                    else:
+                        color = 'C%d' % (ifreq % 10)
+
+                    ax[itr].plot(xvec_env,
+                                 ifreq + (tr.data - offset) / maxfac,
+                                 c=color,
+                                 lw=0.5, zorder=80)
+                    if waveforms:
+                        ax[itr].plot(xvec,
+                                     ifreq + tr_real[itr].data / maxfac,
+                                     c='C%d' % (ifreq % 10),
+                                     lw=0.5, zorder=50 - ifreq)
+
+                if timemarkers is not None:
+                    for phase, time in timemarkers.items():
+                        if tmin_plot < time < tmax_plot:
+                            ax[itr].axvline(x=time, ls='dashed')
+                            ax[itr].text(x=time, y=nfreqs, s=phase)
+
+        self.mark_phases(ax, tref=t_ref)
+
+        if annotations is not None:
+            annotations_event = annotations.select(
+                starttime=utct(self.picks['start']) - 180.,
+                endtime=utct(self.picks['end']) + 180.)
+            if len(annotations_event) > 0:
+                x0s = []
+                x1s = []
+                for times in annotations_event:
+                    tmin_glitch = utct(times[0])
+                    tmax_glitch = utct(times[1])
+                    x0s.append(
+                        float(tmin_glitch) - float(t_ref))
+                    x1s.append(
+                        float(tmax_glitch) - float(t_ref))
+
+            for x0, x1 in zip(x0s, x1s):
+                mark_glitch(ax, x0, x1, fc='lightgrey',
+                            zorder=-3, alpha=0.8)
+            mark_glitch(ax,
+                        x0=tstart_norm - float(t_ref),
+                        x1=tend_norm - float(t_ref),
+                        ymin=-1, height=0.3, fc='grey', alpha=0.8
+                        )
+        ax[0].set_yticks(range(0, nfreqs))
+        np.set_printoptions(precision=3)
+        ticklabels = []
+        for freq in freqs:
+            if freq > 1:
+                ticklabels.append(f'{freq:.1f}Hz')
+            else:
+                ticklabels.append(f'1/{1. / freq:.1f}Hz')
+        ax[0].set_yticklabels(ticklabels)
+        for a in ax:
+            # a.set_xticks(np.arange(-300, 1000, 100), minor=False)
+            a.set_xticks(np.arange(-300, 3000, 25), minor=True)
+            if t_ref_type == 'P':
+                a.set_xlabel('time after P-wave')
+            else:
+                a.set_xlabel('time after start time')
+            a.grid(b=True, which='both', axis='x', lw=0.2, alpha=0.3)
+            a.grid(b=True, which='major', axis='y', lw=0.2, alpha=0.3)
+        ax[0].set_xlim(tmin_plot, tmax_plot)
+        ax[0].set_ylim(-1.5, nfreqs + 1.5)
+        ax[0].set_ylabel('frequency')
+        ax[0].set_title('Vertical')
+        if rotated:
+            ax[1].set_title('Radial')
+            ax[2].set_title('Transverse')
+        else:
+            ax[1].set_title('North/South')
+            ax[2].set_title('East/West')
+        fig.suptitle('Event %s (%5.3f-%5.3f Hz)' %
+                     (self.name, fmin, fmax))
+        plt.subplots_adjust(top=0.911,
+                            bottom=0.097,
+                            left=0.089,
+                            right=0.972,
+                            hspace=0.2,
+                            wspace=0.116)
+        if fnam is None:
+            plt.show()
+        else:
+            fig.savefig(fnam,
+                        dpi=200)
+        plt.close()
