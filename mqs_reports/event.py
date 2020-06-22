@@ -837,74 +837,77 @@ class Event:
             f0 = fcenter / df
             f1 = fcenter * df
             st_filt = st_work.copy()
-            st_filt.filter('bandpass', freqmin=f0, freqmax=f1, corners=8)
-
-            st_filt.trim(starttime=utct(starttime),
-                         endtime=utct(endtime))
-
-            if rotated:
-                tr_3 = st_filt.select(channel='?HT')[0]
-                tr_2 = st_filt.select(channel='?HR')[0]
+            try:
+                st_filt.filter('bandpass', freqmin=f0, freqmax=f1, corners=8)
+            except ValueError:  # If f0 is above Nyquist
+                print('No 20sps data available for event %s' % self.name)
             else:
-                tr_2 = st_filt.select(channel='?HN')[0]
-                tr_3 = st_filt.select(channel='?HE')[0]
-            tr_2_env = envelope_smooth(tr=tr_2, mode='same',
-                                       envelope_window_in_sec=10.)
-            tr_3_env = envelope_smooth(tr=tr_3, mode='same',
-                                       envelope_window_in_sec=10.)
-            tr_Z = st_filt.select(channel='?HZ')[0]
-            tr_Z_env = envelope_smooth(tr=tr_Z, mode='same',
-                                       envelope_window_in_sec=10.)
+                st_filt.trim(starttime=utct(starttime),
+                             endtime=utct(endtime))
 
-            tr_real = [tr_Z, tr_2, tr_3]
-            for itr, tr in enumerate((tr_Z_env, tr_2_env, tr_3_env)):
-                if log:
-                    tr_norm = tr.slice(starttime=tstart_norm,
-                                       endtime=tend_norm)
-                    maxfac = np.quantile(tr_norm.data, q=0.9)
-                    offset = np.quantile(tr_norm.data, q=0.1)
+                if rotated:
+                    tr_3 = st_filt.select(channel='?HT')[0]
+                    tr_2 = st_filt.select(channel='?HR')[0]
                 else:
-                    tr_norm = tr.slice(starttime=tstart_norm,
-                                       endtime=tend_norm,
-                                       nearest_sample=True)
-                    maxfac = np.quantile(tr_norm.data, q=0.9)
-                    offset = np.quantile(tr_norm.data, q=0.1)
+                    tr_2 = st_filt.select(channel='?HN')[0]
+                    tr_3 = st_filt.select(channel='?HE')[0]
+                tr_2_env = envelope_smooth(tr=tr_2, mode='same',
+                                           envelope_window_in_sec=10.)
+                tr_3_env = envelope_smooth(tr=tr_3, mode='same',
+                                           envelope_window_in_sec=10.)
+                tr_Z = st_filt.select(channel='?HZ')[0]
+                tr_Z_env = envelope_smooth(tr=tr_Z, mode='same',
+                                           envelope_window_in_sec=10.)
 
-                xvec_env = tr_Z_env.times() + float(tr_Z_env.stats.starttime - \
-                                                    t_ref)
-                xvec = tr_Z.times() + float(tr_Z.stats.starttime - \
-                                            t_ref)
-                # ax[itr].plot(xvec_env,
-                #              iangle + tr_Z_env.data / maxfac, c='grey',
-                #              lw=1)
-                # ax[itr].fill_between(x=xvec_env,
-                #                      y1=iangle + tr_Z_env.data / maxfac,
-                #                      y2=iangle, color='darkgrey')
-                if log:
-                    ax[itr].plot(xvec_env,
-                                 ifreq + np.log(tr.data / maxfac) / 3,
-                                 lw=1.0, zorder=50)
-                else:
-                    if waveforms:
-                        color = 'k'
+                tr_real = [tr_Z, tr_2, tr_3]
+                for itr, tr in enumerate((tr_Z_env, tr_2_env, tr_3_env)):
+                    if log:
+                        tr_norm = tr.slice(starttime=tstart_norm,
+                                           endtime=tend_norm)
+                        maxfac = np.quantile(tr_norm.data, q=0.9)
+                        offset = np.quantile(tr_norm.data, q=0.1)
                     else:
-                        color = 'C%d' % (ifreq % 10)
+                        tr_norm = tr.slice(starttime=tstart_norm,
+                                           endtime=tend_norm,
+                                           nearest_sample=True)
+                        maxfac = np.quantile(tr_norm.data, q=0.9)
+                        offset = np.quantile(tr_norm.data, q=0.1)
 
-                    ax[itr].plot(xvec_env,
-                                 ifreq + (tr.data - offset) / maxfac,
-                                 c=color,
-                                 lw=0.5, zorder=80)
-                    if waveforms:
-                        ax[itr].plot(xvec,
-                                     ifreq + tr_real[itr].data / maxfac,
-                                     c='C%d' % (ifreq % 10),
-                                     lw=0.5, zorder=50 - ifreq)
+                    t_offset = float(tr_Z_env.stats.starttime - t_ref)
+                    xvec_env = tr_Z_env.times() + t_offset
+                    xvec = tr_Z.times() + t_offset
+                    # ax[itr].plot(xvec_env,
+                    #              iangle + tr_Z_env.data / maxfac, c='grey',
+                    #              lw=1)
+                    # ax[itr].fill_between(x=xvec_env,
+                    #                      y1=iangle + tr_Z_env.data / maxfac,
+                    #                      y2=iangle, color='darkgrey')
+                    if log:
+                        ax[itr].plot(xvec_env,
+                                     ifreq + np.log(tr.data / maxfac) / 3,
+                                     lw=1.0, zorder=50)
+                    else:
+                        if waveforms:
+                            color = 'k'
+                        else:
+                            color = 'C%d' % (ifreq % 10)
 
-                if timemarkers is not None:
-                    for phase, time in timemarkers.items():
-                        if tmin_plot < time < tmax_plot:
-                            ax[itr].axvline(x=time, ls='dashed')
-                            ax[itr].text(x=time, y=nfreqs, s=phase)
+                        ax[itr].plot(xvec_env,
+                                     ifreq + (tr.data - offset) / maxfac,
+                                     c=color,
+                                     lw=0.5, zorder=80)
+                        if waveforms:
+                            ax[itr].plot(xvec,
+                                         ifreq + tr_real[itr].data / maxfac,
+                                         c='C%d' % (ifreq % 10),
+                                         lw=0.5, zorder=50 - ifreq)
+
+        if timemarkers is not None:
+            for phase, time in timemarkers.items():
+                if tmin_plot < time < tmax_plot:
+                    for a in ax:
+                        a.axvline(x=time, ls='dashed')
+                        a.text(x=time, y=nfreqs, s=phase)
 
         self.mark_phases(ax, tref=t_ref)
 
@@ -923,9 +926,9 @@ class Event:
                     x1s.append(
                         float(tmax_glitch) - float(t_ref))
 
-            for x0, x1 in zip(x0s, x1s):
-                mark_glitch(ax, x0, x1, fc='lightgrey',
-                            zorder=-3, alpha=0.8)
+                for x0, x1 in zip(x0s, x1s):
+                    mark_glitch(ax, x0, x1, fc='lightgrey',
+                                zorder=-3, alpha=0.8)
             mark_glitch(ax,
                         x0=tstart_norm - float(t_ref),
                         x1=tend_norm - float(t_ref),
