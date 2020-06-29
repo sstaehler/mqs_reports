@@ -246,7 +246,8 @@ def qml_get_sso_info_for_event_element(xml_root, ev):
                     lxml_prefix_with_namespace("distance", XMLNS_SINGLESTATION),
                     lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
 
-        sso_info['distance'] = float(distance)
+        if distance is not None:
+            sso_info['distance'] = float(distance)
 
     if pref_ori_time_id is not None:
         origin_time = lxml_text_or_none(
@@ -270,7 +271,8 @@ def qml_get_sso_info_for_event_element(xml_root, ev):
                     lxml_prefix_with_namespace("depth", XMLNS_SINGLESTATION),
                     lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
 
-        sso_info['depth'] = float(depth)
+        if depth is not None:
+            sso_info['depth'] = float(depth)
 
     if pref_azimuth_id is not None:
         azimuth = lxml_text_or_none(
@@ -280,8 +282,8 @@ def qml_get_sso_info_for_event_element(xml_root, ev):
                     pref_azimuth_id,
                     lxml_prefix_with_namespace("azimuth", XMLNS_SINGLESTATION),
                     lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
-
-        sso_info['azimuth'] = float(azimuth)
+        if azimuth is not None:
+            sso_info['azimuth'] = float(azimuth)
 
     return sso_info
 
