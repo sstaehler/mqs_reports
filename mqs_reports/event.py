@@ -167,8 +167,8 @@ class Event:
                         self.distance = float(row['distance'])
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
-                        print('Found aligned distance %f for event %s' %
-                              (self.distance, self.name))
+                        # print('Found aligned distance %f for event %s' %
+                        #       (self.distance, self.name))
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
@@ -558,13 +558,13 @@ class Event:
 
         st_work.filter('bandpass', zerophase=True, freqmin=fmin, freqmax=fmax)
 
-        if unit is 'nm':
+        if unit == 'nm':
             output_fac = 1e9
-        elif unit is 'pm':
+        elif unit == 'pm':
             output_fac = 1e12
-        elif unit is 'fm':
+        elif unit == 'fm':
             output_fac = 1e15
-        elif unit is 'm':
+        elif unit == 'm':
             output_fac = 1.
         else:
             raise ValueError('Unknown unit %s' % unit)
@@ -798,7 +798,10 @@ class Event:
         if instrument == 'VBB':
             st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
         elif instrument == 'SP':
-            st_work = self.waveforms_SP.select(channel='??[ENZ]').copy()
+            try:
+                st_work = self.waveforms_SP.select(channel='??[ENZ]').copy()
+            except AttributeError:
+                st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
         else:
             raise ValueError(f'Invalid value for instrument: {instrument}')
 
@@ -874,8 +877,12 @@ class Event:
                         tr_norm = tr.slice(starttime=tstart_norm,
                                            endtime=tend_norm,
                                            nearest_sample=True)
-                        maxfac = np.quantile(tr_norm.data, q=0.9)
-                        offset = np.quantile(tr_norm.data, q=0.1)
+                        try: 
+                            maxfac = np.quantile(tr_norm.data, q=0.9)
+                            offset = np.quantile(tr_norm.data, q=0.1)
+                        except:
+                            maxfac = 1.e-9
+                            offset = 0.
 
                     t_offset = float(tr_Z_env.stats.starttime - t_ref)
                     xvec_env = tr_Z_env.times() + t_offset

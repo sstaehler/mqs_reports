@@ -39,8 +39,12 @@ def calc_SNR(event: Event, fmin: float, fmax: float,
                 f_bool = np.array((spectra[spec_win]['f'] > fmin,
                                    spectra[spec_win]['f'] < fmax)).all(axis=0)
                 break
+        try:
+            power_signal = np.trapz(p_signal[f_bool], dx=df_signal)
+        except UnboundLocalError:
+            power_signal = 0.0
+            spec_win = 'none'
 
-        power_signal = np.trapz(p_signal[f_bool], dx=df_signal)
         return power_signal / power_noise, spec_win
     else:
         return -1, 'No Noise'
