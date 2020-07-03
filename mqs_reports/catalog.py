@@ -1019,7 +1019,7 @@ class Catalog:
                 fnam_report = pjoin(dir_out,
                                     'mag_report_%s_%s' %
                                     (event.name, chan))
-                if not pexists(fnam_report):
+                if not pexists(fnam_report + '.pdf'):
                     event.make_report(fnam_out=fnam_report,
                                       chan=chan,
                                       annotations=annotations)
@@ -1051,7 +1051,7 @@ class Catalog:
                 fmin = fmin_LF
                 fmax = fmax_LF
                 df = df_LF
-            else:
+            elif event.mars_event_type_short in ['HF', 'VF', '24']:
                 if instrument is None:
                     instrument = 'SP'
                 if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
@@ -1064,17 +1064,34 @@ class Catalog:
                 fmax = fmax_HF
                 df = df_HF
 
-            fnam = pjoin(dir_out,
-                         'filterbank_%s_all.png' % event.name)
-            if not pexists(fnam):
-                event.plot_filterbank(normwindow='all', annotations=annotations,
-                                      starttime=event.starttime - 300.,
-                                      endtime=event.endtime + 300.,
-                                      instrument=instrument,
-                                      fnam=fnam, fmin=fmin, fmax=fmax, df=df)
+            else: # Super High Frequency
+                if instrument is None:
+                    instrument = 'SP'
+                t_P = utct(event.starttime)
+                t_S = None
+                fmin = 0.5
+                fmax = 32.0 * np.sqrt(2.)
+                df = df_HF
 
-            if event.quality in ['A', 'B', 'C']:
-                fnam = pjoin(dir_out,
+            fnam = pjoin(dir_out, event.mars_event_type_short,
+                         'filterbank_%s_all.png' % event.name)
+            nodata = True
+            if not pexists(fnam):
+                try:
+                    event.plot_filterbank(normwindow='all', annotations=annotations,
+                                          starttime=event.starttime - 300.,
+                                          endtime=event.endtime + 300.,
+                                          instrument=instrument,
+                                          fnam=fnam, fmin=fmin, fmax=fmax, df=df)
+                except IndexError:
+                    print('No data for %s' % event.name)
+                except AttributeError:
+                    print('No data for %s' % event.name)
+                else:
+                    nodata = False
+
+            if event.quality in ['A', 'B', 'C'] and not nodata:
+                fnam = pjoin(dir_out, event.mars_event_type_short,
                              'filterbank_%s_zoom.png' % event.name)
                 if not pexists(fnam):
                     event.plot_filterbank(starttime=t_P - 300.,
@@ -1087,7 +1104,7 @@ class Catalog:
                                           fmin=fmin, fmax=fmax, df=df)
 
                 if t_S is not None:
-                    fnam = pjoin(dir_out,
+                    fnam = pjoin(dir_out, event.mars_event_type_short,
                                  'filterbank_%s_phases.png' % event.name)
                     if not pexists(fnam):
                         event.plot_filterbank(starttime=t_P - 120.,
@@ -1099,6 +1116,7 @@ class Catalog:
                                               fnam=fnam,
                                               instrument=instrument,
                                               fmin=fmin, fmax=fmax, df=df)
+            plt.close()
 
     def plot_spectra(self,
                      ymin: float = -240.,

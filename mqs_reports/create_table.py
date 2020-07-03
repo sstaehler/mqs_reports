@@ -151,13 +151,13 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                                      '%s_polarization.png' %
                                      event.name)
     event.fnam_report['fb_local'] = pjoin(path_images_local,
-                                          'filterbank',
-                                          event.name,
+                                          'filterbanks',
+                                          event.mars_event_type_short,
                                           'filterbank_%s_all.png' %
                                           event.name)
     event.fnam_report['fb'] = pjoin(path_images,
-                                    'filterbank',
-                                    event.name,
+                                    'filterbanks',
+                                    event.mars_event_type_short,
                                     'filterbank_%s_all.png' %
                                     event.name)
     path_dailyspec = pjoin(path_images,
@@ -180,8 +180,8 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                    None,
                    event_type_idx[event.mars_event_type_short],
                    None,
-                   float(utct(event.picks['start'])),
-                   float(solify(event.picks['start'])) % 86400,
+                   float(utct(event.starttime)),
+                   float(solify(event.starttime)) % 86400,
                    None,
                    None,
                    snr,
@@ -221,9 +221,9 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
         else:
             link_report = \
                 ('{name:s}<br>' +
-                 '<a href="{Z:s}" target="_blank">Z</a> ' +
-                 '<a href="{N:s}" target="_blank">N</a> ' +
-                 '<a href="{E:s}" target="_blank">E</a>').format(
+                 '<a href="{Z:s}.html" target="_blank">Z</a> ' +
+                 '<a href="{N:s}.html" target="_blank">N</a> ' +
+                 '<a href="{E:s}.html" target="_blank">E</a>').format(
                     **event.fnam_report)
         if pexists(event.fnam_report['pol_local']):
             link_report += ' <a href="{pol:s}" target="_blank">Pol</a>'.format(
@@ -361,7 +361,11 @@ def define_arguments():
 
     helptext = 'Location qualities (one or more)'
     parser.add_argument('-q', '--quality', help=helptext,
-                        nargs='+', default=('A', 'B'))
+                        nargs='+', default=('A', 'B', 'C', 'D'))
+
+    helptext = 'Distances to use: "all" (default), "aligned", "GUI"'
+    parser.add_argument('-d', '--distances', help=helptext,
+                        default='all')
 
     helptext = 'Event types'
     parser.add_argument('-t', '--types', help=helptext,
@@ -381,13 +385,28 @@ if __name__ == '__main__':
                       type_select=args.types, quality=args.quality)
     ann = Annotations(fnam_csv=args.input_csv)
     # load manual (aligned) distances
-    catalog.load_distances(fnam_csv=args.input_dist)
+    if args.distances == 'all':
+        catalog.load_distances(fnam_csv=args.input_dist)
+        fnam_out='overview.html'
+    elif args.distances == 'GUI':
+        fnam_out='overview_GUI.html'
+    elif args.distances == 'aligned':
+        catalog.load_distances(fnam_csv=args.input_dist, overwrite=True)
+        fnam_out='overview_aligned.html'
+
     inv = obspy.read_inventory(args.inventory)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
+        print('Read waveforms')
         catalog.read_waveforms(inv=inv, kind='DISP', sc3dir=args.sc3_dir)
+    print('Calc spectra')
     catalog.calc_spectra(winlen_sec=20., detick_nfsamp=10)
 
+    print('Plot filter banks')
     catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
+
+    print('Make magnitude reports')
     catalog.make_report(dir_out='reports', annotations=ann)
-    catalog.write_table(fnam_out='./overview.html')
+
+    print('Create table')
+    catalog.write_table(fnam_out=fnam_out)
