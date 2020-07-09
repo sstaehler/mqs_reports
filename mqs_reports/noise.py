@@ -18,7 +18,7 @@ from matplotlib.patches import Polygon, Rectangle
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
-import mqs_reports
+from mqs_reports.event import EVENT_TYPES_PRINT
 from mqs_reports.catalog import Catalog
 from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable
 
@@ -284,24 +284,31 @@ class Noise():
 
         quantiles_HF = []
         quantiles_LF = []
+        print(sol_start, sol_end)
         for q in qs:
             bol_LF = np.array([np.isfinite(self.stds_LF),
                                self.sol > sol_start,
                                self.sol < sol_end]).all(axis=0)
-            quantiles_LF.append(
-                np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
-                )
+            if sum(bol_LF) > 0:
+                quantiles_LF.append(
+                    np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
+                    )
+            else:
+                quantiles_LF.append(0.0)
+
             bol_HF = np.array([np.isfinite(self.stds_HF),
                                self.sol > sol_start,
                                self.sol < sol_end]).all(axis=0)
-            quantiles_HF.append(
-                np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
-                )
-
+            if sum(bol_HF) > 0:
+                quantiles_HF.append(
+                    np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
+                    )
+            else:
+                quantiles_HF.append(0.0)
         return np.asarray(quantiles_LF), np.asarray(quantiles_HF)
 
 
-    def plot_daystats(self, cat: mqs_reports.catalog.Catalog = None,
+    def plot_daystats(self, cat: Catalog = None,
                       sol_start: int = 80, sol_end: int = 500, data_apss=False,
                       fnam_out='noise_vs_eventamplitudes.png', extra_data=None,
                       cmap_dist='plasma_r', tau_data=None, metal=False):
@@ -432,11 +439,26 @@ class Noise():
         LF_times = []
         LF_amps = []
         LF_dists = []
-        symbols = {'2.4_HZ': '>',
-                   'HIGH_FREQUENCY': 'v',
-                   'VERY_HIGH_FREQUENCY': '^',
-                   'LOW_FREQUENCY': 's',
-                   'BROADBAND': 'D'}
+        # symbols = {'2.4_HZ': '>',
+        #            'HIGH_FREQUENCY': 'v',
+        #            'VERY_HIGH_FREQUENCY': '^',
+        #            'LOW_FREQUENCY': 's',
+        #            'BROADBAND': 'D'}
+
+
+        # Knapmeyer edition
+        symbols = {'2.4_HZ': 'o',
+                   'HIGH_FREQUENCY': 's',
+                   'VERY_HIGH_FREQUENCY': 'v',
+                   'LOW_FREQUENCY': 'o',
+                   'BROADBAND': 'v'}
+        cols = {'2.4_HZ':              [0.57, 0.86, 0.98],
+                'HIGH_FREQUENCY':      [0.57, 0.86, 0.98],
+                'VERY_HIGH_FREQUENCY': [0.57, 0.86, 0.98],
+                'LOW_FREQUENCY':       [0.45, 0.35, 0.22],
+                'BROADBAND':           [0.45, 0.35, 0.22]}
+
+
         markers_HF = []
         markers_LF = []
 
@@ -485,8 +507,9 @@ class Noise():
                 if len(bol) > 0:
                     sc = ax_LF.scatter(x=np.array(LF_times)[bol], 
                                        y=np.array(LF_amps)[bol],
-                                       c=np.array(LF_dists)[bol],  
-                                       vmin=15., vmax=100., cmap=cmap,
+                                       #c=np.array(LF_dists)[bol],  
+                                       c=(0.45, 0.35, 0.22),
+                                       vmin=15., vmax=100., #cmap=cmap,
                                        edgecolors='k', linewidths=0.5,
                                        s=80., marker=m, zorder=100)
             cax = fig.add_axes([w_LF + w_base + 0.02, h_base + 0.1, 
@@ -500,10 +523,11 @@ class Noise():
                 if len(bol) > 0:
                     sc = ax_HF.scatter(x=np.array(HF_times)[bol], 
                                        y=np.array(HF_amps)[bol],
-                                       c=np.array(HF_dists)[bol],  
-                                       vmin=15., vmax=100., cmap=cmap,
+                                       #c=np.array(HF_dists)[bol],  
+                                       c=(0.57, 0.86, 0.98),
+                                       vmin=15., vmax=100., #cmap=cmap,
                                        edgecolors='k', linewidths=0.5,
-                                       s=40., marker=m, zorder=100)
+                                       s=50., marker=m, zorder=100)
             # cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True, 
             #                    fraction=0.08)
             # cax.ax.set_ylabel('distance / degree', rotation=270.,
@@ -551,7 +575,7 @@ class Noise():
             h, = ax_HF.plot(-100, -100, markeredgecolor='k', markerfacecolor='white', 
                             marker=m, ls=None, lw=0., ms=8.)
             handles.append(h)
-            labels.append(event_type)
+            labels.append(EVENT_TYPES_PRINT[event_type])
         l = ax_HF.legend(handles=handles, labels=labels,
                          bbox_to_anchor=(w_LF + w_base, h_base, 0.1, 0.1), 
                          bbox_transform=fig.transFigure, framealpha=1.0)
@@ -627,8 +651,10 @@ class Noise():
                 self.quantiles_press[i, :] = np.nan_to_num(values_press)
             i += 1
 
-        # self.quantiles_LF, self.quantiles_HF = self.calc_noise_quantiles(
-        #         qs=[0.05, 0.25, 0.5, 0.9], sol_start=sol_start, sol_end=sol_end)
+            # quantiles_LF, quantiles_HF = self.calc_noise_quantiles(
+            #          qs=[0.05, 0.25, 0.5, 0.9], sol_start=isol, sol_end=isol + 1)
+            # self.quantiles_HF[i, :] = np.nan_to_num(quantiles_HF)
+            # self.quantiles_LF[i, :] = np.nan_to_num(quantiles_LF)
 
         # Mask outliers
         self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-23)
