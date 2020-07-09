@@ -14,12 +14,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
-from matplotlib.patches import Polygon, Rectangle
+from matplotlib.patches import Rectangle
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
-from mqs_reports.event import EVENT_TYPES_PRINT
 from mqs_reports.catalog import Catalog
+from mqs_reports.event import EVENT_TYPES_PRINT
 from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable
 
 SECONDS_PER_DAY = 86400.
@@ -235,7 +235,6 @@ class Noise():
                         self.fmin_HF_broad, self.fmax_HF_broad],
                  winlen_sec=self.winlen_sec)
 
-
     def plot_noise_stats(self, sol_start=80, sol_end=None,
                          ax=None, show=True):
         power_bins, p_LF, p_HF = self.calc_noise_stats(sol_end,
@@ -276,41 +275,10 @@ class Noise():
         p_HF = np.cumsum(power_HF) * binwidth
         return bins, p_LF, p_HF
 
-    def calc_noise_quantiles(self, qs,
-                             sol_start=80, sol_end=None):
-        if sol_end is None:
-            # Now
-            sol_end = float(solify(utct())) // 86400
-
-        quantiles_HF = []
-        quantiles_LF = []
-        print(sol_start, sol_end)
-        for q in qs:
-            bol_LF = np.array([np.isfinite(self.stds_LF),
-                               self.sol > sol_start,
-                               self.sol < sol_end]).all(axis=0)
-            if sum(bol_LF) > 0:
-                quantiles_LF.append(
-                    np.quantile(a=20*np.log10(self.stds_LF[bol_LF]), q=q)
-                    )
-            else:
-                quantiles_LF.append(0.0)
-
-            bol_HF = np.array([np.isfinite(self.stds_HF),
-                               self.sol > sol_start,
-                               self.sol < sol_end]).all(axis=0)
-            if sum(bol_HF) > 0:
-                quantiles_HF.append(
-                    np.quantile(a=20*np.log10(self.stds_HF[bol_HF]), q=q)
-                    )
-            else:
-                quantiles_HF.append(0.0)
-        return np.asarray(quantiles_LF), np.asarray(quantiles_HF)
-
-
     def plot_daystats(self, cat: Catalog = None,
                       sol_start: int = 80, sol_end: int = 500, data_apss=False,
                       fnam_out='noise_vs_eventamplitudes.png', extra_data=None,
+                      grouping='quantiles',
                       cmap_dist='plasma_r', tau_data=None, metal=False):
 
         def make_patch_spines_invisible(ax):
@@ -320,21 +288,23 @@ class Noise():
                 sp.set_visible(False)
 
         if self.sols_quant is None:
-            self.calc_time_windows(sol_end, sol_start)
-            self.save_quantiles(fnam='noise_quantiles.npz')
-
-        # verts_LF = []
-        # verts_HF = []
-
-        # for i, isol in enumerate(self.sols_quant):
-        #     if self.quantiles_LF[i, 0] > 0:
-        #         verts_LF.append([isol, 10 * np.log10(self.quantiles_LF[i, 0])])
-        #     if self.quantiles_HF[i, 0] > 0:
-        #         verts_HF.append([isol, 10 * np.log10(self.quantiles_HF[i, 0])])
-        # verts_LF.append([verts_LF[-1][0], -300])
-        # verts_HF.append([verts_HF[-1][0], -300])
-        # verts_HF.append([self.sols_quant[0], -300])
-        # verts_LF.append([self.sols_quant[0], -300])
+            if grouping == 'quantiles':
+                self.calc_quantiles(sol_end, sol_start,
+                                    qs=(0.10, 0.33, 0.67, 0.9))
+                labels = ['10%', '33%', '67%', '90%']
+            elif grouping == 'timewindows':
+                self.calc_time_windows(sol_end, sol_start)
+                if metal:
+                    labels = ['quiet\n(17-22 LMST)',
+                              'NÖCTURNAL WAVEGÜIDE\n(22-5 LMST)',
+                              'SÜNRÏSE\n(5-9 LMST)',
+                              'SËISMIC NÖISË\n(9-17 LMST)']
+                else:
+                    labels = ['quiet\n(17-22 LMST)', 'noisy night\n(22-5 LMST)',
+                              'morning\n(5-9 LMST)', 'day\n(9-17 LMST)']
+            else:
+                raise ValueError(f'Unknown value for grouping: {grouping}')
+            self.save_quantiles(fnam=f'noise_{grouping}.npz')
 
         fig = plt.figure(figsize=(16, 9))
         # ax_HF = ax[1
@@ -401,12 +371,6 @@ class Noise():
 
         cols = ['black', 'darkgrey', 'grey', 'black']
         ls = ['dotted', 'dashed', 'dotted', 'dashed']
-        if metal: 
-            labels = ['quiet\n(17-22 LMST)', 'NÖCTURNAL WAVEGÜIDE\n(22-5 LMST)',
-                      'SÜNRÏSE\n(5-9 LMST)', 'SËISMIC NÖISË\n(9-17 LMST)']
-        else:
-            labels = ['quiet\n(17-22 LMST)', 'noisy night\n(22-5 LMST)',
-                      'morning\n(5-9 LMST)', 'day\n(9-17 LMST)']
         for i in range(self.quantiles_LF.shape[1] - 1, -1, -1):
             ax_LF.plot(self.sols_quant - 1.,
                        10 * np.log10(self.quantiles_LF[:, i]),
@@ -505,11 +469,11 @@ class Noise():
             for event_type, m in symbols.items():
                 bol = np.array(markers_LF) == m
                 if len(bol) > 0:
-                    sc = ax_LF.scatter(x=np.array(LF_times)[bol], 
+                    sc = ax_LF.scatter(x=np.array(LF_times)[bol],
                                        y=np.array(LF_amps)[bol],
-                                       #c=np.array(LF_dists)[bol],  
-                                       c=(0.45, 0.35, 0.22),
-                                       vmin=15., vmax=100., #cmap=cmap,
+                                       c=np.array(LF_dists)[bol],
+                                       # c=(0.45, 0.35, 0.22),
+                                       vmin=15., vmax=100.,  # cmap=cmap,
                                        edgecolors='k', linewidths=0.5,
                                        s=80., marker=m, zorder=100)
             cax = fig.add_axes([w_LF + w_base + 0.02, h_base + 0.1, 
@@ -553,16 +517,17 @@ class Noise():
                          (self.fmin_HF, self.fmax_HF))
 
         ax_LF.set_ylim(-210., -170.)
-        ax_LF.set_title('Seismic power, low frequency,  %3.1f-%3.1f seconds and LF/BB events' %
-                        (1. / self.fmax_LF, 1. / self.fmin_LF))
-        ax_HF.set_title('Seismic power, high frequency,  %3.1f-%3.1f Hz and HF/2.4 Hz events' %
-                        (self.fmin_HF, self.fmax_HF))
+        ax_LF.set_title(
+            'Seismic power, low frequency,  %3.1f-%3.1f seconds and LF/BB events' %
+            (1. / self.fmax_LF, 1. / self.fmin_LF))
+        ax_HF.set_title(
+            'Seismic power, high frequency,  %3.1f-%3.1f Hz and HF/2.4 Hz events' %
+            (self.fmin_HF, self.fmax_HF))
         ax_HF.set_ylim(-225., -185.)
         ax_LF.set_xlim(sol_start, sol_end)
 
-
-        ax_HF.text(0.7, -0.12, s=str(self),
-                   transform=ax_HF.transAxes)
+        # ax_HF.text(0.7, -0.12, s=str(self),
+        #            transform=ax_HF.transAxes)
 
         # Daytimes legend
         l = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.6, 0.1, 0.2),
@@ -572,7 +537,8 @@ class Noise():
         handles = []
         labels = []
         for event_type, m in symbols.items():
-            h, = ax_HF.plot(-100, -100, markeredgecolor='k', markerfacecolor='white', 
+            h, = ax_HF.plot(-100, -100, markeredgecolor='k',
+                            markerfacecolor='white',
                             marker=m, ls=None, lw=0., ms=8.)
             handles.append(h)
             labels.append(EVENT_TYPES_PRINT[event_type])
@@ -604,6 +570,69 @@ class Noise():
                  quantiles_press=self.quantiles_press,
                  sols=self.sols_quant)
 
+    def calc_quantiles(self, sol_end, sol_start, qs):
+
+        self.sols_quant = np.arange(sol_start, sol_end + 1)
+        self.quantiles_LF = np.zeros(
+                (sol_end - sol_start + 1, len(qs)))
+        self.quantiles_HF = np.zeros_like(self.quantiles_LF)
+        self.quantiles_press = np.zeros_like(self.quantiles_LF)
+
+        values_HF = np.zeros(len(qs))
+        values_LF = np.zeros_like(values_HF)
+        values_press = np.zeros_like(values_HF)
+
+        i = 0
+        print('Calculating noise quantiles')
+        df_HF = self.fmax_HF - self.fmin_HF
+        df_LF = self.fmax_LF - self.fmin_LF
+        df_press = self.fmax_press - self.fmin_press
+        for isol in tqdm(self.sols_quant):
+            bol_sol = self.sol == isol - 1
+            if sum(bol_sol) > 1:
+                disp_LF = self.stds_LF[bol_sol] ** 2. / df_LF
+                disp_HF = self.stds_HF[bol_sol] ** 2. / df_HF
+                disp_press = self.stds_press[bol_sol] ** 2. / df_press
+                values_LF = np.nanquantile(disp_LF, q=qs)
+                values_HF = np.nanquantile(disp_HF, q=qs)
+                values_press = np.nanquantile(disp_press, q=qs)
+                # for iwindow, time_window in enumerate(time_windows_hour):
+                #     if time_window[0] < time_window[1]:
+                #         bol_hours = np.array((
+                #                 (time_window[0] < times_this_sol),
+                #                 (times_this_sol < time_window[1]))).all(axis=0)
+                #     else:
+                #         bol_hours = np.array((
+                #                 (time_window[0] < times_this_sol),
+                #                 (times_this_sol < time_window[1]))).any(axis=0)
+
+                #     disp_LF = self.stds_LF[bol_sol] ** 2. / df_LF
+                #     disp_HF = self.stds_HF[bol_sol] ** 2. / df_HF
+                #     disp_press = self.stds_press[bol_sol] ** 2. / df_press
+                #     values_LF[iwindow] = np.nanmedian(disp_LF[bol_hours])
+                #     values_HF[iwindow] = np.nanmedian(disp_HF[bol_hours])
+                #     values_press[iwindow] = np.nanmedian(disp_press[bol_hours])
+
+                self.quantiles_HF[i, :] = np.nan_to_num(values_HF)
+                self.quantiles_LF[i, :] = np.nan_to_num(values_LF)
+                self.quantiles_press[i, :] = np.nan_to_num(values_press)
+            i += 1
+
+            # quantiles_LF, quantiles_HF = self.calc_noise_quantiles(
+            #          qs=[0.05, 0.25, 0.5, 0.9], sol_start=isol, sol_end=isol + 1)
+            # self.quantiles_HF[i, :] = np.nan_to_num(quantiles_HF)
+            # self.quantiles_LF[i, :] = np.nan_to_num(quantiles_LF)
+
+        # Mask outliers
+        self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-23)
+        self.quantiles_HF = np.ma.masked_less(self.quantiles_HF, value=1e-23)
+        self.quantiles_press = np.ma.masked_less(self.quantiles_press,
+                                                 value=1e-6)
+        self.quantiles_LF = np.ma.masked_greater(self.quantiles_LF, value=1e-8)
+        self.quantiles_HF = np.ma.masked_greater(self.quantiles_HF, value=1e-8)
+        self.quantiles_press = np.ma.masked_greater(self.quantiles_press,
+                                                    value=1e-2)
+
     def calc_time_windows(self, sol_end, sol_start,
                           time_windows_hour=[[17, 22.0],
                                              [22.0, 5.0],
@@ -612,7 +641,7 @@ class Noise():
 
         self.sols_quant = np.arange(sol_start, sol_end + 1)
         self.quantiles_LF = np.zeros(
-            (sol_end - sol_start + 1, len(time_windows_hour)))
+                (sol_end - sol_start + 1, len(time_windows_hour)))
         self.quantiles_HF = np.zeros_like(self.quantiles_LF)
         self.quantiles_press = np.zeros_like(self.quantiles_LF)
 
@@ -732,7 +761,7 @@ if __name__ == '__main__':
     # noise.save('noise_0301_1025.npz')
     noise = read_noise('noise_0301_1025.npz')
     noise.plot_noise_stats()
-    noise.read_quantiles(fnam='quantiles.npz')
+    #noise.read_quantiles(fnam='quantiles.npz')
 
     cat = Catalog(fnam_quakeml='mqs_reports/data/catalog_20191024.xml',
                   quality=['A', 'B'])

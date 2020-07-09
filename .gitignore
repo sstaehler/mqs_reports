@@ -102,3 +102,21 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+2020-04-19_a1.csv
+2020-04-19_a1.pdf
+2020-04-20_a1.csv
+annotated_epochs_new.csv.gz
+annotated_epochs_old.csv
+catalog.xml
+catalog_2019.xml
+catalog_20191004.xml
+catalog_20191007.xml
+catalog_20191024.xml
+catalog_20191026.xml
+catalog_20191120.xml
+catalog_20191125.xml
+catalog_S0183a.xml
+erp_template_TWINS.xml
+inventory_single_epoch.xml
+marslocgui.cfg
+paper_UM/
