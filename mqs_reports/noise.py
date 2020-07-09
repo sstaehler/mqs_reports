@@ -333,7 +333,8 @@ class Noise():
                               markeredgecolor='k', markerfacecolor='C0',
                               marker=m, ls=None, lw=0., ms=4.,
                               label='DuDes per Sol\n(A. Spiga)')
-                ax_extra.set_ylim(0, 60)
+                ax_extra.set_yticks(np.arange(0, 90, 15))
+                ax_extra.set_ylim(0, 75)
                 ax_extra.set_ylabel('number of DuDes')
                 ax_extra.yaxis.label.set_color('C0')
                 ax_extra.tick_params(axis='y', colors='C0')
@@ -357,7 +358,8 @@ class Noise():
                                   markeredgecolor='k', markerfacecolor='orange',
                                   marker=m, ls=None, lw=0., ms=6.,
                                   label='tau\n(M. Lemmon)')
-                    ax_tau.set_ylim(0, 1.2)
+                    ax_tau.set_yticks(np.arange(0.3, 2.0, 0.3))
+                    ax_tau.set_ylim(0.3, 1.8)
                     ax_tau.set_ylabel('tau')
                     ax_tau.yaxis.label.set_color('orange')
                     ax_tau.tick_params(axis='y', colors='orange')
@@ -403,33 +405,36 @@ class Noise():
         LF_times = []
         LF_amps = []
         LF_dists = []
-        # symbols = {'2.4_HZ': '>',
-        #            'HIGH_FREQUENCY': 'v',
-        #            'VERY_HIGH_FREQUENCY': '^',
-        #            'LOW_FREQUENCY': 's',
-        #            'BROADBAND': 'D'}
+        TF_times = []
+        TF_amps = []
+        TF_dists = []
+        symbols = {'2.4_HZ': 'v',
+                   'HIGH_FREQUENCY': '^',
+                   'VERY_HIGH_FREQUENCY': '*',
+                   'LOW_FREQUENCY': 's',
+                   'BROADBAND': 'D'}
 
-
-        # Knapmeyer edition
-        symbols = {'2.4_HZ': 'o',
-                   'HIGH_FREQUENCY': 's',
-                   'VERY_HIGH_FREQUENCY': 'v',
-                   'LOW_FREQUENCY': 'o',
-                   'BROADBAND': 'v'}
-        cols = {'2.4_HZ':              [0.57, 0.86, 0.98],
-                'HIGH_FREQUENCY':      [0.57, 0.86, 0.98],
-                'VERY_HIGH_FREQUENCY': [0.57, 0.86, 0.98],
-                'LOW_FREQUENCY':       [0.45, 0.35, 0.22],
-                'BROADBAND':           [0.45, 0.35, 0.22]}
+        # # Knapmeyer edition
+        # symbols = {'2.4_HZ': 'o',
+        #            'HIGH_FREQUENCY': 's',
+        #            'VERY_HIGH_FREQUENCY': 'v',
+        #            'LOW_FREQUENCY': 'o',
+        #            'BROADBAND': 'v'}
+        # cols = {'2.4_HZ':              [0.57, 0.86, 0.98],
+        #         'HIGH_FREQUENCY':      [0.57, 0.86, 0.98],
+        #         'VERY_HIGH_FREQUENCY': [0.57, 0.86, 0.98],
+        #         'LOW_FREQUENCY':       [0.45, 0.35, 0.22],
+        #         'BROADBAND':           [0.45, 0.35, 0.22]}
 
 
         markers_HF = []
         markers_LF = []
+        markers_TF = []
 
         if cat is not None:
             cmap = plt.cm.get_cmap(cmap_dist)
             cmap.set_over('white')
-            for event in cat.select(event_type=['HF', 'VF', '24']):
+            for event in cat.select(event_type=['HF', 'VF']):
                 markers_HF.append(symbols[event.mars_event_type])
                 if event.distance is None:
                     HF_dists.append(50.)
@@ -438,6 +443,16 @@ class Noise():
                 HF_times.append(float(solify(event.starttime)) /
                                 SECONDS_PER_DAY)
                 HF_amps.append(event.amplitudes['A_24'])
+
+            for event in cat.select(event_type=['24']):
+                markers_TF.append(symbols[event.mars_event_type])
+                if event.distance is None:
+                    TF_dists.append(50.)
+                else:
+                    TF_dists.append(event.distance)
+                TF_times.append(float(solify(event.starttime)) /
+                                SECONDS_PER_DAY)
+                TF_amps.append(event.amplitudes['A_24'])
 
             for event in cat.select(event_type=['LF', 'BB']):
                 markers_LF.append(symbols[event.mars_event_type])
@@ -465,34 +480,42 @@ class Noise():
                 LF_amps.append(20 * np.log10(amp))
 
 
-            # for i, m in enumerate(np.unique(markers_LF)): 
             for event_type, m in symbols.items():
                 bol = np.array(markers_LF) == m
                 if len(bol) > 0:
                     sc = ax_LF.scatter(x=np.array(LF_times)[bol],
                                        y=np.array(LF_amps)[bol],
                                        c=np.array(LF_dists)[bol],
-                                       # c=(0.45, 0.35, 0.22),
-                                       vmin=15., vmax=100.,  # cmap=cmap,
+                                       vmin=15., vmax=100., cmap=cmap,
                                        edgecolors='k', linewidths=0.5,
                                        s=80., marker=m, zorder=100)
-            cax = fig.add_axes([w_LF + w_base + 0.02, h_base + 0.1, 
-                                0.018, 1 - h_base - 0.5])
-            cb = plt.colorbar(sc, ax=ax_LF, cax=cax) # use_gridspec=True)
+            cax = fig.add_axes([w_LF + w_base + 0.02,
+                                h_base + 0.1,
+                                0.018,
+                                1 - h_base - 0.5])
+            cb = plt.colorbar(sc, ax=ax_LF, cax=cax)
             cb.ax.set_ylabel('distance / degree', rotation=270.,
                               labelpad=4.45)
-            # for i, m in enumerate(np.unique(markers_HF)): 
             for event_type, m in symbols.items():
                 bol = np.array(markers_HF) == m
                 if len(bol) > 0:
-                    sc = ax_HF.scatter(x=np.array(HF_times)[bol], 
+                    sc = ax_HF.scatter(x=np.array(HF_times)[bol],
                                        y=np.array(HF_amps)[bol],
-                                       #c=np.array(HF_dists)[bol],  
-                                       c=(0.57, 0.86, 0.98),
-                                       vmin=15., vmax=100., #cmap=cmap,
+                                       c=np.array(HF_dists)[bol],
+                                       vmin=15., vmax=100., cmap=cmap,
                                        edgecolors='k', linewidths=0.5,
-                                       s=50., marker=m, zorder=100)
-            # cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True, 
+                                       s=40., marker=m, zorder=100)
+
+            for event_type, m in symbols.items():
+                bol = np.array(markers_TF) == m
+                if len(bol) > 0:
+                    sc = ax_HF.scatter(x=np.array(TF_times)[bol],
+                                       y=np.array(TF_amps)[bol],
+                                       c=np.array(TF_dists)[bol],
+                                       vmin=15., vmax=100., cmap=cmap,
+                                       edgecolors='k', linewidths=0.5,
+                                       s=20., marker=m, zorder=100)
+            # cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True,
             #                    fraction=0.08)
             # cax.ax.set_ylabel('distance / degree', rotation=270.,
             #                   labelpad=12.45)
@@ -517,8 +540,7 @@ class Noise():
                          (self.fmin_HF, self.fmax_HF))
 
         ax_LF.set_ylim(-210., -170.)
-        ax_LF.set_title(
-            'Seismic power, low frequency,  %3.1f-%3.1f seconds and LF/BB events' %
+        ax_LF.set_title( 'Seismic power, low frequency,  %3.1f-%3.1f seconds and LF/BB events' %
             (1. / self.fmax_LF, 1. / self.fmin_LF))
         ax_HF.set_title(
             'Seismic power, high frequency,  %3.1f-%3.1f Hz and HF/2.4 Hz events' %
@@ -543,7 +565,7 @@ class Noise():
             handles.append(h)
             labels.append(EVENT_TYPES_PRINT[event_type])
         l = ax_HF.legend(handles=handles, labels=labels,
-                         bbox_to_anchor=(w_LF + w_base, h_base, 0.1, 0.1), 
+                         bbox_to_anchor=(w_LF + w_base, h_base, 0.1, 0.1),
                          bbox_transform=fig.transFigure, framealpha=1.0)
         l.set_zorder(50)
 
@@ -641,7 +663,7 @@ class Noise():
 
         self.sols_quant = np.arange(sol_start, sol_end + 1)
         self.quantiles_LF = np.zeros(
-                (sol_end - sol_start + 1, len(time_windows_hour)))
+            (sol_end - sol_start + 1, len(time_windows_hour)))
         self.quantiles_HF = np.zeros_like(self.quantiles_LF)
         self.quantiles_press = np.zeros_like(self.quantiles_LF)
 
@@ -680,10 +702,6 @@ class Noise():
                 self.quantiles_press[i, :] = np.nan_to_num(values_press)
             i += 1
 
-            # quantiles_LF, quantiles_HF = self.calc_noise_quantiles(
-            #          qs=[0.05, 0.25, 0.5, 0.9], sol_start=isol, sol_end=isol + 1)
-            # self.quantiles_HF[i, :] = np.nan_to_num(quantiles_HF)
-            # self.quantiles_LF[i, :] = np.nan_to_num(quantiles_LF)
 
         # Mask outliers
         self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-23)
