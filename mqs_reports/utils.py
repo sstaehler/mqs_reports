@@ -581,3 +581,17 @@ def autocorrelation(st, starttime, endtime, fmin=1.2, fmax=3.5, max_lag_sec=40):
     ax[0].set_title('Phase autocorrelation')
     # ax[1].set_title('CC autocorrelation')
     return fig, ax
+
+
+def linregression(x: np.array, y: np.array, q: float = 0.95) -> tuple:
+    # Do a linear regression for value pairs X, Y and return error estimate
+    # for slope and intercept
+    from scipy import stats
+    n = len(x)
+    slope, intercept, r_value, p_value, slope_err = stats.linregress(x, y)
+
+    intercept_err = slope_err * np.sqrt(1. / n * np.sum(x * x))
+
+    tstar = stats.t.ppf(q=q, df=n - 2)
+
+    return (intercept, intercept_err * tstar, slope, slope_err * tstar)

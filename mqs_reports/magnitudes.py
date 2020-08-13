@@ -10,10 +10,13 @@
 
 import numpy as np
 
+from mqs_reports.utils import linregression
+
 
 def mb_P(amplitude_dB, distance_degree):
     amplitude = 10 ** (amplitude_dB / 20.)
-    mag = 0.7318 * np.log10(amplitude) + 1.2 * np.log10(distance_degree)+ 8.3471
+    mag = 0.7318 * np.log10(amplitude) + 1.2 * np.log10(
+        distance_degree) + 8.3471
 
     return mag
 
@@ -171,15 +174,17 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
 
     mute_24 = [1.9, 3.4]
     bol_1Hz_mask = np.array(
-        (np.array((f > fmin, f < fmax)).all(axis=0),
-         np.array((f < 1. / df_mute,
-                   f > df_mute)).any(axis=0),
-         np.array(p_sig > p_noise * 2.)
-         )
-        ).all(axis=0)
+            (np.array((f > fmin, f < fmax)).all(axis=0),
+             np.array((f < 1. / df_mute,
+                       f > df_mute)).any(axis=0),
+             np.array(p_sig > p_noise * 2.)
+             )
+            ).all(axis=0)
     _remove_singles(bol_1Hz_mask)
     A0 = None
     tstar = None
+    A0_err = None
+    tstar_err = None
     ampfac = None
     width_24 = None
     f_24 = None
@@ -208,11 +213,18 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                 except RuntimeError:
                     pass
             else:
-                res = np.polyfit(f[bol_1Hz_mask],
-                                 10 * np.log10(p_sig[bol_1Hz_mask]),
-                                 deg=1)
-                A0 = res[1]
-                tstar = - res[0] / 10. * np.log(10) / np.pi  # Because dB
+                # res = np.polyfit(f[bol_1Hz_mask],
+                #                  10 * np.log10(p_sig[bol_1Hz_mask]),
+                #                  deg=1)
+                res = linregression(x=f[bol_1Hz_mask],
+                                    y=10 * np.log10(p_sig[bol_1Hz_mask]),
+                                    q=0.95)
+                # A0 = res[1]
+                # tstar = - res[0] / 10. * np.log(10) / np.pi  # Because dB
+                A0 = res[0]
+                tstar = - res[2] / 10. * np.log(10) / np.pi  # Because dB
+                A0_err = res[1]
+                tstar_err = - res[3] / 10. * np.log(10) / np.pi  # Because dB
 
     if event_type not in ['LF', 'BB']:
         bol_24_mask = np.array((f > mute_24[0],
@@ -224,6 +236,8 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     amps = dict()
     amps['A0'] = A0
     amps['tstar'] = tstar
+    amps['A0_err'] = A0_err
+    amps['tstar_err'] = tstar_err
     amps['A_24'] = A_24
     amps['f_24'] = f_24
     amps['f_c'] = f_c
