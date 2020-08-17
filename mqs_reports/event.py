@@ -644,7 +644,7 @@ class Event:
 
         elif mag_type == 'MFB':
             if self.mars_event_type_short in ['24', 'HF', 'VF']:
-                mag_type == 'MFB_HF'
+                mag_type = 'MFB_HF'
             amplitude = self.amplitudes['A0'] \
                 if 'A0' in self.amplitudes else None
         elif mag_type == 'm2.4':
