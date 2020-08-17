@@ -17,12 +17,11 @@ from typing import Union
 import numpy as np
 import obspy
 from mars_tools.insight_time import solify
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
-
 from mqs_reports.annotations import Annotations
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
 RADIUS_MARS = 3389.5
 CRUST_VP = 4.
@@ -31,8 +30,8 @@ LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
 EVENT_TYPES_SHORT = {
-    'SUPER_HIGH_FREQUENCY': 'SF',
-    'VERY_HIGH_FREQUENCY': 'VF',
+        'SUPER_HIGH_FREQUENCY': 'SF',
+        'VERY_HIGH_FREQUENCY':  'VF',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
     'HIGH_FREQUENCY': 'HF',
@@ -661,6 +660,99 @@ class Event:
             return funcs[mag_type](amplitude_dB=amplitude,
                                    distance_degree=distance)
 
+    def plot_spectrum(self, comp='Z',
+                      window: str = 'S',
+                      figsize=(4, 3),
+                      color_spec='red',
+                      color_noise='black',
+                      ax=None):
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        ax.plot(self.spectra[window]['f'],
+                10. * np.log10(self.spectra[window]['p_' + comp]),
+                c=color_spec)
+
+        ax.plot(self.spectra['noise']['f'],
+                10. * np.log10(self.spectra['noise']['p_' + comp]),
+                c=color_noise)
+
+        ax.set_xlim(0., 2.)
+        ax.set_ylim(-230., -160.)
+        ax.set_xlabel('frequency / Hz')
+        ax.set_ylabel('power spectral density / m$^2$/Hz')
+        ax.set_title('Spectrum %s' % self.name)
+
+        if new_ax:
+            plt.tight_layout()
+            plt.show()
+
+    def plot_waveform(self, comp='Z',
+                      window: str = 'S',
+                      figsize=(4, 3),
+                      color_spec='red',
+                      color_noise='black',
+                      fmin=None, fmax=None,
+                      ax=None):
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        tr_work = self.waveforms_VBB.select(channel='??' + comp)[0]
+        tr_work.differentiate()
+        tr_work.decimate(2)
+        tr_work.trim(starttime=utct(self.picks['P']) - 60.,
+                     endtime=utct(self.picks['P']) + 520.)
+
+        ax.plot(tr_work.times() - 60., tr_work.data,
+                lw=0.5)
+
+        offset = np.quantile(abs(tr_work.data), q=0.99)
+
+        ax.axvline(x=0., color='k', zorder=-1
+                   )
+        ax.text(x=10., y=-offset * 1.1, s='P',
+                bbox=dict(edgecolor='black',
+                          facecolor='white',
+                          alpha=0.5),
+                fontsize=14)
+        ax.axvline(x=utct(self.picks['S']) - utct(self.picks['P']), color='k',
+                   zorder=-1)
+        ax.text(x=utct(self.picks['S']) - utct(self.picks['P']) + 10.,
+                bbox=dict(edgecolor='black',
+                          facecolor='white',
+                          alpha=0.5),
+                y=-offset * 1.1, s='S', fontsize=14)
+        ax.text(0.12, 0.95,
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes,
+                s='filtered, %3.1f-%3.1f Hz' % (fmin, fmax))
+        ax.text(0.12, 0.05,
+                horizontalalignment='left',
+                verticalalignment='bottom',
+                transform=ax.transAxes,
+                s='raw')
+
+        if fmin is not None and fmax is not None:
+            tr_work.filter('highpass', freq=fmin)
+            tr_work.filter('lowpass', freq=fmax)
+            ax.plot(tr_work.times() - 60., tr_work.data + offset * 1.5,
+                    lw=0.5)
+
+        if new_ax:
+            plt.tight_layout()
+            plt.show()
+
     def make_report(self, chan, fnam_out, annotations=None):
         from mqs_reports.report import make_report
         make_report(self, chan=chan, fnam_out=fnam_out, annotations=annotations)
@@ -736,7 +828,6 @@ class Event:
         fig.savefig('rotations_%s_%3.1f_%3.1f_sec.png' %
                     (self.name, 1. / fmax, 1. / fmin),
                     dpi=200)
-        # plt.show()
 
     def mark_phases(self, ax, tref):
         for a in ax:
