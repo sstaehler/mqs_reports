@@ -595,3 +595,39 @@ def linregression(x: np.array, y: np.array, q: float = 0.95) -> tuple:
     tstar = stats.t.ppf(q=q, df=n - 2)
 
     return (intercept, intercept_err * tstar, slope, slope_err * tstar)
+
+
+def calc_specgram(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
+    from matplotlib.mlab import specgram
+    dt = tr.stats.delta
+
+    s, f, t = specgram(x=tr.data, NFFT=512, Fs=tr.stats.sampling_rate,
+                       noverlap=256, pad_to=1024)
+
+    # t = create_timevector(tr)
+    f_bol = np.asarray(((fmin < f),
+                        (f < fmax))).all(axis=0)
+
+    return s[f_bol, :], f[f_bol], t
+
+
+def calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
+    from obspy.signal.tf_misfit import cwt
+    dt = tr.stats.delta
+
+    scalogram = abs(cwt(tr.data, dt, w0=w0, nf=200,
+                        fmin=fmin, fmax=fmax))
+
+    # t = create_timevector(tr)
+    t = np.linspace(0, dt * tr.stats.npts, tr.stats.npts)
+    f = np.logspace(np.log10(fmin),
+                    np.log10(fmax),
+                    scalogram.shape[0])
+    return scalogram ** 2, f, t
+
+
+def create_timevector(tr, utct=False):
+    timevec = [utct(t +
+                    float(tr.stats.starttime)).datetime
+               for t in tr.times()]
+    return timevec

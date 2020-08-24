@@ -19,7 +19,8 @@ import obspy
 from mars_tools.insight_time import solify
 from mqs_reports.annotations import Annotations
 from mqs_reports.magnitudes import fit_spectra
-from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick
+from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
+    calc_cwf
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
@@ -660,11 +661,117 @@ class Event:
             return funcs[mag_type](amplitude_dB=amplitude,
                                    distance_degree=distance)
 
+    def plot_envelope(self, comp='Z',
+                      figsize=(4, 3),
+                      t0=0.0,
+                      starttime=None, endtime=None,
+                      fmin=0.05, fmax=10.,
+                      ax=None):
+
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        tr = self.waveforms_VBB.select(channel='??' + comp)[0].copy()
+        if starttime is not None:
+            tr.trim(starttime=starttime)
+        if endtime is not None:
+            tr.trim(endtime=endtime)
+
+        tr.differentiate()
+        tr.differentiate()
+        tr.filter('highpass', freq=fmin, corners=8)
+        tr.filter('lowpass', freq=fmax, corners=8)
+
+        tr_env = envelope_smooth(envelope_window_in_sec=10., tr=tr)
+
+        ax.plot(tr_env.times() + t0,
+                tr_env.data * 1e9)
+        ax.axvline(x=0., color='k', zorder=5
+                   )
+        # ax.text(x=10., y=fmax * 0.9, s='P',
+        #         bbox=dict(edgecolor='black',
+        #                   facecolor='white',
+        #                   alpha=0.5),
+        #         fontsize=14)
+        ax.axvline(x=utct(self.picks['S']) - utct(self.picks['P']), color='k',
+                   zorder=3)
+        # ax.text(x=utct(self.picks['S']) - utct(self.picks['P']) + 10.,
+        #         bbox=dict(edgecolor='black',
+        #                   facecolor='white',
+        #                   alpha=0.5),
+        #         y=fmax * 0.9, s='S', fontsize=14)
+        if new_ax:
+            plt.show()
+
+    def plot_spectrogram(self, comp='Z',
+                         figsize=(4, 3),
+                         kind='cwt',
+                         t0=0.0,
+                         starttime=None, endtime=None,
+                         fmin=0.05, fmax=10.,
+                         ax=None):
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        tr = self.waveforms_VBB.select(channel='??' + comp)[0].copy()
+        if starttime is not None:
+            tr.trim(starttime=starttime)
+        if endtime is not None:
+            tr.trim(endtime=endtime)
+
+        tr = detick(tr=tr, detick_nfsamp=5)
+
+        tr.differentiate()
+        tr.differentiate()
+        z, f, t = calc_cwf(tr,
+                           fmin=fmin, fmax=fmax)
+        # z, f, t = calc_specgram(tr, fmin=fmin, fmax=fmax)
+
+        z = 10 * np.log10(z)
+        z[z < -210] = -210.
+        z[z > -160] = -160.
+        # df = 2
+        # dt = 4
+        # ax.pcolormesh(t[::dt], f[::df],z[::df, ::dt], vmin=-220, vmax=-150)
+        ax.pcolormesh(t + t0, f, z, vmin=-210, vmax=-160,
+                      rasterized=True)
+        ax.axvline(x=0., color='k', zorder=5
+                   )
+        ax.text(x=10., y=fmax * 0.95, s='P',
+                verticalalignment='top',
+                # bbox=dict(edgecolor='black',
+                #          facecolor='white',
+                #          alpha=0.5),
+                fontsize=14)
+        ax.axvline(x=utct(self.picks['S']) - utct(self.picks['P']), color='k',
+                   zorder=3)
+        ax.text(x=utct(self.picks['S']) - utct(self.picks['P']) + 10.,
+                verticalalignment='top',
+                # bbox=dict(edgecolor='black',
+                #          facecolor='white',
+                #          alpha=0.5),
+                y=fmax * 0.95, s='S', fontsize=14)
+        if new_ax:
+            plt.show()
+
     def plot_spectrum(self, comp='Z',
                       window: str = 'S',
                       figsize=(4, 3),
                       color_spec='red',
                       color_noise='black',
+                      plot_fit=False,
+                      flip_axes=False,
                       ax=None):
         import matplotlib.pyplot as plt
         if ax is None:
@@ -674,19 +781,42 @@ class Event:
         else:
             new_ax = False
 
-        ax.plot(self.spectra[window]['f'],
-                10. * np.log10(self.spectra[window]['p_' + comp]),
-                c=color_spec)
+        x = self.spectra[window]['f']
+        y = 10. * np.log10(self.spectra[window]['p_' + comp])
+        if flip_axes:
+            ax.plot(y, x, c=color_spec)
+        else:
+            ax.plot(x, y, c=color_spec)
 
-        ax.plot(self.spectra['noise']['f'],
-                10. * np.log10(self.spectra['noise']['p_' + comp]),
-                c=color_noise)
+        y = 10. * np.log10(self.spectra['noise']['p_' + comp])
+        if flip_axes:
+            ax.plot(y, x, c=color_noise)
+        else:
+            ax.plot(x, y, c=color_noise)
 
-        ax.set_xlim(0., 2.)
-        ax.set_ylim(-230., -160.)
-        ax.set_xlabel('frequency / Hz')
-        ax.set_ylabel('power spectral density / m$^2$/Hz')
+        if flip_axes:
+            ax.set_ylim(0., 2.)
+            ax.set_xlim(-230., -160.)
+            ax.set_ylabel('frequency / Hz')
+            ax.set_xlabel('power spectral density / m$^2$/Hz')
+        else:
+            ax.set_xlim(0., 2.)
+            ax.set_ylim(-230., -160.)
+            ax.set_xlabel('frequency / Hz')
+            ax.set_ylabel('power spectral density / m$^2$/Hz')
         ax.set_title('Spectrum %s' % self.name)
+
+        if plot_fit:
+            f = np.geomspace(0.01, 10., 100)
+            f_c = 1.0
+            stf_amp = 1. / (1. + (f / f_c) ** 2) ** 2
+            y = self.amplitudes['A0'] + 10 * np.log10(
+                    np.exp(- np.pi * self.amplitudes['tstar'] * f)
+                    * stf_amp)
+            if flip_axes:
+                ax.plot(y, f)
+            else:
+                ax.plot(f, y)
 
         if new_ax:
             plt.tight_layout()

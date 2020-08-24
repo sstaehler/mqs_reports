@@ -11,11 +11,11 @@ import numpy as np
 import obspy
 import plotly.graph_objects as go
 import plotly.io as pio
+from mqs_reports.magnitudes import lorenz, lorenz_att
+from mqs_reports.utils import envelope_smooth, detick, calc_cwf, \
+    create_timevector
 from obspy import UTCDateTime as utct
 from plotly.subplots import make_subplots
-
-from mqs_reports.magnitudes import lorenz, lorenz_att
-from mqs_reports.utils import envelope_smooth, detick
 
 
 def make_report(event, chan, fnam_out, annotations):
@@ -63,8 +63,8 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
 
         tr.differentiate()
         tr.differentiate()
-        z, f, t = _calc_cwf(tr,
-                            fmin=fmin, fmax=fmax)
+        z, f, t = calc_cwf(tr,
+                           fmin=fmin, fmax=fmax)
         z = 10 * np.log10(z)
         z[z < -220] = -220.
         z[z > -150] = -150.
@@ -284,7 +284,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                                  tr=tr)
         tr_env.stats.starttime += 30.
         tr_env.data *= 2.
-        timevec = _create_timevector(tr)
+        timevec = create_timevector(tr)
         fig.add_trace(
             go.Scatter(x=timevec,
                        y=tr.data,
@@ -293,7 +293,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                        line=go.scatter.Line(color="darkgrey"),
                        mode="lines", **kwargs),
             row=row, col=col)
-        timevec = _create_timevector(tr_env)
+        timevec = create_timevector(tr_env)
         fig.add_trace(
             go.Scatter(x=timevec,
                        y=tr_env.data,
@@ -312,7 +312,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                     tmin = utct(times[0])
                     tmax = utct(times[1])
                     tr_pick = tr.slice(starttime=tmin, endtime=tmax)
-                    timevec = _create_timevector(tr_pick)
+                    timevec = create_timevector(tr_pick)
                     fig.add_trace(go.Scatter(x=timevec,
                                              y=tr_pick.data,
                                              showlegend=False,
@@ -329,7 +329,7 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                 tmin = utct(event.picks[pick]) - 10.
                 tmax = utct(event.picks[pick]) + 10.
                 tr_pick = tr.slice(starttime=tmin, endtime=tmax)
-                timevec = _create_timevector(tr_pick)
+                timevec = create_timevector(tr_pick)
                 fig.add_trace(go.Scatter(x=timevec,
                                          y=tr_pick.data,
                                          name='pick window %s' % pick_type,
@@ -361,26 +361,6 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                               row=row, col=col)
 
     fig.update_yaxes(title_text='displacement / m', row=row, col=col)
-
-
-def _calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
-    from obspy.signal.tf_misfit import cwt
-    dt = tr.stats.delta
-
-    scalogram = abs(cwt(tr.data, dt, w0=w0, nf=200,
-                        fmin=fmin, fmax=fmax))
-
-    t = _create_timevector(tr)  # np.linspace(0, dt * npts, npts)
-    f = np.logspace(np.log10(fmin),
-                    np.log10(fmax),
-                    scalogram.shape[0])
-    return scalogram ** 2, f, t
-
-def _create_timevector(tr):
-    timevec = [utct(t +
-                    float(tr.stats.starttime)).datetime
-               for t in tr.times()]
-    return timevec
 
 
 if __name__ == '__main__':
