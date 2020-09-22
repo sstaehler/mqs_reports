@@ -13,14 +13,13 @@ from os.path import join as pjoin
 import matplotlib.pyplot as plt
 import numpy as np
 import obspy
-from mars_tools.insight_time import solify
 from matplotlib.patches import Polygon, Rectangle
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
 import mqs_reports
 from mqs_reports.catalog import Catalog
-from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable
+from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable, solify
 
 SECONDS_PER_DAY = 86400.
 
@@ -721,7 +720,7 @@ if __name__ == '__main__':
 
 def calc_Ls(t_LMST):
     import marstime
-    from mars_tools.insight_time import UTCify
+    from mqs_reports.utils import UTCify
     t = float(UTCify(t_LMST)) * 1e3
 
     j2000_offset = marstime.j2000_offset_tt(

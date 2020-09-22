@@ -16,13 +16,13 @@ from typing import Union
 
 import numpy as np
 import obspy
-from mars_tools.insight_time import solify
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+
 from mqs_reports.annotations import Annotations
 from mqs_reports.magnitudes import fit_spectra
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
-    calc_cwf
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+    calc_cwf, solify
 
 RADIUS_MARS = 3389.5
 CRUST_VP = 4.

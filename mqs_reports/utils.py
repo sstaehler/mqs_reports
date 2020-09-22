@@ -12,6 +12,23 @@ from obspy.signal.util import next_pow_2
 from scipy.fftpack import fft, ifft
 from scipy.signal import hilbert
 
+SEC_PER_DAY_EARTH = 86400
+SEC_PER_DAY_MARS = 88775.2440
+
+
+def solify(UTC_time, sol0=UTCDateTime(2018, 11, 26, 5, 10, 50.33508)):
+    if type(UTC_time) is str:
+        UTC_time = UTCDateTime(UTC_time)
+    MIT = (UTC_time - sol0) / SEC_PER_DAY_MARS
+    t = UTCDateTime((MIT - 1) * SEC_PER_DAY_EARTH)
+    return t
+
+
+def UTCify(LMST_time, sol0=UTCDateTime(2018, 11, 26, 5, 10, 50.33508)):
+    MIT = float(LMST_time) / SEC_PER_DAY_EARTH + 1
+    UTC_time = UTCDateTime(MIT * SEC_PER_DAY_MARS + float(sol0))
+    return UTC_time
+
 
 def create_fnam_event(
         time,

@@ -14,7 +14,6 @@ from typing import Union
 import matplotlib.pylab as pl
 import matplotlib.ticker
 import numpy as np
-from mars_tools.insight_time import solify
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from obspy import UTCDateTime as utct
@@ -28,7 +27,7 @@ from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
 from mqs_reports.magnitudes import M2_4, lorenz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.snr import calc_stalta
-from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec
+from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec, solify
 
 
 class Catalog:

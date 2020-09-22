@@ -12,11 +12,11 @@ from argparse import ArgumentParser
 from os.path import exists as pexists, join as pjoin
 
 import obspy
-from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
 from mqs_reports.snr import calc_SNR, calc_stalta
+from mqs_reports.utils import solify
 
 
 def create_row_header(list):
