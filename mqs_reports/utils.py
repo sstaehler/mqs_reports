@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from matplotlib import mlab as mlab
-from obspy import UTCDateTime as utct
+from obspy import UTCDateTime as utct, UTCDateTime
 from obspy.signal.filter import envelope
 from obspy.signal.rotate import rotate2zne
 from obspy.signal.util import next_pow_2
@@ -400,7 +400,7 @@ def calc_PSD(tr, winlen_sec, detick_nfsamp=0):
     return f, p
 
 
-def detick(tr, detick_nfsamp, fill_val=None):
+def detick(tr, detick_nfsamp, fill_val=None, freq_tick=1.0):
     # simplistic deticking by muting detick_nfsamp freqeuency samples around
     # 1Hz
     tr_out = tr.copy()
@@ -408,7 +408,7 @@ def detick(tr, detick_nfsamp, fill_val=None):
     NFFT = next_pow_2(tr.stats.npts)
     tr.detrend()
     df = np.fft.rfft(tr.data, n=NFFT)
-    idx_1Hz = np.argmin(np.abs(np.fft.rfftfreq(NFFT) * Fs - 1.))
+    idx_1Hz = np.argmin(np.abs(np.fft.rfftfreq(NFFT) * Fs - freq_tick))
     if fill_val is None:
         fill_val = (df[idx_1Hz - detick_nfsamp - 1] + \
                     df[idx_1Hz + detick_nfsamp + 1]) / 2.
