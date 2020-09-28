@@ -1210,3 +1210,164 @@ class Event:
             fig.savefig(fnam,
                         dpi=200)
         plt.close()
+
+    def plot_filterbank_phase(self,
+                              comp: str,
+                              starttime: obspy.UTCDateTime,
+                              endtime: obspy.UTCDateTime,
+                              tmin_plot: obspy.UTCDateTime,
+                              tmax_plot: obspy.UTCDateTime,
+                              tmin_amp: obspy.UTCDateTime,
+                              tmax_amp: obspy.UTCDateTime,
+                              ax_fbs,
+                              zerophase=False,
+                              df: float = 2 ** 0.5,
+                              waveforms: bool = False,
+                              fmin=1. / 16., fmax=2.):
+        import warnings
+        from mqs_reports.utils import envelope_smooth
+        import scipy.signal as signal
+
+        # Determine frequencies
+        nfreqs = int(np.round(np.log(fmax / fmin) /
+                              np.log(df),
+                              decimals=0) + 1)
+        freqs = np.geomspace(fmin, fmax + 0.001, nfreqs)
+
+        # Reference time
+        if 'P' in self.picks and len(self.picks['P']) > 0:
+            t_ref = utct(self.picks['P'])
+            t_ref_type = 'P'
+        else:
+            t_ref = self.starttime
+            t_ref_type = 'start time'
+
+        st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+
+        st_work.rotate('NE->RT', back_azimuth=self.baz)
+
+        tstart_norm = utct(starttime)
+        tend_norm = utct(endtime)
+
+        if tmin_plot is None:
+            tmin_plot = starttime - t_ref
+            tmax_plot = endtime - t_ref
+
+        st_work.trim(starttime=utct(starttime) - 1. / fmin,
+                     endtime=utct(endtime) + 1. / fmin)
+
+        envs_out = np.zeros(nfreqs)
+
+        for ifreq, fcenter in enumerate(freqs):
+            f0 = fcenter / df
+            f1 = fcenter * df
+            st_filt = st_work.copy()
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    if zerophase:
+                        corners = 3
+                    else:
+                        corners = 6
+                    f0_norm = f0 / (st_filt[0].stats.sampling_rate / 2.)
+                    f1_norm = f1 / (st_filt[0].stats.sampling_rate / 2.)
+
+                    bh, ah = signal.butter(N=corners,
+                                           Wn=(f0_norm),
+                                           btype='highpass')
+
+                    w, h = signal.freqz(b=bh, a=ah, worN=2 ** 14)
+                    bl, al = signal.butter(N=corners,
+                                           Wn=(f1_norm),
+                                           btype='lowpass')
+                    w2, h2 = signal.freqz(b=bl, a=al, worN=2 ** 14)
+                    for tr in st_filt:
+                        if zerophase:
+                            tr.data = signal.filtfilt(bh, ah, tr.data)
+                            tr.data = signal.filtfilt(bl, al, tr.data)
+                            resp = np.trapz(y=(abs(h) * abs(h2)) ** 2.,
+                                            x=w / (2 * np.pi) *
+                                              tr.stats.sampling_rate)
+                        else:
+                            signal.lfilter(bh, ah, tr.data)
+                            signal.lfilter(bl, al, tr.data)
+                            resp = np.trapz(y=abs(h) * abs(h2),
+                                            x=w / (2 * np.pi) *
+                                              tr.stats.sampling_rate)
+
+                    # st_filt.filter('bandpass',
+                    #                freqmin=f0, freqmax=f1,
+                    #                zerophase=zerophase,
+                    #                corners=corners)
+            except ValueError:  # If f0 is above Nyquist
+                print('No 20sps data available for event %s' % self.name)
+            else:
+                st_filt.trim(starttime=utct(starttime),
+                             endtime=utct(endtime))
+                tr = st_filt.select(channel='?H' + comp)[0]
+                tr_env = envelope_smooth(tr=tr, mode='same',
+                                         envelope_window_in_sec=5.)
+
+                tr_norm = tr.slice(starttime=tstart_norm,
+                                   endtime=tend_norm,
+                                   nearest_sample=True)
+                # try:
+                #    maxfac = np.quantile(tr_norm.data, q=0.9)
+                #    offset = np.quantile(tr_norm.data, q=0.1)
+                # except:
+                maxfac = 6.e-11
+                maxfac = np.quantile(tr_env.data, q=0.5)
+                offset = np.quantile(tr_env.data, q=0.1)
+                # offset = 0.
+
+                t_offset = float(tr_env.stats.starttime - t_ref)
+                xvec_env = tr_env.times() + t_offset
+                xvec = tr.times() + t_offset
+                if waveforms:
+                    color = 'k'
+                else:
+                    color = 'C%d' % (ifreq % 10)
+
+                ax_fbs.plot(xvec_env,
+                            ifreq + (tr_env.data - offset) / maxfac,
+                            c=color,
+                            lw=0.5, zorder=80)
+
+                tr_env_amp = tr_env.slice(starttime=t_ref + tmin_amp,
+                                          endtime=t_ref + tmax_amp)
+
+                xvec_env_amp = tr_env_amp.times() + tmin_amp
+                envs_out[ifreq] = tr_env_amp.data.max() / np.sqrt(resp)
+                # np.sqrt(f1 - f0)
+                ax_fbs.plot(xvec_env_amp,
+                            ifreq + (tr_env_amp.data - offset) / maxfac,
+                            c=color,
+                            lw=2.0, zorder=80)
+                if waveforms:
+                    ax_fbs.plot(xvec,
+                                ifreq + tr.data / maxfac,
+                                c='C%d' % (ifreq % 10),
+                                lw=0.5, zorder=50 - ifreq)
+        ax_fbs.set_yticks(range(0, nfreqs))
+        np.set_printoptions(precision=3)
+        ticklabels = []
+        for freq in freqs:
+            if freq > 1:
+                ticklabels.append(f'{freq:.1f}Hz')
+            else:
+                ticklabels.append(f'1/{1. / freq:.1f}Hz')
+        ax_fbs.set_yticklabels(ticklabels)
+        ax_fbs.set_xticks(np.arange(-300, 3000, 25), minor=True)
+        if t_ref_type == 'P':
+            ax_fbs.set_xlabel('time after P-wave')
+        else:
+            ax_fbs.set_xlabel('time after start time')
+        ax_fbs.grid(b=True, which='both', axis='x', lw=0.2, alpha=0.3)
+        ax_fbs.grid(b=True, which='major', axis='y', lw=0.2, alpha=0.3)
+        ax_fbs.axhline(y=np.argmin(abs(freqs - 1.)),
+                       ls='dashed', lw=1.0, c='k')
+        ax_fbs.set_xlim(tmin_plot, tmax_plot)
+        ax_fbs.set_ylim(-1.5, nfreqs + 1.5)
+        ax_fbs.set_ylabel('frequency')
+
+        return freqs, envs_out
