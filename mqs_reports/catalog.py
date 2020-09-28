@@ -24,7 +24,7 @@ from tqdm import tqdm
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
     EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
-from mqs_reports.magnitudes import M2_4, lorenz_att
+from mqs_reports.magnitudes import M2_4, lorentz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.snr import calc_stalta
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec, solify
@@ -674,14 +674,14 @@ class Catalog:
             ampfac = 10.
             delta_A0 = 4.5
 
-        spec1 = lorenz_att(f, A0=-11.5 + delta_A0, f0=2.4, tstar=0.1, fw=0.3,
-                           ampfac=ampfac, f_c=f_c)
-        spec2 = lorenz_att(f, A0=-8.5 + delta_A0, f0=2.4, tstar=0.2, fw=0.3,
-                           ampfac=ampfac, f_c=f_c)
-        spec3 = lorenz_att(f, A0=-13 + delta_A0, f0=2.4, tstar=0.05, fw=0.3,
-                           ampfac=ampfac, f_c=f_c)
-        spec4 = lorenz_att(f, A0=-2 + delta_A0, f0=2.4, tstar=0.4, fw=0.3,
-                           ampfac=ampfac, f_c=f_c)
+        spec1 = lorentz_att(f, A0=-11.5 + delta_A0, f0=2.4, tstar=0.1, fw=0.3,
+                            ampfac=ampfac, f_c=f_c)
+        spec2 = lorentz_att(f, A0=-8.5 + delta_A0, f0=2.4, tstar=0.2, fw=0.3,
+                            ampfac=ampfac, f_c=f_c)
+        spec3 = lorentz_att(f, A0=-13 + delta_A0, f0=2.4, tstar=0.05, fw=0.3,
+                            ampfac=ampfac, f_c=f_c)
+        spec4 = lorentz_att(f, A0=-2 + delta_A0, f0=2.4, tstar=0.4, fw=0.3,
+                            ampfac=ampfac, f_c=f_c)
         l3, = plt.plot(f, spec1, color='k', label='t* = 0.1 s')
         l4, = plt.plot(f, spec2, color='k', ls='--', label='t* = 0.2 s')
         l5, = plt.plot(f, spec3, color='k', ls='-.', label='t* = 0.05 s')

@@ -14,7 +14,7 @@ import plotly.io as pio
 from obspy import UTCDateTime as utct
 from plotly.subplots import make_subplots
 
-from mqs_reports.magnitudes import lorenz, lorenz_att
+from mqs_reports.magnitudes import lorentz, lorentz_att
 from mqs_reports.utils import envelope_smooth, detick, calc_cwf, \
     create_timevector
 
@@ -188,12 +188,12 @@ def plot_spec(event,
             if amps['ampfac'] is not None:
                 fig.add_trace(
                     go.Scatter(x=f,
-                               y=lorenz_att(f, A0=amps['A0'],
-                                            f0=amps['f_24'],
-                                            f_c=amps['f_c'],
-                                            tstar=amps['tstar'],
-                                            fw=amps['width_24'],
-                                            ampfac=amps['ampfac']),
+                               y=lorentz_att(f, A0=amps['A0'],
+                                             f0=amps['f_24'],
+                                             f_c=amps['f_c'],
+                                             tstar=amps['tstar'],
+                                             fw=amps['width_24'],
+                                             ampfac=amps['ampfac']),
                                name='fit: src, att, amplific.<br>'
                                     '%ddB, f=%4.2fHz, f_c=%4.2fHz<br>'
                                     't*=%4.2f, df=%4.2f, dA=%4.1fdB' %
@@ -219,9 +219,9 @@ def plot_spec(event,
     if 'A_24' in amps and amps['A_24'] is not None:
         fig.add_trace(
             go.Scatter(x=f,
-                       y=lorenz(f, A=amps['A_24'],
-                                x0=amps['f_24'],
-                                xw=amps['width_24']),
+                       y=lorentz(f, A=amps['A_24'],
+                                 x0=amps['f_24'],
+                                 xw=amps['width_24']),
                        name='fit, peak only<br>'
                             '%ddB, f0*=%4.2fHz' %
                             (amps['A_24'], amps['f_24']),

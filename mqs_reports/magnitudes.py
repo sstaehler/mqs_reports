@@ -61,20 +61,32 @@ def MFB_HF(amplitude_dB, distance_degree):
         return mag
 
 
-def lorenz(x, A, x0, xw):
-    w = (x - x0) / (xw / 2.)
-    return 10 * np.log10(1 / (1 + w ** 2)) + A
-
-
-def lorenz_att(f: np.array,
-               A0: float,
-               f0: float,
-               f_c: float,
-               tstar: float,
-               fw: float,
-               ampfac: float):
+def lorentz(x, A, x0, xw):
     """
-    Attenuation spectrum, combined with Lorenz peak and source spectrum
+    Return a Lorentz peak function centered around x0, with width xw and
+    amplitude A in dB values
+
+    Parameters
+    ----------
+    :param x: x-values to evaluate function at
+    :param A: Peak amplitude
+    :param x0: center value of peak
+    :param xw: width of peak
+    :return: Lorentz/Cauchy function in dB
+    """
+    w = (x - x0) / (xw / 2.)
+    return 10. * np.log10(1. / (1. + w ** 2)) + A
+
+
+def lorentz_att(f: np.array,
+                A0: float,
+                f0: float,
+                f_c: float,
+                tstar: float,
+                fw: float,
+                ampfac: float):
+    """
+    Attenuation spectrum, combined with Lorentz peak and source spectrum
     :param f: Frequency array (in Hz)
     :param A0: Long-period amplitude in flat part of spectrum (in dB)
     :param f0: Center frequency of the Lorenz peak (aka 2.4 Hz)
@@ -114,17 +126,17 @@ def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
     fw_min = 0.05
     fw_max = 0.4
     # noinspection PyTypeChecker
-    popt, pcov = curve_fit(lorenz_att, f, 10. * np.log10(p),
+    popt, pcov = curve_fit(lorentz_att, f, 10. * np.log10(p),
                            bounds=(
-                               (-240, 
-                                f0_min,
-                                0.8, 
-                                tstar_min,
-                                fw_min,
-                                ampfac_min),
-                               (A0_max, 
-                                f0_max,
-                                10.0, 
+                                   (-240,
+                                    f0_min,
+                                    0.8,
+                                    tstar_min,
+                                    fw_min,
+                                    ampfac_min),
+                                   (A0_max,
+                                    f0_max,
+                                    10.0,
                                 tstar_max,
                                 fw_max,
                                 ampfac_max)),
@@ -133,20 +145,32 @@ def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
     return popt
 
 
-def fit_peak(f, p):
+def fit_peak(f, p, A0_min=-240, A0_max=-180,
+             f0_min=2.25, f0_max=2.5, fw_min=0.05, fw_max=0.4):
+    """
+    Fit a spectral peak to function PSD p at frequencies f
+
+    Parameters
+    ----------
+    :param f: frequency vector [in Hz]
+    :param p: power spectral density [in dB]
+    :param A0_max: Minimum allowed amplitude for peak
+    :param A0_min: Maximum allowed amplitude for peak
+    :param f0_min: Minimum allowed frequency for peak
+    :param f0_max: Maximum allowed frequency for peak
+    :param fw_min: Minimum allowed spectral width [in Hz]
+    :param fw_max: Maximum allowed spectral width [in Hz]
+    :return: list with Amplitude, central frequency, width of peak
+    """
     from scipy.optimize import curve_fit
-    # Central frequency of the 2.4 Hz mode (in Hz)
-    f0_min = 2.25
-    f0_max = 2.5
-    # Width of the 2.4 Hz mode
-    fw_min = 0.05
-    fw_max = 0.4
     try:
         # noinspection PyTypeChecker
-        popt, pcov = curve_fit(lorenz, f, 10 * np.log10(p),
-                               bounds=((-240, f0_min, fw_min),
-                                       (-180, f0_max, fw_max)),
-                               p0=(-210, 2.4, 0.25))
+        popt, pcov = curve_fit(lorentz, f, 10 * np.log10(p),
+                               bounds=((A0_min, f0_min, fw_min),
+                                       (A0_max, f0_max, fw_max)),
+                               p0=((A0_max + A0_min) * 0.5,
+                                   (f0_max + f0_min * 0.5),
+                                   (fw_max + fw_min) * 0.5))
     except ValueError:
         popt = [-250, 2.4, 1.0]
 
