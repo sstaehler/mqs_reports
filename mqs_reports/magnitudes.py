@@ -268,3 +268,25 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     amps['width_24'] = width_24
     amps['ampfac'] = ampfac
     return amps
+
+
+def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax):
+    f = f_sig
+
+    mute_24 = mute_24
+
+    width_24 = None
+    f_24 = None
+    A_24 = None
+
+    bol_24_mask = np.array((f > mute_24[0],
+                            f < mute_24[1])).all(axis=0)
+    A_24, f_24, tmp = fit_peak(f[bol_24_mask], p_sig[bol_24_mask], f0_min = fminmax[0], f0_max=fminmax[-1])
+    if width_24 is None:
+        width_24 = tmp
+
+    amps = dict()
+    amps['A_24'] = A_24
+    amps['f_24'] = f_24
+    amps['width_24'] = width_24
+    return amps
