@@ -310,18 +310,18 @@ def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak):
     bol_24_mask = np.array((f > mute_24[0],
                             f < mute_24[1])).all(axis=0)
     
-    #debug plot part1
-    plt.plot(f, p_sig)
-    plt.plot(f[bol_24_mask], p_sig[bol_24_mask])
+    # #debug plot part1
+    # plt.plot(f, p_sig)
+    # plt.plot(f[bol_24_mask], p_sig[bol_24_mask])
     
     
     A_24, f_24, tmp = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
                                     f0_min = fminmax[0], f0_max=fminmax[-1],
                                     fw_min=width_peak[0], fw_max=width_peak[-1])
 
-    #debug plot part2
-    plt.plot(f[bol_24_mask],lorentz(x=f[bol_24_mask],A=A_24, x0=f_24, xw=tmp))
-    plt.show()
+    # #debug plot part2
+    # plt.plot(f[bol_24_mask],lorentz(x=f[bol_24_mask],A=A_24, x0=f_24, xw=tmp))
+    # plt.show()
 
     if width_24 is None:
         width_24 = tmp
