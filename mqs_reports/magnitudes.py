@@ -149,7 +149,6 @@ def fit_peak(f, p, A0_min=-240, A0_max=-180,
              f0_min=2.25, f0_max=2.5, fw_min=0.05, fw_max=0.4):
     """
     Fit a spectral peak to function PSD p at frequencies f
-
     Parameters
     ----------
     :param f: frequency vector [in Hz]
@@ -176,6 +175,33 @@ def fit_peak(f, p, A0_min=-240, A0_max=-180,
 
     return popt
 
+def fit_peak_modes(f, p, A0_min=-250, A0_max=-150,
+             f0_min=2.25, f0_max=2.5, fw_min=0.05, fw_max=0.4):
+    """
+    Fit a spectral peak to function PSD p at frequencies f
+
+    Parameters
+    ----------
+    :param f: frequency vector [in Hz]
+    :param p: power spectral density [in dB]
+    :param A0_max: Minimum allowed amplitude for peak
+    :param A0_min: Maximum allowed amplitude for peak
+    :param f0_min: Minimum allowed frequency for peak
+    :param f0_max: Maximum allowed frequency for peak
+    :param fw_min: Minimum allowed spectral width [in Hz]
+    :param fw_max: Maximum allowed spectral width [in Hz]
+    :return: list with Amplitude, central frequency, width of peak
+    """
+    from scipy.optimize import curve_fit
+        # noinspection PyTypeChecker
+    popt, pcov = curve_fit(lorentz, f, p,
+                           bounds=((A0_min, f0_min, fw_min),
+                                   (A0_max, f0_max, fw_max)),
+                           p0=((A0_max + A0_min) * 0.5,
+                               (f0_max + f0_min) * 0.5,
+                               (fw_max + fw_min) * 0.5))
+
+    return popt
 
 def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     len_spec = len(f_noise)
@@ -270,7 +296,9 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     return amps
 
 
-def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax):
+def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak):
+    import matplotlib.pyplot as plt
+    
     f = f_sig
 
     mute_24 = mute_24
@@ -281,7 +309,20 @@ def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax):
 
     bol_24_mask = np.array((f > mute_24[0],
                             f < mute_24[1])).all(axis=0)
-    A_24, f_24, tmp = fit_peak(f[bol_24_mask], p_sig[bol_24_mask], f0_min = fminmax[0], f0_max=fminmax[-1])
+    
+    #debug plot part1
+    plt.plot(f, p_sig)
+    plt.plot(f[bol_24_mask], p_sig[bol_24_mask])
+    
+    
+    A_24, f_24, tmp = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
+                                    f0_min = fminmax[0], f0_max=fminmax[-1],
+                                    fw_min=width_peak[0], fw_max=width_peak[-1])
+
+    #debug plot part2
+    plt.plot(f[bol_24_mask],lorentz(x=f[bol_24_mask],A=A_24, x0=f_24, xw=tmp))
+    plt.show()
+
     if width_24 is None:
         width_24 = tmp
 
