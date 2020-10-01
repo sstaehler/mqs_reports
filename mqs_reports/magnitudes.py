@@ -13,10 +13,18 @@ import numpy as np
 from mqs_reports.utils import linregression
 
 
+def get_Mw(M0):
+    return (np.log10(M0) - 9.1) / 1.5
+
+
+def get_M0(Mw):
+    return 10 ** (1.5 * Mw + 9.1)
+
+
 def mb_P(amplitude_dB, distance_degree):
     amplitude = 10 ** (amplitude_dB / 20.)
     mag = 0.7318 * np.log10(amplitude) + 1.2 * np.log10(
-        distance_degree) + 8.3471
+            distance_degree) + 8.3471
 
     return mag
 

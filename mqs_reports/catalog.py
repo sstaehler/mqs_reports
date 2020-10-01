@@ -163,6 +163,10 @@ class Catalog:
         :param name: Name of the event ("SXXXXy")
         :param event_type: two-letter acronym "BB", "LF", "HF", "24", "VF, "SF"
         :param quality: A to D
+        :param distmin: minimum distance (in degree)
+        :param distmax: maximum distance (in degree)
+        :param starttime: minimum origin time (in UTC)
+        :param endtime: maximum origin time (in UTC)
         :return:
         """
         from fnmatch import fnmatch
