@@ -77,6 +77,21 @@ def lorentz(x, A, x0, xw):
     w = (x - x0) / (xw / 2.)
     return 10. * np.log10(1. / (1. + w ** 2)) + A
 
+def lorentz_modes(x, A, x0, xw, ampfac):
+    """
+    Return a Lorentz peak function centered around x0, with width xw and
+    amplitude A in dB values
+
+    Parameters
+    ----------
+    :param x: x-values to evaluate function at
+    :param A: Peak amplitude
+    :param x0: center value of peak
+    :param xw: width of peak
+    :return: Lorentz/Cauchy function in dB
+    """
+    w = (x - x0) / (xw / 2.)
+    return A + 10 * np.log10(1 + ampfac / (1 + w ** 2))
 
 def lorentz_att(f: np.array,
                 A0: float,
@@ -175,8 +190,9 @@ def fit_peak(f, p, A0_min=-240, A0_max=-180,
 
     return popt
 
-def fit_peak_modes(f, p, A0_min=-250, A0_max=-150,
-             f0_min=2.25, f0_max=2.5, fw_min=0.05, fw_max=0.4):
+def fit_peak_modes(f, p, A0_min=-250, A0_max=-135,
+                   f0_min=2.25, f0_max=2.5, fw_min=0.05, fw_max=0.4, 
+                   ampfac_min = 100., ampfac_max = 400.): #10, 400
     """
     Fit a spectral peak to function PSD p at frequencies f
 
@@ -190,16 +206,19 @@ def fit_peak_modes(f, p, A0_min=-250, A0_max=-150,
     :param f0_max: Maximum allowed frequency for peak
     :param fw_min: Minimum allowed spectral width [in Hz]
     :param fw_max: Maximum allowed spectral width [in Hz]
+    ampfac_min/max: Amplification factor of the mode (not in dB!)
+    
     :return: list with Amplitude, central frequency, width of peak
     """
     from scipy.optimize import curve_fit
         # noinspection PyTypeChecker
-    popt, pcov = curve_fit(lorentz, f, p,
-                           bounds=((A0_min, f0_min, fw_min),
-                                   (A0_max, f0_max, fw_max)),
+    popt, pcov = curve_fit(lorentz_modes, f, p,
+                           bounds=((A0_min, f0_min, fw_min, ampfac_min),
+                                   (A0_max, f0_max, fw_max, ampfac_max)),
                            p0=((A0_max + A0_min) * 0.5,
                                (f0_max + f0_min) * 0.5,
-                               (fw_max + fw_min) * 0.5))
+                               (fw_max + fw_min) * 0.5,
+                               (ampfac_max + ampfac_min) * 0.5))
 
     return popt
 
@@ -315,12 +334,13 @@ def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak):
     # plt.plot(f[bol_24_mask], p_sig[bol_24_mask])
     
     
-    A_24, f_24, tmp = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
-                                    f0_min = fminmax[0], f0_max=fminmax[-1],
-                                    fw_min=width_peak[0], fw_max=width_peak[-1])
+    A_24, f_24, tmp, ampfac_24 = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
+                                    f0_min = fminmax[0], f0_max = fminmax[-1],
+                                    fw_min = width_peak[0], fw_max = width_peak[-1],
+                                    ampfac_min = 50., ampfac_max=550.) #50,550 works
 
     # #debug plot part2
-    # plt.plot(f[bol_24_mask],lorentz(x=f[bol_24_mask],A=A_24, x0=f_24, xw=tmp))
+    # plt.plot(f[bol_24_mask],lorentz_modes(x=f[bol_24_mask],A=A_24, x0=f_24, xw=tmp, ampfac=ampfac_24))
     # plt.show()
 
     if width_24 is None:
