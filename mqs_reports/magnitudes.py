@@ -344,19 +344,23 @@ def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak, ampFactor):
     #                                 f0_min = fminmax[0], f0_max = fminmax[-1],
     #                                 fw_min = width_peak[0], fw_max = width_peak[-1])
     
-    A_24, f_24, tmp, ampfac_24 = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
+    A_24, f_24, width_24, ampfac_24 = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
                                     f0_min = fminmax[0], f0_max = fminmax[-1],
                                     fw_min = width_peak[0], fw_max = width_peak[-1],
                                     ampfac_min = ampFactor[0], ampfac_max=ampFactor[-1]) #50,550 works
 
     # #debug plot part2
-    # plt.plot(f[bol_24_mask],lorentz_modes(x=f[bol_24_mask],A=A_24, x0=f_24, xw=tmp, ampfac=ampfac_24))
-    # plt.ylim(-220,-150)
-    # plt.text(x=1, y=-180, s=f'{A_24:6.1f}dB {f_24:6.3f}Hz {tmp:6.4f}Hz {ampfac_24:6.1f}')
+    # plt.plot(f[bol_24_mask],lorentz_modes(x=f[bol_24_mask],A=A_24, x0=f_24, xw=width_24, ampfac=ampfac_24))
+    # plt.ylim(-250,-150)
+    # plt.text(x=1, y=-180, s=f'{A_24:6.1f}dB {f_24:6.3f}Hz {width_24:6.4f}Hz {ampfac_24:6.1f}')
     # plt.show()
+    
+    if ampfac_24  < 10.0: #If amplitude is too small -> Mode not properly detected
+        f_24 = None
+        A_24 = None
+        width_24 = None
+        ampfac_24 = None
 
-    if width_24 is None:
-        width_24 = tmp
 
     amps = dict()
     amps['A_24'] = A_24
