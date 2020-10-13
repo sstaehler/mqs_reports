@@ -219,14 +219,17 @@ def fit_peak_modes(f, p, A0_min=-250, A0_max=-135,
     """
     from scipy.optimize import curve_fit
         # noinspection PyTypeChecker
-    popt, pcov = curve_fit(lorentz_modes, f, p,
-                           bounds=((A0_min, f0_min, fw_min, ampfac_min),
-                                   (A0_max, f0_max, fw_max, ampfac_max)),
-                           p0=((A0_max + A0_min) * 0.5,
-                               (f0_max + f0_min) * 0.5,
-                               (fw_max + fw_min) * 0.5,
-                               (ampfac_max + ampfac_min) * 0.5))
+    try:
+        popt, pcov = curve_fit(lorentz_modes, f, p,
+                               bounds=((A0_min, f0_min, fw_min, ampfac_min),
+                                       (A0_max, f0_max, fw_max, ampfac_max)),
+                               p0=((A0_max + A0_min) * 0.5,
+                                   (f0_max + f0_min) * 0.5,
+                                   (fw_max + fw_min) * 0.5,
+                                   (ampfac_max + ampfac_min) * 0.5))
 
+    except RuntimeError:
+        popt = [np.nan, np.nan, np.nan, np.nan]
     return popt
 
 def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
@@ -346,21 +349,26 @@ def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak, ampFactor):
                                     fw_min = width_peak[0], fw_max = width_peak[-1],
                                     ampfac_min = ampFactor[0], ampfac_max=ampFactor[-1]) #50,550 works
 
-    A_peak = A_baseline+10*np.log10(ampfac_mode)
+    #test if curve fitting was successful or not
+    if ampfac_mode: 
+        A_peak = A_baseline+10*np.log10(1+ampfac_mode)
+    elif not ampfac_mode:
+        A_peak = np.nan
     
-    # #debug plot part2
+    #debug plot part2
     # plt.plot(f[bol_24_mask],lorentz_modes(x=f[bol_24_mask],A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
-    # # plt.plot(f,lorentz_modes(x=f,A=A_24, x0=f_24, xw=width_24, ampfac=ampfac_24))
-    # # plt.axhline(y=A_24)
+    # plt.plot(f,lorentz_modes(x=f,A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
+    # plt.axhline(y=A_peak)
     # plt.ylim(-250,-150)
-    # plt.text(x=1, y=-180, s=f'{A_baseline:6.1f}dB {f_mode:6.3f}Hz {width_mode:6.4f}Hz {ampfac_mode:6.1f} \n Peak:{A_peak}dB')
+    # plt.text(x=1, y=-160, s=f'{A_baseline:6.1f}dB {f_mode:6.3f}Hz {width_mode:6.4f}Hz {ampfac_mode:6.1f} \n Peak:{A_peak}dB')
     # plt.show()
     
-    # if ampfac_24  < 10.0: #If amplitude is too small -> Mode not properly detected
-    #     f_24 = None
-    #     A_24 = None
-    #     width_24 = None
-    #     ampfac_24 = None
+    if ((ampfac_mode  > 380.0 and A_peak < -188) or ampfac_mode  < 1.0 or (ampfac_mode  > 580.0 and width_mode > 0.3)): 
+        f_mode = np.nan
+        A_peak = np.nan
+        A_baseline = np.nan
+        width_mode = np.nan
+        ampfac_mode = np.nan
 
 
     amps = dict()
