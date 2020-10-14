@@ -339,9 +339,9 @@ def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak, ampFactor):
     bol_24_mask = np.array((f > mute_24[0],
                             f < mute_24[1])).all(axis=0)
     
-    # #debug plot part1
-    # plt.plot(f, p_sig)
-    # plt.plot(f[bol_24_mask], p_sig[bol_24_mask])
+    #debug plot part1
+    plt.plot(f, p_sig)
+    plt.plot(f[bol_24_mask], p_sig[bol_24_mask])
     
     
     A_baseline, f_mode, width_mode, ampfac_mode = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
@@ -355,13 +355,13 @@ def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak, ampFactor):
     elif not ampfac_mode:
         A_peak = np.nan
     
-    #debug plot part2
-    # plt.plot(f[bol_24_mask],lorentz_modes(x=f[bol_24_mask],A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
-    # plt.plot(f,lorentz_modes(x=f,A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
-    # plt.axhline(y=A_peak)
-    # plt.ylim(-250,-150)
-    # plt.text(x=1, y=-160, s=f'{A_baseline:6.1f}dB {f_mode:6.3f}Hz {width_mode:6.4f}Hz {ampfac_mode:6.1f} \n Peak:{A_peak}dB')
-    # plt.show()
+    debug plot part2
+    plt.plot(f[bol_24_mask],lorentz_modes(x=f[bol_24_mask],A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
+    plt.plot(f,lorentz_modes(x=f,A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
+    plt.axhline(y=A_peak)
+    plt.ylim(-250,-150)
+    plt.text(x=1, y=-160, s=f'{A_baseline:6.1f}dB {f_mode:6.3f}Hz {width_mode:6.4f}Hz {ampfac_mode:6.1f} \n Peak:{A_peak}dB')
+    plt.show()
     
     if ((ampfac_mode  > 380.0 and A_peak < -188) or ampfac_mode  < 1.0 or (ampfac_mode  > 580.0 and width_mode > 0.3)): 
         f_mode = np.nan
