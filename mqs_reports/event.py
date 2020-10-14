@@ -1242,9 +1242,9 @@ class Event:
             t_ref = self.starttime
             t_ref_type = 'start time'
 
-        st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
-
-        st_work.rotate('NE->RT', back_azimuth=self.baz)
+        if len(self.waveforms_VBB.select(channel='?HT')) == 0:
+            self.add_rotated_traces()
+        st_work = self.waveforms_VBB.select(channel='??[RTENZ]').copy()
 
         tstart_norm = utct(starttime)
         tend_norm = utct(endtime)
