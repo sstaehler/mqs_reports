@@ -177,7 +177,7 @@ def fit_peak(f, p, A0_min=-240, A0_max=-180,
                                bounds=((A0_min, f0_min, fw_min),
                                        (A0_max, f0_max, fw_max)),
                                p0=((A0_max + A0_min) * 0.5,
-                                   (f0_max + f0_min * 0.5),
+                                   (f0_max + f0_min) * 0.5,
                                    (fw_max + fw_min) * 0.5))
     except ValueError:
         popt = [-250, 2.4, 1.0]
