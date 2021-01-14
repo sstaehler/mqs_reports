@@ -12,15 +12,23 @@ import numpy as np
 
 
 def mb_P(amplitude_dB, distance_degree):
+    dist_term = 0.8
+    amp_term = 0.6403
+    offset = 8.1130
     amplitude = 10 ** (amplitude_dB / 20.)
-    mag = 0.7318 * np.log10(amplitude) + 1.2 * np.log10(distance_degree)+ 8.3471
+    mag = amp_term * np.log10(amplitude) + \
+          dist_term * np.log10(distance_degree) + offset
 
     return mag
 
 
 def mb_S(amplitude_dB, distance_degree):
+    dist_term = 0.9333
+    amp_term = 0.6055
+    offset = 7.3797
     amplitude = 10 ** (amplitude_dB / 20.)
-    mag = 0.7647 * np.log10(amplitude)+ 1.4 * np.log10(distance_degree) + 8.0755
+    mag = amp_term * np.log10(amplitude) + \
+          dist_term * np.log10(distance_degree) + offset
 
     return mag
 
@@ -29,31 +37,36 @@ def M2_4(amplitude_dB, distance_degree):
     if amplitude_dB is None:
         return None
     else:
+        dist_term = 0.6
+        amp_term = 0.512
+        offset = 6.3648
         amplitude = 10 ** (amplitude_dB / 20.)
-        mag = 0.6177 * np.log10(amplitude) + 0.9 * np.log10(distance_degree) + \
-              7.0026
+        mag = amp_term * np.log10(amplitude) + \
+              dist_term * np.log10(distance_degree) + offset
         return mag
 
 def MFB(amplitude_dB, distance_degree):
     dist_term = 1.1
+    offset = 21.475
     if amplitude_dB is None:
         return None
     else:
         logM0 = amplitude_dB / 20. + \
                 dist_term * np.log10(distance_degree) + \
-                21.475
+                offset
         mag = 2. / 3. * (logM0 - 9.1)
         return mag
 
 
 def MFB_HF(amplitude_dB, distance_degree):
     dist_term = 0.9
+    offset = 21.475
     if amplitude_dB is None:
         return None
     else:
         logM0 = amplitude_dB / 20. + \
                 dist_term * np.log10(distance_degree) + \
-                21.475
+                offset
         mag = 2. / 3. * (logM0 - 9.1)
         return mag
 
@@ -113,15 +126,15 @@ def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
     # noinspection PyTypeChecker
     popt, pcov = curve_fit(lorenz_att, f, 10. * np.log10(p),
                            bounds=(
-                               (-240, 
+                               (-240,
                                 f0_min,
-                                0.8, 
+                                0.8,
                                 tstar_min,
                                 fw_min,
                                 ampfac_min),
-                               (A0_max, 
+                               (A0_max,
                                 f0_max,
-                                10.0, 
+                                10.0,
                                 tstar_max,
                                 fw_max,
                                 ampfac_max)),
@@ -161,23 +174,31 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     f = f_noise
     fmin = 0.1
     fmax = 6.0
-    if event_type in ['LF', 'BB']:
+    noise_threshold = 2.0
+    if event_type == 'LF':
         fmax = 0.9
-    if event_type == 'HF':
+        #noise_threshold = 1.2
+    elif event_type == 'BB':
+        fmax = 2.0
+        #noise_threshold = 1.2
+    elif event_type == 'HF':
         fmin = 1.0
-    if event_type == 'UF':
+    elif event_type == 'SF':
         fmin = 4.0
         fmax = 9.0
 
-    mute_24 = [1.9, 3.4]
+
+
     bol_1Hz_mask = np.array(
         (np.array((f > fmin, f < fmax)).all(axis=0),
          np.array((f < 1. / df_mute,
                    f > df_mute)).any(axis=0),
-         np.array(p_sig > p_noise * 2.)
+         np.array(p_sig > p_noise * noise_threshold)
          )
         ).all(axis=0)
     _remove_singles(bol_1Hz_mask)
+
+    mute_24 = [1.9, 3.4]
     A0 = None
     tstar = None
     ampfac = None
@@ -185,9 +206,10 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     f_24 = None
     f_c = None
     A_24 = None
-    if event_type is not '24':
+    if event_type not in ['24', 'SF']:
         if sum(bol_1Hz_mask) > 5:
 
+            # Fitting HF family events
             if event_type in ['HF', 'VF']:
                 # A0 should not be larger than peak between 1.1 and 1.8 Hz
                 A0_max = np.max(10 * np.log10(
@@ -207,6 +229,8 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                         A0_max, tstar_min)
                 except RuntimeError:
                     pass
+
+            # Fitting LF family events
             else:
                 res = np.polyfit(f[bol_1Hz_mask],
                                  10 * np.log10(p_sig[bol_1Hz_mask]),
