@@ -37,6 +37,10 @@ def define_arguments():
     parser.add_argument('--old_noise', default=False, help=helptext,
                         action='store_true')
 
+    helptext = 'Chose color scheme (standard, Knapmeyer)'
+    parser.add_argument('--color_scheme', default='standard',
+                        help=helptext, type=str)
+
     helptext = 'Use quantiles for grouping instead of time windows'
     parser.add_argument('--grouping', help=helptext, default='quantiles',
                         type=str)
@@ -49,7 +53,6 @@ def define_arguments():
     parser.add_argument('--sol_end', help=helptext,
                         default=550, type=int)
 
-
     return parser.parse_args()
 
 
@@ -58,7 +61,6 @@ args = define_arguments()
 inv = obspy.read_inventory(args.inventory)
 if args.old_noise:
     noise = read_noise('noise.npz')
-    #noise.read_quantiles('noise_quantiles.npz')
 else:
     noise = Noise(sc3_dir=args.sc3_dir,
                   starttime=utct('20190202'),
@@ -67,14 +69,14 @@ else:
                   winlen_sec=120.
                   )
     noise.save('./noise.npz')
+noise.save_ascii('./noise.csv')
 
-extra = np.loadtxt('dds.txt', skiprows=1)
-tau = np.loadtxt('mqs_reports/data/nsyt_tau_report.txt', skiprows=1,
+extra = np.loadtxt('./data/dds.txt', skiprows=1)
+tau = np.loadtxt('./data/nsyt_tau_report.txt', skiprows=1,
                  usecols=[1, 2])
 cat = Catalog(fnam_quakeml=args.input_quakeml,
               quality=['A', 'B', 'C', 'D'])
-cat = cat.select(event_type=['VF', 'HF', 'LF', 'BB', '24'],
-                 endtime='2019-06-01')
+cat = cat.select(event_type=['VF', 'HF', 'LF', 'BB', '24'])
 cat.load_distances(fnam_csv=args.input_dist)
 cat.read_waveforms(inv=inv, sc3dir=args.sc3_dir)
 cat.calc_spectra(winlen_sec=10.)
@@ -85,8 +87,13 @@ noise.plot_daystats(cat, data_apss=False,
                     sol_start=sol_start,
                     sol_end=sol_end,
                     grouping=args.grouping,
-                    fnam_out='noise_vs_events.pdf')
+                    fnam_out='noise_vs_events.png')
 noise.read_quantiles(fnam=f'noise_{args.grouping}.npz')
+noise.plot_daystats(cat, data_apss=False,
+                    sol_start=sol_start,
+                    sol_end=sol_end,
+                    grouping=args.grouping,
+                    fnam_out='noise_vs_events.pdf')
 noise.plot_daystats(cat, data_apss=True, extra_data=[extra[:, 0], extra[:, 2]],
                     tau_data=[tau[:, 0], tau[:, 1]],
                     sol_start=sol_start,
@@ -99,6 +106,12 @@ noise.plot_daystats(cat, data_apss=True, extra_data=[extra[:, 0], extra[:, 2]],
                     sol_end=sol_end,
                     grouping=args.grouping,
                     fnam_out='./noise_apss.pdf', metal=False)
+noise.plot_daystats(cat, data_apss=False,
+                    sol_start=sol_start,
+                    sol_end=567,
+                    grouping=args.grouping,
+                    color_scheme='Knapmeyer',
+                    fnam_out='noise_vs_events_knapmeyer.pdf')
 
 # noise.plot_daystats(cat, data_apss=True, extra_data=[extra[:, 0], extra[:,
 # # 2]],#
