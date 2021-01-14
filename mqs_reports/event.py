@@ -113,10 +113,15 @@ class Event:
 
         # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
-            self.distance = self.calc_distance()
-            if self.distance is not None:
+            distance_tmp, otime_tmp = self.calc_distance()
+            if distance_tmp is not None:
+                self.distance = distance_tmp
+                self.origin_time = utct(otime_tmp)
                 self.distance_type = 'PgSg'
-            self.origin_time = utct(origin_time)
+            else:
+                self.distance = None
+                self.origin_time = utct(origin_time)
+
             self.baz = None
 
         else:
@@ -172,7 +177,8 @@ class Event:
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
-                      vs: float = CRUST_VS) -> Union[float, None]:
+                      vs: float = CRUST_VS) -> (Union[float, None],
+                                                Union[float, None]):
         """
         Calculate distance of event based on Pg and Sg picks, if available,
         otherwise return None
@@ -183,9 +189,12 @@ class Event:
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
             distance_km = deltat / (1. / vs - 1. / vp)
-            return kilometers2degrees(distance_km, radius=RADIUS_MARS)
+            distance_degree = kilometers2degrees(distance_km,
+                                                 radius=RADIUS_MARS)
+            origin_time = utct(self.picks['Sg']) - distance_km / vs
+            return distance_degree, origin_time
         else:
-            return None
+            return None, None
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
@@ -354,6 +363,20 @@ class Event:
         if not success_VBB:
             # Try for 15.BL? (10sps VBB)
             filenam_VBB_HG = 'XB.ELYSE.15.HL?.D.%04d.%03d'
+            fnam_VBB = create_fnam_event(
+                filenam_inst=filenam_VBB_HG,
+                sc3dir=sc3dir, time=self.picks['start'])
+            self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                           kind=kind,
+                                           fmin=fmin_VBB,
+                                           twin=[twin_start - tpre_VBB,
+                                                 twin_end + tpre_VBB])
+            if len(self.waveforms_VBB) == 3:
+                success_VBB = True
+
+        if not success_VBB:
+            # Try for 07.BL? (20sps VBB low gain)
+            filenam_VBB_HG = 'XB.ELYSE.07.BL?.D.%04d.%03d'
             fnam_VBB = create_fnam_event(
                 filenam_inst=filenam_VBB_HG,
                 sc3dir=sc3dir, time=self.picks['start'])
@@ -644,8 +667,9 @@ class Event:
                 amplitude = 20 * np.log10(amplitude)
 
         elif mag_type == 'MFB':
+
             if self.mars_event_type_short in ['24', 'HF', 'VF']:
-                mag_type == 'MFB_HF'
+                mag_type = 'MFB_HF'
             amplitude = self.amplitudes['A0'] \
                 if 'A0' in self.amplitudes else None
         elif mag_type == 'm2.4':
@@ -740,10 +764,14 @@ class Event:
 
     def mark_phases(self, ax, tref):
         for a in ax:
-            for pick in ['P', 'S', 'Pg', 'Sg']:
+            for pick in ['P', 'S', 'Pg', 'Sg', 'x1', 'x2', 'x3']:
                 try:
-                    a.axvline(utct(self.picks[pick]) - tref,
-                              c='darkred', ls='dashed')
+                    if pick in self.picks:
+                        x = utct(self.picks[pick]) - tref
+                        a.axvline(x, c='darkred', ls='dashed')
+                        a.annotate(xy=(x, -0.5), s=' ' + pick,
+                                   c='darkred',
+                                   horizontalalignment='left')
                 except TypeError:
                     pass
             for pick in ['start', 'end']:
@@ -764,6 +792,7 @@ class Event:
                         starttime: obspy.UTCDateTime = None,
                         endtime: obspy.UTCDateTime = None,
                         instrument: str = 'VBB',
+                        f_VBB_SP_transition = 7.5,
                         fnam: str = None):
         import matplotlib.pyplot as plt
         import warnings
@@ -796,17 +825,26 @@ class Event:
             t_ref_type = 'start time'
 
         if instrument == 'VBB':
-            st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+            st_LF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+            st_HF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
         elif instrument == 'SP':
             try:
-                st_work = self.waveforms_SP.select(channel='??[ENZ]').copy()
+                st_LF = self.waveforms_SP.select(channel='??[ENZ]').copy()
+                st_HF = self.waveforms_SP.select(channel='??[ENZ]').copy()
             except AttributeError:
-                st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+                st_LF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+                st_HF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        elif instrument == 'both':
+            st_LF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+            st_HF = self.waveforms_SP.select(channel='??[ENZ]').copy()
+
+
         else:
             raise ValueError(f'Invalid value for instrument: {instrument}')
 
         try:
-            st_work.rotate('NE->RT', back_azimuth=self.baz)
+            st_HF.rotate('NE->RT', back_azimuth=self.baz)
+            st_LF.rotate('NE->RT', back_azimuth=self.baz)
         except:
             rotated = False
         else:
@@ -834,13 +872,19 @@ class Event:
         if tmax_plot is None:
             tmax_plot = endtime - t_ref
 
-        st_work.trim(starttime=utct(starttime) - 1. / fmin,
-                     endtime=utct(endtime) + 1. / fmin)
+        for st in (st_HF, st_LF):
+            st.trim(starttime=utct(starttime) - 1. / fmin,
+                    endtime=utct(endtime) + 1. / fmin)
 
         for ifreq, fcenter in enumerate(freqs):
             f0 = fcenter / df
             f1 = fcenter * df
-            st_filt = st_work.copy()
+
+            if fcenter < f_VBB_SP_transition:
+                st_filt = st_LF.copy()
+            else:
+                st_filt = st_HF.copy()
+
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore')
@@ -877,7 +921,7 @@ class Event:
                         tr_norm = tr.slice(starttime=tstart_norm,
                                            endtime=tend_norm,
                                            nearest_sample=True)
-                        try: 
+                        try:
                             maxfac = np.quantile(tr_norm.data, q=0.9)
                             offset = np.quantile(tr_norm.data, q=0.1)
                         except:
@@ -950,9 +994,9 @@ class Event:
         ticklabels = []
         for freq in freqs:
             if freq > 1:
-                ticklabels.append(f'{freq:.1f}Hz')
+                ticklabels.append(f'{freq:.1f}')
             else:
-                ticklabels.append(f'1/{1. / freq:.1f}Hz')
+                ticklabels.append(f'1/{1. / freq:.1f}')
         ax[0].set_yticklabels(ticklabels)
         for a in ax:
             # a.set_xticks(np.arange(-300, 1000, 100), minor=False)
@@ -967,7 +1011,7 @@ class Event:
                       ls='dashed', lw=1.0, c='k')
         ax[0].set_xlim(tmin_plot, tmax_plot)
         ax[0].set_ylim(-1.5, nfreqs + 1.5)
-        ax[0].set_ylabel('frequency')
+        ax[0].set_ylabel('frequency / Hz')
         ax[0].set_title('Vertical')
         if rotated:
             ax[1].set_title('Radial')
