@@ -1371,3 +1371,337 @@ class Event:
         ax_fbs.set_ylabel('frequency')
 
         return freqs, envs_out
+
+    def plot_polarization_event_noise(self, 
+                                  tstart_phase, tend_phase, phase,
+                                  kind='spec', fmin=1., fmax=10.,
+                                  winlen_sec=20., overlap=0.5,
+                                  tstart=None, tend=None, vmin=None,
+                                  vmax=None, log=False, fname=None,
+                                  dop_winlen=60, dop_specwidth=0.2,
+                                  nf=100, w0=20,
+                                  use_alpha=True, use_alpha2=False, plot_6C=True,
+                                  differentiate=False, detick_1Hz=False):
+        
+        """
+        Plots polarisation of seismic event with window of noise and manually defined event time window
+        """
+        import matplotlib.patches as patches
+        import matplotlib.dates as mdates
+        import polarization.polarization as polarization
+        from obspy import Stream
+        from obspy.signal.util import next_pow_2
+        import matplotlib.pyplot as plt
+        from matplotlib.colorbar import make_axes
+        
+        trim_time = [420., 300.] #[time before P, time after S] [seconds] Trimms waveform
+        
+        st_Copy = self.waveforms_VBB.copy() 
+        phase_P = 'P' if self.picks['P'] else 'Pg'
+        phase_S = 'S' if self.picks['S'] else 'Sg'
+    
+        if differentiate:
+            st_Copy.differentiate()
+        
+        st_Copy.trim(starttime=utct(self.picks[phase_P]) - trim_time[0], #og: -50, +850
+                     endtime=utct(self.picks[phase_S]) + trim_time[1])
+        
+                                                               
+        st_Z = Stream(traces=[st_Copy.select(channel='BHZ')[0]])
+        st_N = Stream(traces=[st_Copy.select(channel='BHN')[0]])
+        st_E = Stream(traces=[st_Copy.select(channel='BHE')[0]])
+        
+        #Signal/wave window: after P (=phase_start), tsignal can be + or - values. Change to phase_end for window relative to S
+        if 'P' in phase:
+            phase_pick = phase_P
+        elif 'S' in phase:
+            phase_pick = phase_S
+        else:
+            raise Exception("Sorry, no valid phase for signal window") 
+        tstart_signal = utct(self.picks[phase_pick]) + tstart_phase
+        tend_signal = utct(self.picks[phase_pick]) + tend_phase
+        
+        #Noise window: before P (=phase_start), tnoise should be negative values
+        tstart_noise = utct(self.picks['noise_start'])
+        tend_noise = utct(self.picks['noise_end'])
+    
+        tstart, tend, dt = polarization._check_traces(st_Z, st_N, st_E, tstart, tend)
+    
+        #define in which row Signal and Noise hist are plotted
+        signal_row = 2
+        noise_row = 1
+        
+        # Create figure to plot in
+        if plot_6C:
+            gridspec_kw = dict(width_ratios=[12, 2],   # specgram, hist2d
+                               height_ratios=[1, 1, 1, 1, 1, 1],
+                               top=0.98,
+                               bottom=0.1,
+                               left=0.02,
+                               right=0.91,
+                               hspace=0.25,
+                               wspace=0.02)
+            nrows = 6
+            dy_lmst = -0.4
+        else:
+            gridspec_kw = dict(width_ratios=[10, 2, 2],  # specgram, hist2d, hist2d
+                               height_ratios=[1, 1, 1, 1],
+                               top=0.96,
+                               bottom=0.05,
+                               left=0.02,
+                               right=0.91,
+                               hspace=0.15,
+                               wspace=0.05) #0.02 original
+            nrows = 4
+            dy_lmst = -0.25
+        dx_cbar = 0.055
+        w_cbar = 0.005
+        
+        rect = [[None for i in range(2)] for j in range(nrows)] #prepare rectangles to mark the time windows
+        for j in range(nrows):
+            rect[j][0] = patches.Rectangle((utct(tstart_signal).datetime,fmin), utct(tend_signal).datetime-utct(tstart_signal).datetime, fmax-fmin, linewidth=2, edgecolor='grey', fill = False) #signal
+            rect[j][1] = patches.Rectangle((utct(tstart_noise).datetime,fmin), utct(tend_noise).datetime-utct(tstart_noise).datetime, fmax-fmin, linewidth=2, edgecolor='grey', fill = False) #noise
+    
+        fig, axes = plt.subplots(nrows=nrows, ncols=3, sharey='all',
+                                 figsize=(16, 9), gridspec_kw=gridspec_kw)
+    
+        winlen = int(winlen_sec / dt)
+        nfft = next_pow_2(winlen) * 2
+    
+        # variables for statistics
+        nbins = 30 #original: 90
+        nts = 0
+    
+        # Calculate width of smoothing windows for degree of polarization analysis
+        nfsum, ntsum, dsfacf, dsfact = polarization._calc_dop_windows(
+            dop_specwidth, dop_winlen, dt, fmax, fmin,
+            kind, nf, nfft, overlap, winlen_sec)
+    
+        if kind == 'spec':
+            binned_data_signal = np.zeros((nrows, nfft // (2 * dsfacf) + 1, nbins))
+            binned_data_noise = np.zeros_like(binned_data_signal)
+        else:
+            binned_data_signal = np.zeros((nrows, nf // dsfacf, nbins))
+            binned_data_noise = np.zeros_like(binned_data_signal)
+    
+        for tr_Z, tr_N, tr_E in zip(st_Z, st_N, st_E):
+            if tr_Z.stats.npts < winlen * 4:
+                continue
+            
+            if detick_1Hz:
+                tr_Z_detick = detick(tr_Z, 3)
+                tr_N_detick = detick(tr_N, 3)
+                tr_E_detick = detick(tr_E, 3)
+                f, t, u1, u2, u3 = polarization._compute_spec(tr_Z_detick, tr_N_detick, tr_E_detick, kind, fmin, fmax,
+                                             winlen, nfft, overlap, nf=nf, w0=w0)
+            else:
+                f, t, u1, u2, u3 = polarization._compute_spec(tr_Z, tr_N, tr_E, kind, fmin, fmax,
+                                                 winlen, nfft, overlap, nf=nf, w0=w0)
+    
+            azi1, azi2, elli, inc1, inc2, r1, r2, P = polarization.compute_polarization(
+                u1, u2, u3, ntsum=ntsum, nfsum=nfsum, dsfacf=dsfacf, dsfact=dsfact)
+    
+            f = f[::dsfacf]
+            t = t[::dsfact]
+            t += float(tr_Z.stats.starttime)
+            nts += len(t)
+            bol_signal_mask= np.array((t > tstart_signal, t< tend_signal)).all(axis=0)
+            bol_noise_mask= np.array((t > tstart_noise, t< tend_noise)).all(axis=0)
+    
+            scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
+            alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
+            
+            t_datetime = np.zeros_like(t,dtype=object)
+            for i, time in enumerate(t):
+                 t_datetime[i] = utct(time).datetime
+    
+            # plot scalogram, ellipticity, major axis azimuth and inclination
+    
+            iterables = [
+                (scalogram, vmin, vmax, np.ones_like(alpha),
+                 'amplitude\n/ dB', np.arange(vmin, vmax+1, 20), 'plasma'),
+                (elli, 0, 1, alpha,
+                 'ellipticity\n', np.arange(0, 1.1, 0.2), 'gnuplot'),
+                (np.rad2deg(azi1), 0, 360, alpha,
+                 'major azimuth\n/ degree', np.arange(0, 361, 60), 'tab20b'), #was 45 deg steps
+                (np.rad2deg(abs(inc1)), -0, 90, alpha,
+                 'major inclination\n/ degree', np.arange(0, 91, 20),
+                 'gnuplot')]
+    
+            if plot_6C:
+                iterables.append(
+                    (np.rad2deg(azi2), 0, 180, alpha2,
+                     'minor azimuth\n/ degree', np.arange(0, 181, 30), 'hsv'))
+                iterables.append(
+                    (np.rad2deg(inc2), -90, 90, alpha2,
+                     'minor inclination\n/ degree', np.arange(-90, 91, 30), 'hsv'))
+    
+            for irow, [data, rmin, rmax, a, xlabel, xticks, cmap] in \
+                    enumerate(iterables):
+    
+                ax = axes[irow, 0]
+    
+                if log and kind == 'cwt':
+                    # imshow can't do the log sampling in frequency
+                    cm = polarization.pcolormesh_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
+                                          vmin=rmin, vmax=rmax)
+                else:
+                    cm = polarization.imshow_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
+                                      vmin=rmin, vmax=rmax)
+    
+                if tr_Z == st_Z[0]:
+                    cax, kw = make_axes(ax, location='left', fraction=0.07,
+                                        pad=0.07)
+                    plt.colorbar(cm, cax=cax, ticks=xticks, **kw)
+    
+                for i in range(len(f)):
+                    binned_data_signal[irow, i, :] += np.histogram(data[i,bol_signal_mask], bins=nbins,
+                                                            range=(rmin, rmax),
+                                                            weights=alpha[i,bol_signal_mask], density=True)[0]
+                    binned_data_noise[irow, i, :] += np.histogram(data[i,bol_noise_mask], bins=nbins,
+                                                            range=(rmin, rmax),
+                                                            weights=alpha[i,bol_noise_mask], density=True)[0]
+    
+        date_fmt = mdates.DateFormatter('%Y-%m-%d \n %H:%M') #set time format: YYYY-MM-DD \n HH:MM in UTC
+        loc = mdates.AutoDateLocator(tz=None, minticks=4, maxticks=6)
+        # loc.intervald[MINUTELY] = [3] # only show every 3 minutes
+    
+        
+        for ax in axes:
+            ax[0].set_xlim(utct(tstart).datetime, utct(tend).datetime)
+            ax[0].xaxis.set_major_formatter(date_fmt)
+            ax[0].xaxis.set_major_locator(loc)
+            
+            for a in ax:
+                a.set_ylim(fmin, fmax)
+                a.set_ylabel("frequency / Hz")
+            if log:
+                ax[0].set_yscale('log')
+            ax[0].yaxis.set_ticks_position('both')
+            ax[1].yaxis.set_ticks_position('both')
+            # set tick position twice, otherwise labels appear right :/
+            ax[-1].yaxis.set_ticks_position('right')
+            ax[-1].yaxis.set_label_position('right')
+            ax[-1].yaxis.set_ticks_position('both')
+    
+        for ax in axes[0:-1, :].flatten():
+            ax.set_xlabel('')
+    
+        for ax in axes[0:-1, 0]:
+            ax.get_shared_x_axes().join(ax, axes[-1, 0])
+            ax.get_shared_y_axes().join(ax, axes[-1, 0])
+    
+        for ax in axes[:, 1]:
+            ax.set_ylabel('')
+            ax.get_shared_y_axes().join(ax, axes[-1, 0])
+    
+        for ax in axes[:, 2]: #no clue if this is needed.. gze
+            ax.get_shared_y_axes().join(ax, axes[-1, 0])
+    
+        for i,ax in enumerate(axes[:, 0]):
+            ax.grid(b=True, which='major', axis='x')
+            
+            #Patched marking the hist time windows
+            ax.add_patch(rect[i][0])
+            ax.add_patch(rect[i][1])
+            
+        #     __dayplot_set_x_ticks(ax,
+        #                           starttime=utct(tstart),
+        #                           endtime=utct(tend),
+        #                           sol=False)
+            # ax.set_xticklabels(ax.get_xticklabels(), ha='right')
+    
+        for ax in axes[0:-1, 0]:
+            ax.set_xticklabels('')
+            
+        axes[0, signal_row].set_title('Signal')
+        axes[0, noise_row].set_title('Noise')
+        axes[0, 0].text(utct(tstart_signal).datetime, fmax+1, 'Signal', c='black', fontsize=12)
+        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c='black', fontsize=12)
+        
+    
+        linewidth_twofour = 1.0
+        for irow, [data, rmin, rmax, a, xlabel, xticks, cmap] in \
+                enumerate(iterables):
+            
+            #hist plot: signal
+            ax = axes[irow, signal_row]
+            cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
+                               f, binned_data_signal[irow] *(rmax-rmin),
+                               cmap='hot_r', #pqlx,
+                               vmin=0., vmax=10)
+            
+            #Mark 2.4Hz and the BAZ of the event (if known)
+            ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
+            ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
+            if irow == 2 and self.baz:
+                ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
+            ax.set_ylim(fmin, fmax)
+            ax.set_xticks(xticks)
+            
+            #hist plot: noise
+            ax = axes[irow, noise_row]
+            cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
+                               f, binned_data_noise[irow] *(rmax-rmin),
+                               cmap='hot_r', #pqlx,
+                               vmin=0., vmax=10)
+            
+            #Mark 2.4Hz
+            # ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
+            ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
+            ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
+                
+            ax.set_ylim(fmin, fmax)
+            if log:
+                for i in range(0, 3):
+                    axes[irow, i].set_yscale('log')
+                    axes[irow, i].set_yticks((0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0))
+                    axes[irow, i].set_yticklabels(("1/10", "1/5", "1/2", "1", "2", "5", "10"))
+                    axes[irow, i].set_ylim(fmin, fmax)
+            ax.set_xticks(xticks)
+            
+            props = dict(boxstyle='round', facecolor='white', alpha=0.9)
+            
+            ax = axes[irow, 0]
+            ax.text(x=-0.19, y=0.5, transform=ax.transAxes, s=xlabel, #x=-0.18
+                    ma='center', va='center', bbox=props, rotation=90, size=10)
+    
+        cbar_axes = fig.add_axes([gridspec_kw['right'] + dx_cbar,
+                                  gridspec_kw['bottom'], w_cbar,
+                                  gridspec_kw['top'] - gridspec_kw['bottom']])
+        plt.colorbar(cm, cax=cbar_axes, label='weighted relative frequency')
+    
+        # # Axis with Martian time
+        # ax_LMST = axes[-1, 0].twiny()
+        # ax_LMST._set_position(axes[-1, 0].get_position())
+    
+        # # Move twinned axis ticks and label from top to bottom
+        # ax_LMST.xaxis.set_ticks_position("bottom")
+        # ax_LMST.xaxis.set_label_position("bottom")
+    
+        # # Offset the twin axis below the host
+        # ax_LMST.spines["bottom"].set_position(("axes", dy_lmst))
+        # # Turn on the frame for the twin axis, but then hide all but the bottom
+        # # spine
+        # ax_LMST.set_frame_on(True)
+        # ax_LMST.patch.set_visible(False)
+        # for sp in ax_LMST.spines.values():
+        #     sp.set_visible(False)
+        # ax_LMST.spines["bottom"].set_visible(True)
+    
+        # ax_LMST.text(x=-0.1, y=0.01 + dy_lmst, transform=ax_LMST.transAxes,
+        #              s=r"UTC", ha='right', va='bottom')
+        # ax_LMST.text(x=-0.1, y=-0.01 + dy_lmst, transform=ax_LMST.transAxes,
+        #              s=r"LMST", ha='right', va='top')
+        # # __dayplot_set_x_ticks(ax_LMST,
+        # #                       solify(utct(tstart)),
+        # #                       solify(utct(tend)),
+        # #                       sol=True)
+        # ax_LMST.set_xticklabels(ax_LMST.get_xticklabels(), ha='right')
+    
+        if fname is None:
+            plt.show()
+        else:
+            savename = f'{fname}_diff' if differentiate else f'{fname}'
+            # fig.savefig(f'Plots/Polarisation/{savename}.png', dpi=200) 
+            fig.savefig(f'{savename}.png', dpi=200)
