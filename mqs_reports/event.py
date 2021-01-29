@@ -1382,6 +1382,7 @@ class Event:
                                   dop_winlen=60, dop_specwidth=0.2,
                                   nf=100, w0=20,
                                   use_alpha=True, use_alpha2=False, plot_6C=True,
+                                  plot_spec_azi_only = False,
                                   differentiate=False, detick_1Hz=False):
         
         """
@@ -1444,8 +1445,8 @@ class Event:
         noise_row = 1
         
         # Create figure to plot in
-        if plot_6C:
-            gridspec_kw = dict(width_ratios=[12, 2],   # specgram, hist2d
+        if plot_6C: #not tested
+            gridspec_kw = dict(width_ratios=[10, 2, 2],   # specgram, hist2d
                                height_ratios=[1, 1, 1, 1, 1, 1],
                                top=0.98,
                                bottom=0.1,
@@ -1455,6 +1456,19 @@ class Event:
                                wspace=0.02)
             nrows = 6
             dy_lmst = -0.4
+            figsize_y = 9
+        elif plot_spec_azi_only:
+            gridspec_kw = dict(width_ratios=[10, 2, 2],   # specgram, hist2d
+                               height_ratios=[1, 1],
+                               top=0.90,
+                               bottom=0.1,
+                               left=0.02,
+                               right=0.91,
+                               hspace=0.15,
+                               wspace=0.05)
+            nrows = 2
+            dy_lmst = -0.4
+            figsize_y = 6
         else:
             gridspec_kw = dict(width_ratios=[10, 2, 2],  # specgram, hist2d, hist2d
                                height_ratios=[1, 1, 1, 1],
@@ -1466,16 +1480,23 @@ class Event:
                                wspace=0.05) #0.02 original
             nrows = 4
             dy_lmst = -0.25
+            figsize_y = 9
         dx_cbar = 0.055
         w_cbar = 0.005
         
         rect = [[None for i in range(2)] for j in range(nrows)] #prepare rectangles to mark the time windows
         for j in range(nrows):
-            rect[j][0] = patches.Rectangle((utct(tstart_signal).datetime,fmin), utct(tend_signal).datetime-utct(tstart_signal).datetime, fmax-fmin, linewidth=2, edgecolor='grey', fill = False) #signal
-            rect[j][1] = patches.Rectangle((utct(tstart_noise).datetime,fmin), utct(tend_noise).datetime-utct(tstart_noise).datetime, fmax-fmin, linewidth=2, edgecolor='grey', fill = False) #noise
+            rect[j][0] = patches.Rectangle((utct(tstart_signal).datetime,fmin+0.03*fmin), 
+                                           utct(tend_signal).datetime-utct(tstart_signal).datetime, 
+                                           fmax-fmin-0.03*fmax, linewidth=2, 
+                                           edgecolor='C0', fill = False) #signal
+            rect[j][1] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin), 
+                                           utct(tend_noise).datetime-utct(tstart_noise).datetime, 
+                                           fmax-fmin-0.03*fmax, linewidth=2, 
+                                           edgecolor='C8', fill = False) #noise
     
         fig, axes = plt.subplots(nrows=nrows, ncols=3, sharey='all',
-                                 figsize=(16, 9), gridspec_kw=gridspec_kw)
+                                 figsize=(16, figsize_y), gridspec_kw=gridspec_kw)
     
         winlen = int(winlen_sec / dt)
         nfft = next_pow_2(winlen) * 2
@@ -1532,14 +1553,16 @@ class Event:
             iterables = [
                 (scalogram, vmin, vmax, np.ones_like(alpha),
                  'amplitude\n/ dB', np.arange(vmin, vmax+1, 20), 'plasma'),
-                (elli, 0, 1, alpha,
-                 'ellipticity\n', np.arange(0, 1.1, 0.2), 'gnuplot'),
                 (np.rad2deg(azi1), 0, 360, alpha,
                  'major azimuth\n/ degree', np.arange(0, 361, 60), 'tab20b'), #was 45 deg steps
+                (elli, 0, 1, alpha,
+                 'ellipticity\n', np.arange(0, 1.1, 0.2), 'gnuplot'),
                 (np.rad2deg(abs(inc1)), -0, 90, alpha,
                  'major inclination\n/ degree', np.arange(0, 91, 20),
                  'gnuplot')]
-    
+            
+            if plot_spec_azi_only:
+                del iterables[-2:]
             if plot_6C:
                 iterables.append(
                     (np.rad2deg(azi2), 0, 180, alpha2,
@@ -1576,7 +1599,6 @@ class Event:
     
         date_fmt = mdates.DateFormatter('%Y-%m-%d \n %H:%M') #set time format: YYYY-MM-DD \n HH:MM in UTC
         loc = mdates.AutoDateLocator(tz=None, minticks=4, maxticks=6)
-        # loc.intervald[MINUTELY] = [3] # only show every 3 minutes
     
         
         for ax in axes:
@@ -1606,9 +1628,10 @@ class Event:
         for ax in axes[:, 1]:
             ax.set_ylabel('')
             ax.get_shared_y_axes().join(ax, axes[-1, 0])
-    
-        for ax in axes[:, 2]: #no clue if this is needed.. gze
+            
+        for ax in axes[:, 2]:
             ax.get_shared_y_axes().join(ax, axes[-1, 0])
+
     
         for i,ax in enumerate(axes[:, 0]):
             ax.grid(b=True, which='major', axis='x')
@@ -1617,19 +1640,14 @@ class Event:
             ax.add_patch(rect[i][0])
             ax.add_patch(rect[i][1])
             
-        #     __dayplot_set_x_ticks(ax,
-        #                           starttime=utct(tstart),
-        #                           endtime=utct(tend),
-        #                           sol=False)
-            # ax.set_xticklabels(ax.get_xticklabels(), ha='right')
     
         for ax in axes[0:-1, 0]:
             ax.set_xticklabels('')
             
         axes[0, signal_row].set_title('Signal')
         axes[0, noise_row].set_title('Noise')
-        axes[0, 0].text(utct(tstart_signal).datetime, fmax+1, 'Signal', c='black', fontsize=12)
-        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c='black', fontsize=12)
+        axes[0, 0].text(utct(tstart_signal).datetime, fmax+1, 'Signal', c='C0', fontsize=12)
+        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c='C8', fontsize=12)
         
     
         linewidth_twofour = 1.0
@@ -1646,7 +1664,7 @@ class Event:
             #Mark 2.4Hz and the BAZ of the event (if known)
             ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
             ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
-            if irow == 2 and self.baz:
+            if irow == 1 and self.baz:
                 ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
             ax.set_ylim(fmin, fmax)
             ax.set_xticks(xticks)
@@ -1677,39 +1695,16 @@ class Event:
             ax = axes[irow, 0]
             ax.text(x=-0.19, y=0.5, transform=ax.transAxes, s=xlabel, #x=-0.18
                     ma='center', va='center', bbox=props, rotation=90, size=10)
+            
+            for ax in axes[1:, 1:].flatten():
+                ax.grid(b=True, which='both', axis='x', linewidth=0.2, color='grey')
     
         cbar_axes = fig.add_axes([gridspec_kw['right'] + dx_cbar,
                                   gridspec_kw['bottom'], w_cbar,
                                   gridspec_kw['top'] - gridspec_kw['bottom']])
         plt.colorbar(cm, cax=cbar_axes, label='weighted relative frequency')
     
-        # # Axis with Martian time
-        # ax_LMST = axes[-1, 0].twiny()
-        # ax_LMST._set_position(axes[-1, 0].get_position())
-    
-        # # Move twinned axis ticks and label from top to bottom
-        # ax_LMST.xaxis.set_ticks_position("bottom")
-        # ax_LMST.xaxis.set_label_position("bottom")
-    
-        # # Offset the twin axis below the host
-        # ax_LMST.spines["bottom"].set_position(("axes", dy_lmst))
-        # # Turn on the frame for the twin axis, but then hide all but the bottom
-        # # spine
-        # ax_LMST.set_frame_on(True)
-        # ax_LMST.patch.set_visible(False)
-        # for sp in ax_LMST.spines.values():
-        #     sp.set_visible(False)
-        # ax_LMST.spines["bottom"].set_visible(True)
-    
-        # ax_LMST.text(x=-0.1, y=0.01 + dy_lmst, transform=ax_LMST.transAxes,
-        #              s=r"UTC", ha='right', va='bottom')
-        # ax_LMST.text(x=-0.1, y=-0.01 + dy_lmst, transform=ax_LMST.transAxes,
-        #              s=r"LMST", ha='right', va='top')
-        # # __dayplot_set_x_ticks(ax_LMST,
-        # #                       solify(utct(tstart)),
-        # #                       solify(utct(tend)),
-        # #                       sol=True)
-        # ax_LMST.set_xticklabels(ax_LMST.get_xticklabels(), ha='right')
+
     
         if fname is None:
             plt.show()
