@@ -1374,6 +1374,7 @@ class Event:
 
     def plot_polarization_event_noise(self, 
                                   tstart_phase, tend_phase, phase,
+                                  rotation = 'ZNE', BAZ=0.0,
                                   kind='spec', fmin=1., fmax=10.,
                                   winlen_sec=20., overlap=0.5,
                                   tstart=None, tend=None, vmin=None,
@@ -1394,15 +1395,26 @@ class Event:
         import matplotlib.pyplot as plt
         from matplotlib.colorbar import make_axes
         
-        trim_time = [420., 300.] #[time before P, time after S] [seconds] Trimms waveform
+        trim_time = [420., 300.] #[time before P, time after S] [seconds] Trims waveform
         
         st_Copy = self.waveforms_VBB.copy() 
         phase_P = 'P' if self.picks['P'] else 'Pg'
         phase_S = 'S' if self.picks['S'] else 'Sg'
+        
+        #Rotate the waveforms into different coordinate system: ZRT or LQT
+        if 'ZNE' not in rotation:
+            if 'RT' in rotation:
+                st_Copy.rotate('NE->RT', back_azimuth=BAZ)
+            elif 'LQT' in rotation:
+                st_Copy.rotate('ZNE->LQT', back_azimuth=BAZ, inclination = 40.0)
+            else:
+                raise Exception("Sorry, please pick valid rotation system: ZNE, RT, LQT") 
     
+        #differentiate waveforms
         if differentiate:
             st_Copy.differentiate()
         
+        #trim the waveforms in length
         st_Copy.trim(starttime=utct(self.picks[phase_P]) - trim_time[0], #og: -50, +850
                      endtime=utct(self.picks[phase_S]) + trim_time[1])
         
@@ -1422,7 +1434,7 @@ class Event:
         tend_signal = utct(self.picks[phase_pick]) + tend_phase
         
         #Noise window: before P (=phase_start), tnoise should be negative values
-        tstart_noise = utct(self.picks['noise_start'])
+        tstart_noise = utct(self.picks['noise_start']) # -120
         tend_noise = utct(self.picks['noise_end'])
     
         tstart, tend, dt = polarization._check_traces(st_Z, st_N, st_E, tstart, tend)
