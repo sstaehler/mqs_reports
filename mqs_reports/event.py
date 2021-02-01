@@ -1395,8 +1395,9 @@ class Event:
         from obspy.signal.util import next_pow_2
         import matplotlib.pyplot as plt
         from matplotlib.colorbar import make_axes
+        from matplotlib.ticker import NullFormatter
         
-        trim_time = [420., 300.] #[time before P, time after S] [seconds] Trims waveform
+        trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
         
         st_Copy = self.waveforms_VBB.copy() 
         phase_P = 'P' if self.picks['P'] else 'Pg'
@@ -1416,7 +1417,7 @@ class Event:
             st_Copy.differentiate()
         
         #trim the waveforms in length
-        st_Copy.trim(starttime=utct(self.picks[phase_P]) - trim_time[0], #og: -50, +850
+        st_Copy.trim(starttime=utct(self.picks['noise_start']) - trim_time[0], #og: -50, +850
                      endtime=utct(self.picks[phase_S]) + trim_time[1])
         
                                                                
@@ -1434,7 +1435,7 @@ class Event:
         tstart_signal = utct(self.picks[phase_pick]) + tstart_phase
         tend_signal = utct(self.picks[phase_pick]) + tend_phase
         
-        #Noise window: before P (=phase_start), tnoise should be negative values
+        #Noise window: MQS picks
         tstart_noise = utct(self.picks['noise_start']) # -120
         tend_noise = utct(self.picks['noise_end'])
     
@@ -1460,15 +1461,15 @@ class Event:
         elif plot_spec_azi_only:
             gridspec_kw = dict(width_ratios=[10, 2, 2],   # specgram, hist2d
                                height_ratios=[1, 1],
-                               top=0.90,
+                               top=0.93,
                                bottom=0.1,
-                               left=0.02,
-                               right=0.91,
-                               hspace=0.15,
-                               wspace=0.05)
+                               left=0.05,
+                               right=0.89,
+                               hspace=0.3,
+                               wspace=0.08)
             nrows = 2
             dy_lmst = -0.4
-            figsize_y = 6
+            figsize_y = 5
         else:
             gridspec_kw = dict(width_ratios=[10, 2, 2],  # specgram, hist2d, hist2d
                                height_ratios=[1, 1, 1, 1],
@@ -1485,18 +1486,19 @@ class Event:
         w_cbar = 0.005
         
         rect = [[None for i in range(2)] for j in range(nrows)] #prepare rectangles to mark the time windows
+        color_windows = ['C0', 'C9'] #signal, noise
         for j in range(nrows):
             rect[j][0] = patches.Rectangle((utct(tstart_signal).datetime,fmin+0.03*fmin), 
                                            utct(tend_signal).datetime-utct(tstart_signal).datetime, 
                                            fmax-fmin-0.03*fmax, linewidth=2, 
-                                           edgecolor='C0', fill = False) #signal
+                                           edgecolor=color_windows[0], fill = False) #signal
             rect[j][1] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin), 
                                            utct(tend_noise).datetime-utct(tstart_noise).datetime, 
                                            fmax-fmin-0.03*fmax, linewidth=2, 
-                                           edgecolor='C8', fill = False) #noise
+                                           edgecolor=color_windows[1], fill = False) #noise
     
         fig, axes = plt.subplots(nrows=nrows, ncols=3, sharey='all',
-                                 figsize=(16, figsize_y), gridspec_kw=gridspec_kw)
+                                 figsize=(12, figsize_y), gridspec_kw=gridspec_kw) #16 og
     
         winlen = int(winlen_sec / dt)
         nfft = next_pow_2(winlen) * 2
@@ -1554,7 +1556,7 @@ class Event:
                 (scalogram, vmin, vmax, np.ones_like(alpha),
                  'amplitude\n/ dB', np.arange(vmin, vmax+1, 20), 'plasma'),
                 (np.rad2deg(azi1), 0, 360, alpha,
-                 'major azimuth\n/ degree', np.arange(0, 361, 60), 'tab20b'), #was 45 deg steps
+                 'major azimuth\n/ degree', np.arange(0, 361, 90), 'tab20b'), #was 45 deg steps
                 (elli, 0, 1, alpha,
                  'ellipticity\n', np.arange(0, 1.1, 0.2), 'gnuplot'),
                 (np.rad2deg(abs(inc1)), -0, 90, alpha,
@@ -1586,7 +1588,7 @@ class Event:
     
                 if tr_Z == st_Z[0]:
                     cax, kw = make_axes(ax, location='left', fraction=0.07,
-                                        pad=0.07)
+                                        pad=0.1) #pad=0.07
                     plt.colorbar(cm, cax=cax, ticks=xticks, **kw)
     
                 for i in range(len(f)):
@@ -1640,14 +1642,20 @@ class Event:
             ax.add_patch(rect[i][0])
             ax.add_patch(rect[i][1])
             
+            #mark P/S arrival
+            ax.axvline(x=utct(self.picks[phase_P]).datetime,ls='dashed',c='black')
+            ax.axvline(x=utct(self.picks[phase_S]).datetime,ls='dashed',c='black')
+            
     
         for ax in axes[0:-1, 0]:
             ax.set_xticklabels('')
             
         axes[0, signal_row].set_title('Signal')
         axes[0, noise_row].set_title('Noise')
-        axes[0, 0].text(utct(tstart_signal).datetime, fmax+1, 'Signal', c='C0', fontsize=12)
-        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c='C8', fontsize=12)
+        axes[0, 0].text(utct(tstart_signal).datetime, fmax+1, 'Signal', c=color_windows[0], fontsize=12)
+        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c=color_windows[1], fontsize=12)
+        axes[0, 0].text(utct(self.picks[phase_P]).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
+        axes[0, 0].text(utct(self.picks[phase_S]).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
         
     
         linewidth_twofour = 1.0
@@ -1687,13 +1695,14 @@ class Event:
                     axes[irow, i].set_yscale('log')
                     axes[irow, i].set_yticks((0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0))
                     axes[irow, i].set_yticklabels(("1/10", "1/5", "1/2", "1", "2", "5", "10"))
+                    axes[irow, i].yaxis.set_minor_formatter(NullFormatter()) #removes minor ticks between the major ticks which are set above
                     axes[irow, i].set_ylim(fmin, fmax)
             ax.set_xticks(xticks)
             
             props = dict(boxstyle='round', facecolor='white', alpha=0.9)
             
             ax = axes[irow, 0]
-            ax.text(x=-0.19, y=0.5, transform=ax.transAxes, s=xlabel, #x=-0.18
+            ax.text(x=-0.29, y=0.5, transform=ax.transAxes, s=xlabel, #x=-0.18 #x=-019 gze
                     ma='center', va='center', bbox=props, rotation=90, size=10)
             
             for ax in axes[1:, 1:].flatten():
@@ -1703,6 +1712,14 @@ class Event:
                                   gridspec_kw['bottom'], w_cbar,
                                   gridspec_kw['top'] - gridspec_kw['bottom']])
         plt.colorbar(cm, cax=cbar_axes, label='weighted relative frequency')
+        
+        #For BSSA plot
+        # axes[0,0].text(-0.21, 1.06, '(a)', fontsize=14, transform=axes[0,0].transAxes)
+        # axes[0,1].text(-0.18, 1.06, '(b)', fontsize=14, transform=axes[0,1].transAxes)
+        # axes[0,2].text(-0.18, 1.06, '(c)', fontsize=14, transform=axes[0,2].transAxes)
+        # axes[1,0].text(-0.21, 1.06, '(d)', fontsize=14, transform=axes[1,0].transAxes)
+        # axes[1,1].text(-0.18, 1.06, '(e)', fontsize=14, transform=axes[1,1].transAxes)
+        # axes[1,2].text(-0.18, 1.06, '(f)', fontsize=14, transform=axes[1,2].transAxes)
     
 
     
