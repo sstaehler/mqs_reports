@@ -1373,7 +1373,7 @@ class Event:
         return freqs, envs_out
 
     def plot_polarization_event_noise(self, 
-                                  tstart_phase, tend_phase, phase,
+                                  t_pick_P, t_pick_S,
                                   rotation = 'ZNE', BAZ=0.0,
                                   kind='spec', fmin=1., fmax=10.,
                                   winlen_sec=20., overlap=0.5,
@@ -1426,14 +1426,17 @@ class Event:
         st_E = Stream(traces=[st_Copy.select(channel='BHE')[0]])
         
         #Signal/wave window: after P (=phase_start), tsignal can be + or - values. Change to phase_end for window relative to S
-        if 'P' in phase:
-            phase_pick = phase_P
-        elif 'S' in phase:
-            phase_pick = phase_S
-        else:
-            raise Exception("Sorry, no valid phase for signal window") 
-        tstart_signal = utct(self.picks[phase_pick]) + tstart_phase
-        tend_signal = utct(self.picks[phase_pick]) + tend_phase
+        # if 'P' in phase:
+        #     phase_pick = phase_P
+        # elif 'S' in phase:
+        #     phase_pick = phase_S
+        # else:
+        #     raise Exception("Sorry, no valid phase for signal window") 
+        tstart_signal_P = utct(self.picks[phase_P]) + t_pick_P[0]
+        tend_signal_P = utct(self.picks[phase_S]) - 5
+        
+        tstart_signal_S = utct(self.picks[phase_S]) + t_pick_S[0]
+        tend_signal_S = utct(self.picks[phase_S]) + t_pick_S[1]
         
         #Noise window: MQS picks
         tstart_noise = utct(self.picks['noise_start']) # -120
@@ -1442,24 +1445,25 @@ class Event:
         tstart, tend, dt = polarization._check_traces(st_Z, st_N, st_E, tstart, tend)
     
         #define in which row Signal and Noise hist are plotted
-        signal_row = 2
+        signal_P_row = 2
+        signal_S_row = 3
         noise_row = 1
         
         # Create figure to plot in
         if plot_6C: #not tested
-            gridspec_kw = dict(width_ratios=[10, 2, 2],   # specgram, hist2d
+            gridspec_kw = dict(width_ratios=[10, 2, 2, 2],   # specgram, hist2d
                                height_ratios=[1, 1, 1, 1, 1, 1],
-                               top=0.98,
-                               bottom=0.1,
+                               top=0.95,
+                               bottom=0.03,
                                left=0.02,
                                right=0.91,
                                hspace=0.25,
-                               wspace=0.02)
+                               wspace=0.05)
             nrows = 6
             dy_lmst = -0.4
             figsize_y = 9
         elif plot_spec_azi_only:
-            gridspec_kw = dict(width_ratios=[10, 2, 2],   # specgram, hist2d
+            gridspec_kw = dict(width_ratios=[10, 2, 2, 2],   # specgram, hist2d
                                height_ratios=[1, 1],
                                top=0.93,
                                bottom=0.1,
@@ -1471,34 +1475,38 @@ class Event:
             dy_lmst = -0.4
             figsize_y = 5
         else:
-            gridspec_kw = dict(width_ratios=[10, 2, 2],  # specgram, hist2d, hist2d
+            gridspec_kw = dict(width_ratios=[10, 2, 2, 2],  # specgram, hist2d, hist2d
                                height_ratios=[1, 1, 1, 1],
                                top=0.96,
                                bottom=0.05,
-                               left=0.02,
-                               right=0.91,
+                               left=0.05,
+                               right=0.89,
                                hspace=0.15,
-                               wspace=0.05) #0.02 original
+                               wspace=0.08) #0.02 original
             nrows = 4
             dy_lmst = -0.25
             figsize_y = 9
         dx_cbar = 0.055
         w_cbar = 0.005
         
-        rect = [[None for i in range(2)] for j in range(nrows)] #prepare rectangles to mark the time windows
-        color_windows = ['C0', 'C9'] #signal, noise
+        rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
+        color_windows = ['C0', 'C2', 'C9'] #signal P, S, noise
         for j in range(nrows):
-            rect[j][0] = patches.Rectangle((utct(tstart_signal).datetime,fmin+0.03*fmin), 
-                                           utct(tend_signal).datetime-utct(tstart_signal).datetime, 
+            rect[j][0] = patches.Rectangle((utct(tstart_signal_P).datetime,fmin+0.03*fmin), 
+                                           utct(tend_signal_P).datetime-utct(tstart_signal_P).datetime, 
                                            fmax-fmin-0.03*fmax, linewidth=2, 
                                            edgecolor=color_windows[0], fill = False) #signal
-            rect[j][1] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin), 
+            rect[j][1] = patches.Rectangle((utct(tstart_signal_S).datetime,fmin+0.03*fmin), 
+                                           utct(tend_signal_S).datetime-utct(tstart_signal_S).datetime, 
+                                           fmax-fmin-0.03*fmax, linewidth=2, 
+                                           edgecolor=color_windows[1], fill = False) #signal
+            rect[j][2] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin), 
                                            utct(tend_noise).datetime-utct(tstart_noise).datetime, 
                                            fmax-fmin-0.03*fmax, linewidth=2, 
-                                           edgecolor=color_windows[1], fill = False) #noise
+                                           edgecolor=color_windows[-1], fill = False) #noise
     
-        fig, axes = plt.subplots(nrows=nrows, ncols=3, sharey='all',
-                                 figsize=(12, figsize_y), gridspec_kw=gridspec_kw) #16 og
+        fig, axes = plt.subplots(nrows=nrows, ncols=4, sharey='all',
+                                 figsize=(16, figsize_y), gridspec_kw=gridspec_kw) #16 og - 12 for 3 panel/row
     
         winlen = int(winlen_sec / dt)
         nfft = next_pow_2(winlen) * 2
@@ -1513,11 +1521,13 @@ class Event:
             kind, nf, nfft, overlap, winlen_sec)
     
         if kind == 'spec':
-            binned_data_signal = np.zeros((nrows, nfft // (2 * dsfacf) + 1, nbins))
-            binned_data_noise = np.zeros_like(binned_data_signal)
+            binned_data_signal_P = np.zeros((nrows, nfft // (2 * dsfacf) + 1, nbins))
+            binned_data_signal_S = np.zeros_like(binned_data_signal_P)
+            binned_data_noise = np.zeros_like(binned_data_signal_P)
         else:
-            binned_data_signal = np.zeros((nrows, nf // dsfacf, nbins))
-            binned_data_noise = np.zeros_like(binned_data_signal)
+            binned_data_signal_P = np.zeros((nrows, nf // dsfacf, nbins))
+            binned_data_signal_S = np.zeros_like(binned_data_signal_P)
+            binned_data_noise = np.zeros_like(binned_data_signal_P)
     
         for tr_Z, tr_N, tr_E in zip(st_Z, st_N, st_E):
             if tr_Z.stats.npts < winlen * 4:
@@ -1540,7 +1550,8 @@ class Event:
             t = t[::dsfact]
             t += float(tr_Z.stats.starttime)
             nts += len(t)
-            bol_signal_mask= np.array((t > tstart_signal, t< tend_signal)).all(axis=0)
+            bol_signal_P_mask= np.array((t > tstart_signal_P, t< tend_signal_P)).all(axis=0)
+            bol_signal_S_mask= np.array((t > tstart_signal_S, t< tend_signal_S)).all(axis=0)
             bol_noise_mask= np.array((t > tstart_noise, t< tend_noise)).all(axis=0)
     
             scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
@@ -1592,9 +1603,12 @@ class Event:
                     plt.colorbar(cm, cax=cax, ticks=xticks, **kw)
     
                 for i in range(len(f)):
-                    binned_data_signal[irow, i, :] += np.histogram(data[i,bol_signal_mask], bins=nbins,
+                    binned_data_signal_P[irow, i, :] += np.histogram(data[i,bol_signal_P_mask], bins=nbins,
                                                             range=(rmin, rmax),
-                                                            weights=alpha[i,bol_signal_mask], density=True)[0]
+                                                            weights=alpha[i,bol_signal_P_mask], density=True)[0]
+                    binned_data_signal_S[irow, i, :] += np.histogram(data[i,bol_signal_S_mask], bins=nbins,
+                                                            range=(rmin, rmax),
+                                                            weights=alpha[i,bol_signal_S_mask], density=True)[0]
                     binned_data_noise[irow, i, :] += np.histogram(data[i,bol_noise_mask], bins=nbins,
                                                             range=(rmin, rmax),
                                                             weights=alpha[i,bol_noise_mask], density=True)[0]
@@ -1615,6 +1629,7 @@ class Event:
                 ax[0].set_yscale('log')
             ax[0].yaxis.set_ticks_position('both')
             ax[1].yaxis.set_ticks_position('both')
+            ax[2].yaxis.set_ticks_position('both')
             # set tick position twice, otherwise labels appear right :/
             ax[-1].yaxis.set_ticks_position('right')
             ax[-1].yaxis.set_label_position('right')
@@ -1632,6 +1647,7 @@ class Event:
             ax.get_shared_y_axes().join(ax, axes[-1, 0])
             
         for ax in axes[:, 2]:
+            ax.set_ylabel('')
             ax.get_shared_y_axes().join(ax, axes[-1, 0])
 
     
@@ -1641,6 +1657,7 @@ class Event:
             #Patched marking the hist time windows
             ax.add_patch(rect[i][0])
             ax.add_patch(rect[i][1])
+            ax.add_patch(rect[i][-1])
             
             #mark P/S arrival
             ax.axvline(x=utct(self.picks[phase_P]).datetime,ls='dashed',c='black')
@@ -1650,10 +1667,12 @@ class Event:
         for ax in axes[0:-1, 0]:
             ax.set_xticklabels('')
             
-        axes[0, signal_row].set_title('Signal')
+        axes[0, signal_P_row].set_title('Signal P')
+        axes[0, signal_S_row].set_title('Signal S')
         axes[0, noise_row].set_title('Noise')
-        axes[0, 0].text(utct(tstart_signal).datetime, fmax+1, 'Signal', c=color_windows[0], fontsize=12)
-        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c=color_windows[1], fontsize=12)
+        axes[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, 'Signal P', c=color_windows[0], fontsize=12)
+        axes[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, 'Signal S', c=color_windows[1], fontsize=12)
+        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c=color_windows[-1], fontsize=12)
         axes[0, 0].text(utct(self.picks[phase_P]).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
         axes[0, 0].text(utct(self.picks[phase_S]).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
         
@@ -1662,10 +1681,25 @@ class Event:
         for irow, [data, rmin, rmax, a, xlabel, xticks, cmap] in \
                 enumerate(iterables):
             
-            #hist plot: signal
-            ax = axes[irow, signal_row]
+            #hist plot: signal P
+            ax = axes[irow, signal_P_row]
             cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
-                               f, binned_data_signal[irow] *(rmax-rmin),
+                               f, binned_data_signal_P[irow] *(rmax-rmin),
+                               cmap='hot_r', #pqlx,
+                               vmin=0., vmax=10)
+            
+            #Mark 2.4Hz and the BAZ of the event (if known)
+            ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
+            ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
+            if irow == 1 and self.baz:
+                ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
+            ax.set_ylim(fmin, fmax)
+            ax.set_xticks(xticks)
+            
+            #hist plot: signal P
+            ax = axes[irow, signal_S_row]
+            cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
+                               f, binned_data_signal_S[irow] *(rmax-rmin),
                                cmap='hot_r', #pqlx,
                                vmin=0., vmax=10)
             
@@ -1691,7 +1725,7 @@ class Event:
                 
             ax.set_ylim(fmin, fmax)
             if log:
-                for i in range(0, 3):
+                for i in range(0, 4):
                     axes[irow, i].set_yscale('log')
                     axes[irow, i].set_yticks((0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0))
                     axes[irow, i].set_yticklabels(("1/10", "1/5", "1/2", "1", "2", "5", "10"))
@@ -1728,4 +1762,4 @@ class Event:
         else:
             savename = f'{fname}_diff' if differentiate else f'{fname}'
             # fig.savefig(f'Plots/Polarisation/{savename}.png', dpi=200) 
-            fig.savefig(f'{savename}.png', dpi=200)
+            fig.savefig(f'{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{savename}_4panels.png', dpi=200)
