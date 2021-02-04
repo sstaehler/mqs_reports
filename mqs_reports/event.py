@@ -1383,7 +1383,8 @@ class Event:
                                   nf=100, w0=20,
                                   use_alpha=True, use_alpha2=False, plot_6C=True,
                                   plot_spec_azi_only = False,
-                                  differentiate=False, detick_1Hz=False):
+                                  differentiate=False, detick_1Hz=False,
+                                  impact = False):
         
         """
         Plots polarisation of seismic event with window of noise and manually defined event time window
@@ -1407,23 +1408,32 @@ class Event:
         if 'ZNE' not in rotation:
             if 'RT' in rotation:
                 st_Copy.rotate('NE->RT', back_azimuth=BAZ)
+                components = ['Z', 'R', 'T']
             elif 'LQT' in rotation:
                 st_Copy.rotate('ZNE->LQT', back_azimuth=BAZ, inclination = 40.0)
+                components = ['L', 'Q', 'T']
             else:
                 raise Exception("Sorry, please pick valid rotation system: ZNE, RT, LQT") 
+        else:
+            components = ['Z', 'N', 'E']
+
     
         #differentiate waveforms
         if differentiate:
             st_Copy.differentiate()
         
         #trim the waveforms in length
-        st_Copy.trim(starttime=utct(self.picks['noise_start']) - trim_time[0], #og: -50, +850
-                     endtime=utct(self.picks[phase_S]) + trim_time[1])
+        try:
+            st_Copy.trim(starttime=utct(self.picks['noise_start']) - trim_time[0], #og: -50, +850
+                         endtime=utct(self.picks[phase_S]) + trim_time[1])
+        except ValueError: #if noise window is picked after the event
+            st_Copy.trim(starttime=utct(self.picks[phase_P]) - trim_time[0], #og: -50, +850
+                         endtime=utct(self.picks['noise_end']) + trim_time[0])
         
                                                                
-        st_Z = Stream(traces=[st_Copy.select(channel='BHZ')[0]])
-        st_N = Stream(traces=[st_Copy.select(channel='BHN')[0]])
-        st_E = Stream(traces=[st_Copy.select(channel='BHE')[0]])
+        st_Z = Stream(traces=[st_Copy.select(component=components[0])[0]])
+        st_N = Stream(traces=[st_Copy.select(component=components[1])[0]])
+        st_E = Stream(traces=[st_Copy.select(component=components[2])[0]])
         
         #Signal/wave window: after P (=phase_start), tsignal can be + or - values. Change to phase_end for window relative to S
         # if 'P' in phase:
@@ -1433,10 +1443,14 @@ class Event:
         # else:
         #     raise Exception("Sorry, no valid phase for signal window") 
         tstart_signal_P = utct(self.picks[phase_P]) + t_pick_P[0]
-        tend_signal_P = utct(self.picks[phase_S]) - 5
+        tend_signal_P = utct(self.picks[phase_S]) - 15
         
         tstart_signal_S = utct(self.picks[phase_S]) + t_pick_S[0]
         tend_signal_S = utct(self.picks[phase_S]) + t_pick_S[1]
+        
+        #manual adjustment list
+        if self.name == 'S0734a' or self.name == 'S0756a':
+            tend_signal_S = utct(self.picks[phase_S]) + 50
         
         #Noise window: MQS picks
         tstart_noise = utct(self.picks['noise_start']) # -120
@@ -1454,7 +1468,7 @@ class Event:
             gridspec_kw = dict(width_ratios=[10, 2, 2, 2],   # specgram, hist2d
                                height_ratios=[1, 1, 1, 1, 1, 1],
                                top=0.95,
-                               bottom=0.03,
+                               bottom=0.05,
                                left=0.02,
                                right=0.91,
                                hspace=0.25,
@@ -1488,6 +1502,10 @@ class Event:
             figsize_y = 9
         dx_cbar = 0.055
         w_cbar = 0.005
+        
+        if impact:
+            gridspec_kw['top'] = 0.91
+            title = f'{self.name} - {rotation} impact: {impact}'
         
         rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
         color_windows = ['C0', 'C2', 'C9'] #signal P, S, noise
@@ -1762,4 +1780,9 @@ class Event:
         else:
             savename = f'{fname}_diff' if differentiate else f'{fname}'
             # fig.savefig(f'Plots/Polarisation/{savename}.png', dpi=200) 
-            fig.savefig(f'{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{savename}_4panels.png', dpi=200)
+            if impact:
+                fig.suptitle(title)
+                path = f'Plots/Impact_search/Impact_{impact}'
+            else:
+                path = f'Plots'
+            fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
