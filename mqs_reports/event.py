@@ -364,6 +364,20 @@ class Event:
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
                 success_VBB = True
+                
+        if not success_VBB:
+            # Try for 07.BL? (20sps VBB at low gain)
+            filenam_VBB_HG = 'XB.ELYSE.07.BL?.D.%04d.%03d'
+            fnam_VBB = create_fnam_event(
+                filenam_inst=filenam_VBB_HG,
+                sc3dir=sc3dir, time=self.picks['start'])
+            self.waveforms_VBB = read_data(fnam_VBB, inv=inv,
+                                           kind=kind,
+                                           fmin=fmin_VBB,
+                                           twin=[twin_start - tpre_VBB,
+                                                 twin_end + tpre_VBB])
+            if len(self.waveforms_VBB) == 3:
+                success_VBB = True
 
         if not success_VBB:
             self.waveforms_VBB = None
