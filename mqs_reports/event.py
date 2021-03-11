@@ -1457,14 +1457,15 @@ class Event:
         # else:
         #     raise Exception("Sorry, no valid phase for signal window") 
         tstart_signal_P = utct(self.picks[phase_P]) + t_pick_P[0]
-        tend_signal_P = utct(self.picks[phase_S]) - 15
+        tend_signal_P = utct(self.picks[phase_S]) - 20 if (utct(self.picks[phase_P]) + t_pick_P[1]) > (utct(self.picks[phase_S]) - 1) else  utct(self.picks[phase_P]) + t_pick_P[1]
+        # tend_signal_P = utct(self.picks[phase_P]) + t_pick_P[1]
         
         tstart_signal_S = utct(self.picks[phase_S]) + t_pick_S[0]
         tend_signal_S = utct(self.picks[phase_S]) + t_pick_S[1]
         
-        #manual adjustment list
-        if self.name == 'S0734a' or self.name == 'S0756a':
-            tend_signal_S = utct(self.picks[phase_S]) + 50
+        # #manual adjustment list
+        # if self.name == 'S0734a' or self.name == 'S0756a':
+        #     tend_signal_S = utct(self.picks[phase_S]) + 50
         
         #Noise window: MQS picks
         tstart_noise = utct(self.picks['noise_start']) # -120
@@ -1517,9 +1518,11 @@ class Event:
         dx_cbar = 0.055
         w_cbar = 0.005
         
+        gridspec_kw['top'] = 0.91
+        title = f'{self.name}'
+        
         if impact:
-            gridspec_kw['top'] = 0.91
-            title = f'{self.name} - {rotation} impact: {impact}'
+            title += f' - {rotation} impact: {impact}'
         
         rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
         color_windows = ['C0', 'C2', 'C9'] #signal P, S, noise
@@ -1728,7 +1731,7 @@ class Event:
             ax.set_ylim(fmin, fmax)
             ax.set_xticks(xticks)
             
-            #hist plot: signal P
+            #hist plot: signal S
             ax = axes[irow, signal_S_row]
             cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
                                f, binned_data_signal_S[irow] *(rmax-rmin),
@@ -1787,7 +1790,7 @@ class Event:
         # axes[1,1].text(-0.18, 1.06, '(e)', fontsize=14, transform=axes[1,1].transAxes)
         # axes[1,2].text(-0.18, 1.06, '(f)', fontsize=14, transform=axes[1,2].transAxes)
     
-
+        fig.suptitle(title)
     
         if fname is None:
             plt.show()
@@ -1795,8 +1798,7 @@ class Event:
             savename = f'{fname}_diff' if differentiate else f'{fname}'
             # fig.savefig(f'Plots/Polarisation/{savename}.png', dpi=200) 
             if impact:
-                fig.suptitle(title)
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
-                path = f'Plots'
+                path = 'Plots'
             fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
