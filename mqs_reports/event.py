@@ -1589,9 +1589,34 @@ class Event:
             bol_signal_S_mask= np.array((t > tstart_signal_S, t< tend_signal_S)).all(axis=0)
             bol_noise_mask= np.array((t > tstart_noise, t< tend_noise)).all(axis=0)
     
-            scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
-            alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
+    
+            #Scalogram and alpha/masking of signals
+            # scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
+            # alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
+            if alpha_inc > 0.: 
+                func_inc= np.cos
+                func_azi= np.sin
+            else: 
+                alpha_inc= -alpha_inc 
+                func_inc= np.sin
+                func_azi= np.cos
             
+            if alpha_inc is not None: 
+                scalogram= 10 * np.log10((r1** 2).sum(axis=-1) * func_inc(inc1)**(2*alpha_inc) * abs(func_azi(azi1))**(alpha_inc) * (1. - elli)**(2*alpha_elli)) 
+            else: 
+                scalogram= 10 * np.log10((r1** 2).sum(axis=-1)) 
+                alpha, alpha2= _dop_elli_to_alpha(P, elli, use_alpha, use_alpha2) 
+            if mod_180: 
+                azi1= azi1% np.pi
+                azi2= azi2% np.pi
+            
+            
+            if alpha_inc is not None: 
+                alpha*= func_inc(inc1)**alpha_inc * abs(func_azi(azi1))**alpha_inc 
+            if alpha_elli is not None: 
+                alpha*= (1. - elli)**alpha_elli
+            
+            #Prepare x axis array (datetime)
             t_datetime = np.zeros_like(t,dtype=object)
             for i, time in enumerate(t):
                  t_datetime[i] = utct(time).datetime
