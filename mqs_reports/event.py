@@ -1395,8 +1395,9 @@ class Event:
                                   vmax=None, log=False, fname=None,
                                   dop_winlen=60, dop_specwidth=0.2,
                                   nf=100, w0=20,
-                                  use_alpha=True, use_alpha2=False, plot_6C=True,
-                                  plot_spec_azi_only = False,
+                                  use_alpha=True, use_alpha2=False, 
+                                  alpha_inc = 1.0, alpha_elli = 1.0, alpha_azi = 1.0,
+                                  plot_6C=True, plot_spec_azi_only = False,
                                   differentiate=False, detick_1Hz=False,
                                   impact = False):
         
@@ -1412,6 +1413,7 @@ class Event:
         from matplotlib.colorbar import make_axes
         from matplotlib.ticker import NullFormatter
         
+        mod_180 = False #set to True if only mapping 0-180° azimuth, False maps 0-360°
         trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
         
         st_Copy = self.waveforms_VBB.copy() 
@@ -1602,17 +1604,19 @@ class Event:
                 func_azi= np.cos
             
             if alpha_inc is not None: 
-                scalogram= 10 * np.log10((r1** 2).sum(axis=-1) * func_inc(inc1)**(2*alpha_inc) * abs(func_azi(azi1))**(alpha_inc) * (1. - elli)**(2*alpha_elli)) 
+                scalogram= 10 * np.log10((r1** 2).sum(axis=-1) * func_inc(inc1)**(2*alpha_inc) * abs(func_azi(azi1))**(alpha_azi) * (1. - elli)**(2*alpha_elli)) 
             else: 
                 scalogram= 10 * np.log10((r1** 2).sum(axis=-1)) 
-                alpha, alpha2= _dop_elli_to_alpha(P, elli, use_alpha, use_alpha2) 
+            alpha, alpha2= polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2) 
             if mod_180: 
                 azi1= azi1% np.pi
                 azi2= azi2% np.pi
             
             
             if alpha_inc is not None: 
-                alpha*= func_inc(inc1)**alpha_inc * abs(func_azi(azi1))**alpha_inc 
+                alpha*= func_inc(inc1)**alpha_inc
+            if alpha_azi is not None:
+                alpha*= abs(func_azi(azi1))**alpha_azi 
             if alpha_elli is not None: 
                 alpha*= (1. - elli)**alpha_elli
             
@@ -1825,5 +1829,5 @@ class Event:
             if impact:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
-                path = 'Plots'
+                path = 'Plots/Test'
             fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
