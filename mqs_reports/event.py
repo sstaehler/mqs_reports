@@ -1407,6 +1407,7 @@ class Event:
         import matplotlib
         import matplotlib.patches as patches
         import matplotlib.dates as mdates
+        import matplotlib.gridspec as gridspec
         import polarization.polarization as polarization
         from obspy import Stream
         from obspy.signal.util import next_pow_2
@@ -1428,6 +1429,10 @@ class Event:
             if 'RT' in rotation:
                 st_Copy.rotate('NE->RT', back_azimuth=BAZ)
                 components = ['Z', 'R', 'T']
+                #need to use -R, otherwise it aligns with 180° instead of 0°
+                tr_R_data = st_Copy[1].data
+                tr_R_data *= -1
+                
             elif 'LQT' in rotation:
                 st_Copy.rotate('ZNE->LQT', back_azimuth=BAZ, inclination = 40.0)
                 components = ['L', 'Q', 'T']
@@ -1510,10 +1515,12 @@ class Event:
                                left=0.03, #0.05
                                right=0.94, #0.89
                                hspace=0.15,
-                               wspace=0.1) #0.02 original
+                               wspace=0.08) #0.02 original
             nrows = 4
             dy_lmst = -0.25
             figsize_y = 9
+            
+            
         # dx_cbar = 0.055
         dx_cbar = 0.028
         w_cbar = 0.005
@@ -1521,22 +1528,32 @@ class Event:
         gridspec_kw['top'] = 0.91
         title = f'{self.name}'
         
-        fig, axes = plt.subplots(nrows=nrows, ncols=5, #sharey='all',
-                                 figsize=(19, figsize_y), gridspec_kw=gridspec_kw) #16 og - 12 for 3 panel/row
+        # fig, axes = plt.subplots(nrows=nrows, ncols=5, #sharey='all',
+        #                          figsize=(19, figsize_y), gridspec_kw=gridspec_kw) #16 og - 12 for 3 panel/row
         
-        #join y-axis (frequency) for all but right most column
-        # for ax in axes[0:-1, 0].flatten():
-        #     ax.get_shared_y_axes().join(ax, axes[-1, 0])
-        # for ax in axes[:, 1:-1].flatten():
-        #     ax.get_shared_y_axes().join(ax, axes[-1, 0])
+        # gridspec inside gridspec
+        fig = plt.figure(figsize=(19, figsize_y))
+        gs0 = gridspec.GridSpec(1, 2, figure=fig, 
+                                left=gridspec_kw['left'], bottom=gridspec_kw['bottom'], right=gridspec_kw['right'], top=gridspec_kw['top'], 
+                                wspace=0.1, hspace=None,
+                                height_ratios=[1], width_ratios=[7, 1])
+        
+        gs00 = gridspec.GridSpecFromSubplotSpec(4, 4, subplot_spec=gs0[0], wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=[1, 1, 1, 1], width_ratios=[4,1,1,1])
+        axes0 = gs00.subplots()
+        
+        # the following syntax does the same as the GridSpecFromSubplotSpec call above:
+        gs01 = gs0[-1].subgridspec(4, 1, wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=[1,1,1,1], width_ratios=[1])
+        axes1 = gs01.subplots()
+        
+
         
         if impact:
             title += f' - {rotation} impact: {impact}'
         if 'ZNE' not in rotation and not impact:
-            title += f' - {rotation} rotated to {BAZ}° BAZ'
+            title += f' - {rotation} rotated to {BAZ:.0f}° BAZ'
         
         rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
-        color_windows = ['C0', 'C2', 'C9'] #signal P, S, noise
+        color_windows = ['C0', 'Firebrick', 'grey', 'Peru'] #signal P, S, noise, density C9
         for j in range(nrows):
             rect[j][0] = patches.Rectangle((utct(tstart_signal_P).datetime,fmin+0.03*fmin), 
                                            utct(tend_signal_P).datetime-utct(tstart_signal_P).datetime, 
@@ -1549,7 +1566,7 @@ class Event:
             rect[j][2] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin), 
                                            utct(tend_noise).datetime-utct(tstart_noise).datetime, 
                                            fmax-fmin-0.03*fmax, linewidth=2, 
-                                           edgecolor=color_windows[-1], fill = False) #noise
+                                           edgecolor=color_windows[2], fill = False) #noise
             
     
 
@@ -1675,7 +1692,7 @@ class Event:
             for irow, [data, rmin, rmax, a, xlabel, xticks, cmap] in \
                     enumerate(iterables):
     
-                ax = axes[irow, 0]
+                ax = axes0[irow, 0]
     
                 if log and kind == 'cwt':
                     # imshow can't do the log sampling in frequency
@@ -1714,12 +1731,12 @@ class Event:
         loc = mdates.AutoDateLocator(tz=None, minticks=4, maxticks=6)
     
         
-        for ax in axes:
+        for ax in axes0:
             ax[0].set_xlim(utct(tstart).datetime, utct(tend).datetime)
             ax[0].xaxis.set_major_formatter(date_fmt)
             ax[0].xaxis.set_major_locator(loc)
             
-            for a in ax[:-1]:
+            for a in ax[:]:
                 a.set_ylim(fmin, fmax)
                 a.set_ylabel("frequency / Hz")
             if log:
@@ -1731,32 +1748,26 @@ class Event:
             ax[signal_S_row].yaxis.set_ticks_position('right')
             ax[signal_S_row].yaxis.set_label_position('right')
             ax[signal_S_row].yaxis.set_ticks_position('both')
-            
-            ax[density_row].yaxis.set_ticks_position('right')
-            ax[density_row].yaxis.set_label_position('right')
-            ax[density_row].yaxis.set_ticks_position('both')
+        
+        for ax in axes1: #density
+            ax.yaxis.set_ticks_position('right')
+            ax.yaxis.set_label_position('right')
+            ax.yaxis.set_ticks_position('both')
     
-        for ax in axes[0:-1, :].flatten():
+        for ax in axes0[0:-1, :].flatten():
             ax.set_xlabel('')
     
-        for ax in axes[0:-1, 0]:
-            ax.get_shared_x_axes().join(ax, axes[-1, 0])
-            # ax.get_shared_y_axes().join(ax, axes[-1, 0])
+        for ax in axes0[0:-1, 0]:
+            ax.get_shared_x_axes().join(ax, axes0[-1, 0])
     
-        for ax in axes[:, 1]:
+        for ax in axes0[:, 1]:
             ax.set_ylabel('')
-            # ax.get_shared_y_axes().join(ax, axes[-1, 0])
             
-        for ax in axes[:, 2]:
+        for ax in axes0[:, 2]:
             ax.set_ylabel('')
-            # ax.get_shared_y_axes().join(ax, axes[-1, 0])
-            
-        for ax in axes[:, 3]:
-            ax.set_ylabel('')
-            # ax.get_shared_y_axes().join(ax, axes[-1, 0])
 
     
-        for i,ax in enumerate(axes[:, 0]):
+        for i,ax in enumerate(axes0[:, 0]):
             ax.grid(b=True, which='major', axis='x')
             
             #Patched marking the hist time windows
@@ -1769,19 +1780,19 @@ class Event:
             ax.axvline(x=utct(self.picks[phase_S]).datetime,ls='dashed',c='black')
             
     
-        for ax in axes[0:-1, 0]:
+        for ax in axes0[0:-1, 0]:
             ax.set_xticklabels('')
             
             
-        axes[0, signal_P_row].set_title(f'Signal P \n {t_pick_P[1]-t_pick_P[0]}s')
-        axes[0, signal_S_row].set_title(f'Signal S \n {t_pick_S[1]-t_pick_S[0]}s')
-        axes[0, noise_row].set_title(f'Noise \n {tend_noise-tstart_noise:.0f}s')
-        axes[0, density_row].set_title(f'Density \n {f_band_density[0]}-{f_band_density[1]} Hz')
-        axes[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, 'Signal P', c=color_windows[0], fontsize=12)
-        axes[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, 'Signal S', c=color_windows[1], fontsize=12)
-        axes[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c=color_windows[-1], fontsize=12)
-        axes[0, 0].text(utct(self.picks[phase_P]).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
-        axes[0, 0].text(utct(self.picks[phase_S]).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
+        axes0[0, signal_P_row].set_title(f'Signal P \n {t_pick_P[1]-t_pick_P[0]}s')
+        axes0[0, signal_S_row].set_title(f'Signal S \n {t_pick_S[1]-t_pick_S[0]}s')
+        axes0[0, noise_row].set_title(f'Noise \n {tend_noise-tstart_noise:.0f}s')
+        axes1[0].set_title(f'Density \n {f_band_density[0]}-{f_band_density[1]} Hz')
+        axes0[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, 'Signal P', c=color_windows[0], fontsize=12)
+        axes0[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, 'Signal S', c=color_windows[1], fontsize=12)
+        axes0[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c=color_windows[2], fontsize=12)
+        axes0[0, 0].text(utct(self.picks[phase_P]).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
+        axes0[0, 0].text(utct(self.picks[phase_S]).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
         
     
         linewidth_twofour = 1.0
@@ -1789,7 +1800,8 @@ class Event:
                 enumerate(iterables):
             
             #hist plot: signal P
-            ax = axes[irow, signal_P_row]
+            ax = axes0[irow, signal_P_row]
+            ax.axhspan(f_band_density[0], f_band_density[-1], color=color_windows[3], alpha=0.2) #mark f-band used in density plot
             cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
                                f, binned_data_signal_P[irow] *(rmax-rmin),
                                cmap='hot_r', #pqlx,
@@ -1798,9 +1810,14 @@ class Event:
             
             ax.set_ylim(fmin, fmax)
             ax.set_xticks(xticks)
+            #Color the outside lines of the plot
+            for spine in ax.spines.values():
+                spine.set_edgecolor(color_windows[0])
+                spine.set_linewidth(2)
             
             #hist plot: signal S
-            ax = axes[irow, signal_S_row]
+            ax = axes0[irow, signal_S_row]
+            ax.axhspan(f_band_density[0], f_band_density[-1], color=color_windows[3], alpha=0.2) #mark f-band used in density plot
             cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
                                f, binned_data_signal_S[irow] *(rmax-rmin),
                                cmap='hot_r', #pqlx,
@@ -1809,9 +1826,14 @@ class Event:
             
             ax.set_ylim(fmin, fmax)
             ax.set_xticks(xticks)
+            #Color the outside lines of the plot
+            for spine in ax.spines.values():
+                spine.set_edgecolor(color_windows[1])
+                spine.set_linewidth(2)
             
             #hist plot: noise
-            ax = axes[irow, noise_row]
+            ax = axes0[irow, noise_row]
+            ax.axhspan(f_band_density[0], f_band_density[-1], color=color_windows[3], alpha=0.2) #mark f-band used in density plot
             cm = ax.pcolormesh(np.linspace(rmin, rmax, nbins),
                                f, binned_data_noise[irow] *(rmax-rmin),
                                cmap='hot_r', #pqlx,
@@ -1820,18 +1842,24 @@ class Event:
             
                 
             ax.set_ylim(fmin, fmax)
+            #Color the outside lines of the plot
+            for spine in ax.spines.values():
+                spine.set_edgecolor(color_windows[2])
+                spine.set_linewidth(2)
+                
+                
             if log:
                 for i in range(0, 4):
-                    axes[irow, i].set_yscale('log')
-                    axes[irow, i].set_yticks((0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0))
-                    axes[irow, i].set_yticklabels(("1/10", "1/5", "1/2", "1", "2", "5", "10"))
-                    axes[irow, i].yaxis.set_minor_formatter(NullFormatter()) #removes minor ticks between the major ticks which are set above
-                    axes[irow, i].set_ylim(fmin, fmax)
+                    axes0[irow, i].set_yscale('log')
+                    axes0[irow, i].set_yticks((0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0))
+                    axes0[irow, i].set_yticklabels(("1/10", "1/5", "1/2", "1", "2", "5", "10"))
+                    axes0[irow, i].yaxis.set_minor_formatter(NullFormatter()) #removes minor ticks between the major ticks which are set above
+                    axes0[irow, i].set_ylim(fmin, fmax)
             ax.set_xticks(xticks)
             
             props = dict(boxstyle='round', facecolor='white', alpha=0.9)
             
-            ax = axes[irow, 0]
+            ax = axes0[irow, 0]
             ax.text(x=-0.25, y=0.5, transform=ax.transAxes, s=xlabel, #x=-0.18 #x=-019 gze
                     ma='center', va='center', bbox=props, rotation=90, size=10)            
                
@@ -1840,33 +1868,38 @@ class Event:
             hx_P = np.nansum(binned_data_signal_P[irow,idx_density[0],:], axis=0)
             hx_S = np.nansum(binned_data_signal_S[irow,idx_density[0],:], axis=0)
             hx_noise = np.nansum(binned_data_noise[irow,idx_density[0],:], axis=0)
-            ax = axes[irow, density_row]
+            ax = axes1[irow]
             # sns.kdeplot(x=hx_P, ax=ax, color=color_windows[0])
             # sns.kdeplot(x=hx_S, ax=ax, color=color_windows[1])
             ax.fill_between(np.linspace(rmin, rmax, nbins), hx_noise, 0,
                  facecolor="grey", # The fill color
                  color='grey',       # The outline color
-                 alpha=0.2)          # Transparency of the fill
-            ax.plot(np.linspace(rmin, rmax, nbins),hx_P, color=color_windows[0])
-            ax.plot(np.linspace(rmin, rmax, nbins),hx_S, color=color_windows[1])
+                 alpha=0.2,         # Transparency of the fill
+                 label = 'Noise')          
+            ax.plot(np.linspace(rmin, rmax, nbins),hx_P, color=color_windows[0], label = 'P')
+            ax.plot(np.linspace(rmin, rmax, nbins),hx_S, color=color_windows[1], label = 'S')
             # ax.plot(np.linspace(rmin, rmax, nbins),hx_noise, color=color_windows[-1])
             
             ax.set_xticks(xticks)
             ax.set_ylim(0,max(max(hx_P),max(hx_S))+0.05*max(max(hx_P),max(hx_S)))
             ax.set_xlim(rmin,rmax)
+            
+            for spine in ax.spines.values():
+                spine.set_edgecolor(color_windows[3])
+                spine.set_linewidth(2)
         
         
         #Mark the 2.4Hz band, set grid lines, mark BAZ
-        for ax in axes[1, 1:-1]:
+        for ax in axes0[1, 1:]:
             if self.baz and ('ZNE' in rotation): #plot BAZ if it exists and if traces have NOT been rotated
                 ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
-        for ax in axes[:, 1:-1].flatten():
-            ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
-            ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
-        for ax in axes[1:, 1:-1].flatten():
+        # for ax in axes0[:, 1:].flatten():
+        #     ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
+        #     ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
+        for ax in axes0[1:, 1:].flatten():
             ax.grid(b=True, which='both', axis='x', linewidth=0.2, color='grey')
         #Turn off y-axis ticks for left and middle histograms
-        for ax in axes[:, 1:3].flatten():
+        for ax in axes0[:, 1:-1].flatten():
             ax.set_yticklabels('')
             
     
@@ -1875,8 +1908,12 @@ class Event:
                                   gridspec_kw['top'] - gridspec_kw['bottom']])
         plt.colorbar(cm, cax=cbar_axes, label='weighted relative frequency')
         
+        #Legend for density column
+        chartBox = axes1[0].get_position()
+        axes1[0].set_position([chartBox.x0, chartBox.y0, chartBox.width, chartBox.height])
+        axes1[0].legend(loc='upper right', bbox_to_anchor=(1.3, 1.45), ncol=1)
     
-        fig.suptitle(title)
+        fig.suptitle(title, fontsize=15)
     
         if fname is None:
             plt.show()
@@ -1886,5 +1923,5 @@ class Event:
             if impact:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
-                path = 'Plots/Test'
+                path = 'Plots'
             fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
