@@ -1486,36 +1486,39 @@ class Event:
         if plot_6C: #not tested
             gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],   # specgram, hist2d
                                height_ratios=[1, 1, 1, 1, 1, 1],
-                               top=0.95,
+                               top=0.93,
                                bottom=0.05,
-                               left=0.02,
-                               right=0.91,
-                               hspace=0.25,
-                               wspace=0.05)
+                               left=0.03,
+                               right=0.94,
+                               hspace=0.15,
+                               wspace=0.08)
+            box_legend = (1.3, 1.5)
             nrows = 6
             dy_lmst = -0.4
-            figsize_y = 9
+            figsize_y = 12
         elif plot_spec_azi_only:
             gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],   # specgram, hist2d
                                height_ratios=[1, 1],
-                               top=0.93,
-                               bottom=0.1,
-                               left=0.05,
-                               right=0.89,
-                               hspace=0.3,
+                               top=0.85,
+                               bottom=0.08,
+                               left=0.03,
+                               right=0.94,
+                               hspace=0.2,
                                wspace=0.08)
+            box_legend = (1.3, 1.4)
             nrows = 2
             dy_lmst = -0.4
-            figsize_y = 5
+            figsize_y = 6
         else:
             gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],  # specgram, hist2d, hist2d
                                height_ratios=[1, 1, 1, 1],
-                               top=0.96,
+                               top=0.91,
                                bottom=0.05,
                                left=0.03, #0.05
                                right=0.94, #0.89
                                hspace=0.15,
                                wspace=0.08) #0.02 original
+            box_legend = (1.3, 1.45)
             nrows = 4
             dy_lmst = -0.25
             figsize_y = 9
@@ -1525,7 +1528,7 @@ class Event:
         dx_cbar = 0.028
         w_cbar = 0.005
         
-        gridspec_kw['top'] = 0.91
+        # gridspec_kw['top'] = 0.91
         title = f'{self.name}'
         
         # fig, axes = plt.subplots(nrows=nrows, ncols=5, #sharey='all',
@@ -1538,11 +1541,11 @@ class Event:
                                 wspace=0.1, hspace=None,
                                 height_ratios=[1], width_ratios=[7, 1])
         
-        gs00 = gridspec.GridSpecFromSubplotSpec(4, 4, subplot_spec=gs0[0], wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=[1, 1, 1, 1], width_ratios=[4,1,1,1])
+        gs00 = gridspec.GridSpecFromSubplotSpec(nrows, 4, subplot_spec=gs0[0], wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[4,1,1,1])
         axes0 = gs00.subplots()
         
         # the following syntax does the same as the GridSpecFromSubplotSpec call above:
-        gs01 = gs0[-1].subgridspec(4, 1, wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=[1,1,1,1], width_ratios=[1])
+        gs01 = gs0[-1].subgridspec(nrows, 1, wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[1])
         axes1 = gs01.subplots()
         
 
@@ -1890,9 +1893,11 @@ class Event:
         
         
         #Mark the 2.4Hz band, set grid lines, mark BAZ
-        for ax in axes0[1, 1:]:
-            if self.baz and ('ZNE' in rotation): #plot BAZ if it exists and if traces have NOT been rotated
+        if self.baz and ('ZNE' in rotation): #plot BAZ if it exists and if traces have NOT been rotated
+            for ax in axes0[1, 1:]:
                 ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
+            ax = axes1[1]
+            ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
         # for ax in axes0[:, 1:].flatten():
         #     ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
         #     ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
@@ -1911,7 +1916,7 @@ class Event:
         #Legend for density column
         chartBox = axes1[0].get_position()
         axes1[0].set_position([chartBox.x0, chartBox.y0, chartBox.width, chartBox.height])
-        axes1[0].legend(loc='upper right', bbox_to_anchor=(1.3, 1.45), ncol=1)
+        axes1[0].legend(loc='upper right', bbox_to_anchor=box_legend, ncol=1)
     
         fig.suptitle(title, fontsize=15)
     
@@ -1923,5 +1928,5 @@ class Event:
             if impact:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
-                path = 'Plots'
+                path = 'Plots/Test'
             fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
