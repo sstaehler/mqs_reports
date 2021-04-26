@@ -434,6 +434,17 @@ class Noise():
                                  y1=-300,
                                  y2=10 * np.log10(self.quantiles_press[:, 0]),
                                  facecolor='lightgrey')
+
+        # Add one-year marker
+        SOLS_PER_YEAR = 668
+        for ax in [ax_LF, ax_HF]:
+            ax.axvline(x=sol_start + SOLS_PER_YEAR, ls='dashed',
+                       color='black', lw=1)
+        if data_apss:
+            ax_apss.axvline(x=sol_start + SOLS_PER_YEAR, ls='dashed',
+                       color='black', lw=1)
+
+
         HF_times = []
         HF_amps = []
         HF_dists = []
@@ -599,14 +610,14 @@ class Noise():
         ax_HF.set_ylabel('PSD, displ. %3.1f-%3.1f Hz. [dB]' %
                          (self.fmin_HF, self.fmax_HF))
 
-        ax_LF.set_ylim(-210., -170.)
+        ax_LF.set_ylim(-210., -165.)
         ax_LF.set_title('Seismic power, low frequency,  ' +
                         '%3.1f-%3.1f seconds and LF/BB events' %
                         (1. / self.fmax_LF, 1. / self.fmin_LF))
         ax_HF.set_title('Seismic power, high frequency,  ' +
                         '%3.1f-%3.1f Hz and HF/2.4 Hz events' %
                         (self.fmin_HF, self.fmax_HF))
-        ax_HF.set_ylim(-225., -185.)
+        ax_HF.set_ylim(-225., -180.)
         ax_LF.set_xlim(sol_start, sol_end)
 
         # ax_HF.text(0.7, -0.12, s=str(self),
