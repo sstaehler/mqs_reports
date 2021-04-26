@@ -91,7 +91,9 @@ def write_html(catalog, fnam_out):
                       '100sps<br> SPH'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
-               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
+               '%3.1f&plusmn;%3.1f', '%3.1f&plusmn;%3.1f',
+               '%3.1f&plusmn;%3.1f', '%3.1f&plusmn;%3.1f',
+               '%3.1f', '%5.3f',
                '%s', '%s', '%s')
     time_string = {'GUI': '%s<sup>[O]</sup>',
                    'aligned': '%s<sup>[A]</sup>',

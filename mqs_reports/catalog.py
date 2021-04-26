@@ -872,8 +872,8 @@ class Catalog:
                     continue
 
                 # collect properties for plotting
-                M, dist = np.array([
-                    (event.magnitude(mag_type=mag_type, distance=event.distance),
+                M, Msigma, dist = np.array([
+                    (*event.magnitude(mag_type=mag_type, distance=event.distance),
                      event.distance) for event in cat]).T.astype(float)
 
                 S = np.array([markersize[event.quality] for event in cat])
@@ -1359,7 +1359,7 @@ class Catalog:
                     else:
                         distance = event.distance * 55.e3
                     f = np.geomspace(0.01, 20., 100)
-                    Mw = event.magnitude(mag_type='MFB')
+                    Mw = event.magnitude(mag_type='MFB')[0]
                     if Mw is None:
                         Mw = 3.
                     A0 = fits[event.name]['A0'] if 'A0' in fits[event.name] \

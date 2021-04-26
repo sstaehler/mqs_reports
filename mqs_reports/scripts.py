@@ -124,12 +124,17 @@ def fig_probs():
         if event.distance is not None:
             # magnitude = event.magnitude(mag_type='MFB',
             # distance=event.distance)
-            magnitude = event.magnitude(mag_type='mb_S',
-                                        distance=event.distance)
+            magnitude, sigma_magnitude = \
+                event.magnitude(mag_type='mb_S',
+                                distance=event.distance)
 
             ax[0].scatter(event.distance,
                           magnitude,
                           color='k')
+            ax[0].errorbar(x=event.distance,
+                           y=magnitude,
+                           yerr=sigma_magnitude,
+                           color='k')
             ax[0].text(event.distance,
                        magnitude,
                        s=event.name, rotation=45,

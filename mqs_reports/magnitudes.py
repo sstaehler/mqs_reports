@@ -25,59 +25,75 @@ def mb_P(amplitude_dB, distance_degree):
     dist_term = 0.8
     amp_term = 0.6403
     offset = 8.1130
+    sigma_mb_P = 0.5
+
     amplitude = 10 ** (amplitude_dB / 20.)
     mag = amp_term * np.log10(amplitude) + \
           dist_term * np.log10(distance_degree) + offset
-    return mag
+    return mag, sigma_mb_P
 
 
 def mb_S(amplitude_dB, distance_degree):
     dist_term = 0.9333
     amp_term = 0.6055
     offset = 7.3797
+    sigma_mb_S = 0.5
+
     amplitude = 10 ** (amplitude_dB / 20.)
     mag = amp_term * np.log10(amplitude) + \
           dist_term * np.log10(distance_degree) + offset
 
-    return mag
+    return mag, sigma_mb_S
 
 
 def M2_4(amplitude_dB, distance_degree):
+    dist_term = 0.6
+    amp_term = 0.512
+    offset = 6.3648
+    sigma_M2_4 = 0.2
+
     if amplitude_dB is None:
-        return None
+        return None, None
     else:
-        dist_term = 0.6
-        amp_term = 0.512
-        offset = 6.3648
         amplitude = 10 ** (amplitude_dB / 20.)
         mag = amp_term * np.log10(amplitude) + \
               dist_term * np.log10(distance_degree) + offset
-        return mag
+        return mag, sigma_M2_4
 
-def MFB(amplitude_dB, distance_degree):
+
+def MFB(amplitude_dB, distance_degree,
+        sigma_amplitude_dB, sigma_distance_degree):
     dist_term = 1.1
     offset = 21.475
+
     if amplitude_dB is None:
-        return None
+        return None, None
     else:
         logM0 = amplitude_dB / 20. + \
                 dist_term * np.log10(distance_degree) + \
                 offset
         mag = 2. / 3. * (logM0 - 9.1)
-        return mag
+
+        sigma_mag = 0.44 * sigma_amplitude_dB ** 2 \
+            + 0.044 * np.log10(distance_degree) ** 2 \
+            + 0.44 * sigma_distance_degree ** 2 \
+            + 0.13
+        return mag, sigma_mag
 
 
 def MFB_HF(amplitude_dB, distance_degree):
     dist_term = 0.9
     offset = 21.475
+    sigma = 0.2
+
     if amplitude_dB is None:
-        return None
+        return None, None
     else:
         logM0 = amplitude_dB / 20. + \
                 dist_term * np.log10(distance_degree) + \
                 offset
         mag = 2. / 3. * (logM0 - 9.1)
-        return mag
+        return mag, sigma
 
 
 def lorentz(x, A, x0, xw):
@@ -209,17 +225,15 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     noise_threshold = 2.0
     if event_type == 'LF':
         fmax = 0.9
-        #noise_threshold = 1.2
+        # noise_threshold = 1.2
     elif event_type == 'BB':
         fmax = 2.0
-        #noise_threshold = 1.2
+        # noise_threshold = 1.2
     elif event_type == 'HF':
         fmin = 1.0
     elif event_type == 'SF':
         fmin = 4.0
         fmax = 9.0
-
-
 
     bol_1Hz_mask = np.array(
         (np.array((f > fmin, f < fmax)).all(axis=0),
@@ -227,7 +241,7 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                    f > df_mute)).any(axis=0),
          np.array(p_sig > p_noise * noise_threshold)
          )
-        ).all(axis=0)
+    ).all(axis=0)
     _remove_singles(bol_1Hz_mask)
 
     mute_24 = [1.9, 3.4]
