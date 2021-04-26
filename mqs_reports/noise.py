@@ -13,19 +13,18 @@ from os.path import join as pjoin
 import matplotlib.pyplot as plt
 import numpy as np
 import obspy
-from mars_tools.insight_time import solify
 from matplotlib.patches import Rectangle
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
 from mqs_reports.catalog import Catalog
-from mqs_reports.event import EVENT_TYPES_PRINT
-from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable
+from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable, solify
+
 
 SECONDS_PER_DAY = 86400.
 
 
-class Noise():
+class Noise:
     def __init__(self,
                  data: dict = None,
                  sc3_dir: str = None,
@@ -221,6 +220,36 @@ class Noise():
         self.times = np.asarray(times)
         self.times_LMST = np.asarray(times_LMST)
         self.sol = np.asarray(sol)
+
+    def select(self,
+               starttime: utct = None,
+               endtime: utct = None,
+               ):
+        """
+        Return new Catalog object only with the events that match the given
+        criteria (e.g. all with name=="S026?a").
+        Criteria can either be given as string with wildcards or as tuple of
+        allowed values.
+        :param starttime: minimum origin time (in UTC)
+        :param endtime: maximum origin time (in UTC)
+        :return:
+        """
+        import copy
+
+        self_new = copy.deepcopy(self)
+
+        bol = np.array((self.times > utct(starttime),
+                        self.times < utct(endtime))
+                       ).all(axis=0)
+        self_new.stds_HF_broad = self.stds_HF_broad[bol]
+        self_new.stds_HF = self.stds_HF[bol]
+        self_new.stds_LF = self.stds_LF[bol]
+        self_new.stds_press = self.stds_press[bol]
+        self_new.times_LMST = self.times_LMST[bol]
+        self_new.sol = self.sol[bol]
+        self_new.times = self.times[bol]
+
+        return self_new
 
     def save(self, fnam):
         np.savez(fnam,
@@ -866,7 +895,7 @@ if __name__ == '__main__':
 
 def calc_Ls(t_LMST):
     import marstime
-    from mars_tools.insight_time import UTCify
+    from mqs_reports.utils import UTCify
     t = float(UTCify(t_LMST)) * 1e3
 
     j2000_offset = marstime.j2000_offset_tt(

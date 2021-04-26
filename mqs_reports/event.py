@@ -16,13 +16,13 @@ from typing import Union
 
 import numpy as np
 import obspy
-from mars_tools.insight_time import solify
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
 from mqs_reports.annotations import Annotations
 from mqs_reports.magnitudes import fit_spectra
-from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick
+from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
+    calc_cwf, solify
 
 RADIUS_MARS = 3389.5
 CRUST_VP = 4.
@@ -31,8 +31,8 @@ LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
 EVENT_TYPES_SHORT = {
-    'SUPER_HIGH_FREQUENCY': 'SF',
-    'VERY_HIGH_FREQUENCY': 'VF',
+        'SUPER_HIGH_FREQUENCY': 'SF',
+        'VERY_HIGH_FREQUENCY':  'VF',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
     'HIGH_FREQUENCY': 'HF',
@@ -713,6 +713,228 @@ class Event:
             return funcs[mag_type](amplitude_dB=amplitude,
                                    distance_degree=distance)
 
+    def plot_envelope(self, comp='Z',
+                      figsize=(4, 3),
+                      t0=0.0,
+                      starttime=None, endtime=None,
+                      fmin=0.05, fmax=10.,
+                      ax=None):
+
+        import matplotlib.pyplot as plt
+        from mqs_reports.utils import envelope_smooth
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        tr = self.waveforms_VBB.select(channel='??' + comp)[0].copy()
+        if starttime is not None:
+            tr.trim(starttime=starttime)
+        if endtime is not None:
+            tr.trim(endtime=endtime)
+
+        tr.differentiate()
+        tr.differentiate()
+        tr.filter('highpass', freq=fmin, corners=8)
+        tr.filter('lowpass', freq=fmax, corners=8)
+
+        tr_env = envelope_smooth(envelope_window_in_sec=10., tr=tr)
+
+        ax.plot(tr_env.times() + t0,
+                tr_env.data * 1e9)
+        ax.axvline(x=0., color='k', zorder=5
+                   )
+        # ax.text(x=10., y=fmax * 0.9, s='P',
+        #         bbox=dict(edgecolor='black',
+        #                   facecolor='white',
+        #                   alpha=0.5),
+        #         fontsize=14)
+        ax.axvline(x=utct(self.picks['S']) - utct(self.picks['P']), color='k',
+                   zorder=3)
+        # ax.text(x=utct(self.picks['S']) - utct(self.picks['P']) + 10.,
+        #         bbox=dict(edgecolor='black',
+        #                   facecolor='white',
+        #                   alpha=0.5),
+        #         y=fmax * 0.9, s='S', fontsize=14)
+        if new_ax:
+            plt.show()
+
+    def plot_spectrogram(self, comp='Z',
+                         figsize=(4, 3),
+                         kind='cwt',
+                         t0=0.0,
+                         starttime=None, endtime=None,
+                         fmin=0.05, fmax=10.,
+                         ax=None):
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        tr = self.waveforms_VBB.select(channel='??' + comp)[0].copy()
+        if starttime is not None:
+            tr.trim(starttime=starttime)
+        if endtime is not None:
+            tr.trim(endtime=endtime)
+
+        tr = detick(tr=tr, detick_nfsamp=5)
+
+        tr.differentiate()
+        tr.differentiate()
+        z, f, t = calc_cwf(tr,
+                           fmin=fmin, fmax=fmax)
+        # z, f, t = calc_specgram(tr, fmin=fmin, fmax=fmax)
+
+        z = 10 * np.log10(z)
+        z[z < -210] = -210.
+        z[z > -160] = -160.
+        # df = 2
+        # dt = 4
+        # ax.pcolormesh(t[::dt], f[::df],z[::df, ::dt], vmin=-220, vmax=-150)
+        ax.pcolormesh(t + t0, f, z, vmin=-210, vmax=-160,
+                      rasterized=True)
+        ax.axvline(x=0., color='k', zorder=5
+                   )
+        ax.text(x=10., y=fmax * 0.95, s='P',
+                verticalalignment='top',
+                # bbox=dict(edgecolor='black',
+                #          facecolor='white',
+                #          alpha=0.5),
+                fontsize=14)
+        ax.axvline(x=utct(self.picks['S']) - utct(self.picks['P']), color='k',
+                   zorder=3)
+        ax.text(x=utct(self.picks['S']) - utct(self.picks['P']) + 10.,
+                verticalalignment='top',
+                # bbox=dict(edgecolor='black',
+                #          facecolor='white',
+                #          alpha=0.5),
+                y=fmax * 0.95, s='S', fontsize=14)
+        if new_ax:
+            plt.show()
+
+    def plot_spectrum(self, comp='Z',
+                      window: str = 'S',
+                      figsize=(4, 3),
+                      color_spec='red',
+                      color_noise='black',
+                      plot_fit=False,
+                      flip_axes=False,
+                      ax=None):
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        x = self.spectra[window]['f']
+        y = 10. * np.log10(self.spectra[window]['p_' + comp])
+        if flip_axes:
+            ax.plot(y, x, c=color_spec)
+        else:
+            ax.plot(x, y, c=color_spec)
+
+        y = 10. * np.log10(self.spectra['noise']['p_' + comp])
+        if flip_axes:
+            ax.plot(y, x, c=color_noise)
+        else:
+            ax.plot(x, y, c=color_noise)
+
+        if flip_axes:
+            ax.set_ylim(0., 2.)
+            ax.set_xlim(-230., -160.)
+            ax.set_ylabel('frequency / Hz')
+            ax.set_xlabel('power spectral density / m$^2$/Hz')
+        else:
+            ax.set_xlim(0., 2.)
+            ax.set_ylim(-230., -160.)
+            ax.set_xlabel('frequency / Hz')
+            ax.set_ylabel('power spectral density / m$^2$/Hz')
+        ax.set_title('Spectrum %s' % self.name)
+
+        if plot_fit:
+            f = np.geomspace(0.01, 10., 100)
+            f_c = 1.0
+            stf_amp = 1. / (1. + (f / f_c) ** 2) ** 2
+            y = self.amplitudes['A0'] + 10 * np.log10(
+                    np.exp(- np.pi * self.amplitudes['tstar'] * f)
+                    * stf_amp)
+            if flip_axes:
+                ax.plot(y, f)
+            else:
+                ax.plot(f, y)
+
+        if new_ax:
+            plt.tight_layout()
+            plt.show()
+
+    def plot_waveform(self, comp='Z',
+                      window: str = 'S',
+                      figsize=(4, 3),
+                      color_spec='red',
+                      color_noise='black',
+                      fmin=None, fmax=None,
+                      ax=None):
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots(nrows=1, ncols=1,
+                                   figsize=figsize)
+            new_ax = True
+        else:
+            new_ax = False
+
+        tr_work = self.waveforms_VBB.select(channel='??' + comp)[0]
+        tr_work.differentiate()
+        tr_work.decimate(2)
+        tr_work.trim(starttime=utct(self.picks['P']) - 60.,
+                     endtime=utct(self.picks['P']) + 520.)
+
+        ax.plot(tr_work.times() - 60., tr_work.data,
+                lw=0.5)
+
+        offset = np.quantile(abs(tr_work.data), q=0.99)
+
+        ax.axvline(x=0., color='k', zorder=-1
+                   )
+        ax.text(x=10., y=-offset * 1.1, s='P',
+                bbox=dict(edgecolor='black',
+                          facecolor='white',
+                          alpha=0.5),
+                fontsize=14)
+        ax.axvline(x=utct(self.picks['S']) - utct(self.picks['P']), color='k',
+                   zorder=-1)
+        ax.text(x=utct(self.picks['S']) - utct(self.picks['P']) + 10.,
+                bbox=dict(edgecolor='black',
+                          facecolor='white',
+                          alpha=0.5),
+                y=-offset * 1.1, s='S', fontsize=14)
+        ax.text(0.12, 0.95,
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes,
+                s='filtered, %3.1f-%3.1f Hz' % (fmin, fmax))
+        ax.text(0.12, 0.05,
+                horizontalalignment='left',
+                verticalalignment='bottom',
+                transform=ax.transAxes,
+                s='raw')
+
+        if fmin is not None and fmax is not None:
+            tr_work.filter('highpass', freq=fmin)
+            tr_work.filter('lowpass', freq=fmax)
+            ax.plot(tr_work.times() - 60., tr_work.data + offset * 1.5,
+                    lw=0.5)
+
+        if new_ax:
+            plt.tight_layout()
+            plt.show()
+
     def make_report(self, chan, fnam_out, annotations=None):
         from mqs_reports.report import make_report
         make_report(self, chan=chan, fnam_out=fnam_out, annotations=annotations)
@@ -788,7 +1010,6 @@ class Event:
         fig.savefig('rotations_%s_%3.1f_%3.1f_sec.png' %
                     (self.name, 1. / fmax, 1. / fmin),
                     dpi=200)
-        # plt.show()
 
     def mark_phases(self, ax, tref):
         for a in ax:
@@ -1061,3 +1282,164 @@ class Event:
             fig.savefig(fnam,
                         dpi=200)
         plt.close()
+
+    def plot_filterbank_phase(self,
+                              comp: str,
+                              starttime: obspy.UTCDateTime,
+                              endtime: obspy.UTCDateTime,
+                              tmin_plot: obspy.UTCDateTime,
+                              tmax_plot: obspy.UTCDateTime,
+                              tmin_amp: obspy.UTCDateTime,
+                              tmax_amp: obspy.UTCDateTime,
+                              ax_fbs,
+                              zerophase=False,
+                              df: float = 2 ** 0.5,
+                              waveforms: bool = False,
+                              fmin=1. / 16., fmax=2.):
+        import warnings
+        from mqs_reports.utils import envelope_smooth
+        import scipy.signal as signal
+
+        # Determine frequencies
+        nfreqs = int(np.round(np.log(fmax / fmin) /
+                              np.log(df),
+                              decimals=0) + 1)
+        freqs = np.geomspace(fmin, fmax + 0.001, nfreqs)
+
+        # Reference time
+        if 'P' in self.picks and len(self.picks['P']) > 0:
+            t_ref = utct(self.picks['P'])
+            t_ref_type = 'P'
+        else:
+            t_ref = self.starttime
+            t_ref_type = 'start time'
+
+        if len(self.waveforms_VBB.select(channel='?HT')) == 0:
+            self.add_rotated_traces()
+        st_work = self.waveforms_VBB.select(channel='??[RTENZ]').copy()
+
+        tstart_norm = utct(starttime)
+        tend_norm = utct(endtime)
+
+        if tmin_plot is None:
+            tmin_plot = starttime - t_ref
+            tmax_plot = endtime - t_ref
+
+        st_work.trim(starttime=utct(starttime) - 1. / fmin,
+                     endtime=utct(endtime) + 1. / fmin)
+
+        envs_out = np.zeros(nfreqs)
+
+        for ifreq, fcenter in enumerate(freqs):
+            f0 = fcenter / df
+            f1 = fcenter * df
+            st_filt = st_work.copy()
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    if zerophase:
+                        corners = 3
+                    else:
+                        corners = 6
+                    f0_norm = f0 / (st_filt[0].stats.sampling_rate / 2.)
+                    f1_norm = f1 / (st_filt[0].stats.sampling_rate / 2.)
+
+                    bh, ah = signal.butter(N=corners,
+                                           Wn=(f0_norm),
+                                           btype='highpass')
+
+                    w, h = signal.freqz(b=bh, a=ah, worN=2 ** 14)
+                    bl, al = signal.butter(N=corners,
+                                           Wn=(f1_norm),
+                                           btype='lowpass')
+                    w2, h2 = signal.freqz(b=bl, a=al, worN=2 ** 14)
+                    for tr in st_filt:
+                        if zerophase:
+                            tr.data = signal.filtfilt(bh, ah, tr.data)
+                            tr.data = signal.filtfilt(bl, al, tr.data)
+                            resp = np.trapz(y=(abs(h) * abs(h2)) ** 2.,
+                                            x=w / (2 * np.pi) *
+                                              tr.stats.sampling_rate)
+                        else:
+                            signal.lfilter(bh, ah, tr.data)
+                            signal.lfilter(bl, al, tr.data)
+                            resp = np.trapz(y=abs(h) * abs(h2),
+                                            x=w / (2 * np.pi) *
+                                              tr.stats.sampling_rate)
+
+                    # st_filt.filter('bandpass',
+                    #                freqmin=f0, freqmax=f1,
+                    #                zerophase=zerophase,
+                    #                corners=corners)
+            except ValueError:  # If f0 is above Nyquist
+                print('No 20sps data available for event %s' % self.name)
+            else:
+                st_filt.trim(starttime=utct(starttime),
+                             endtime=utct(endtime))
+                tr = st_filt.select(channel='?H' + comp)[0]
+                tr_env = envelope_smooth(tr=tr, mode='same',
+                                         envelope_window_in_sec=5.)
+
+                tr_norm = tr.slice(starttime=tstart_norm,
+                                   endtime=tend_norm,
+                                   nearest_sample=True)
+                # try:
+                #    maxfac = np.quantile(tr_norm.data, q=0.9)
+                #    offset = np.quantile(tr_norm.data, q=0.1)
+                # except:
+                maxfac = 6.e-11
+                maxfac = np.quantile(tr_env.data, q=0.5)
+                offset = np.quantile(tr_env.data, q=0.1)
+                # offset = 0.
+
+                t_offset = float(tr_env.stats.starttime - t_ref)
+                xvec_env = tr_env.times() + t_offset
+                xvec = tr.times() + t_offset
+                if waveforms:
+                    color = 'k'
+                else:
+                    color = 'C%d' % (ifreq % 10)
+
+                ax_fbs.plot(xvec_env,
+                            ifreq + (tr_env.data - offset) / maxfac,
+                            c=color,
+                            lw=0.5, zorder=80)
+
+                tr_env_amp = tr_env.slice(starttime=t_ref + tmin_amp,
+                                          endtime=t_ref + tmax_amp)
+
+                xvec_env_amp = tr_env_amp.times() + tmin_amp
+                envs_out[ifreq] = tr_env_amp.data.max() / np.sqrt(resp)
+                # np.sqrt(f1 - f0)
+                ax_fbs.plot(xvec_env_amp,
+                            ifreq + (tr_env_amp.data - offset) / maxfac,
+                            c=color,
+                            lw=2.0, zorder=80)
+                if waveforms:
+                    ax_fbs.plot(xvec,
+                                ifreq + tr.data / maxfac,
+                                c='C%d' % (ifreq % 10),
+                                lw=0.5, zorder=50 - ifreq)
+        ax_fbs.set_yticks(range(0, nfreqs))
+        np.set_printoptions(precision=3)
+        ticklabels = []
+        for freq in freqs:
+            if freq > 1:
+                ticklabels.append(f'{freq:.1f}Hz')
+            else:
+                ticklabels.append(f'1/{1. / freq:.1f}Hz')
+        ax_fbs.set_yticklabels(ticklabels)
+        ax_fbs.set_xticks(np.arange(-300, 3000, 25), minor=True)
+        if t_ref_type == 'P':
+            ax_fbs.set_xlabel('time after P-wave')
+        else:
+            ax_fbs.set_xlabel('time after start time')
+        ax_fbs.grid(b=True, which='both', axis='x', lw=0.2, alpha=0.3)
+        ax_fbs.grid(b=True, which='major', axis='y', lw=0.2, alpha=0.3)
+        ax_fbs.axhline(y=np.argmin(abs(freqs - 1.)),
+                       ls='dashed', lw=1.0, c='k')
+        ax_fbs.set_xlim(tmin_plot, tmax_plot)
+        ax_fbs.set_ylim(-1.5, nfreqs + 1.5)
+        ax_fbs.set_ylabel('frequency')
+
+        return freqs, envs_out

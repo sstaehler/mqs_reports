@@ -5,12 +5,29 @@ import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from matplotlib import mlab as mlab
-from obspy import UTCDateTime as utct
+from obspy import UTCDateTime as utct, UTCDateTime
 from obspy.signal.filter import envelope
 from obspy.signal.rotate import rotate2zne
 from obspy.signal.util import next_pow_2
 from scipy.fftpack import fft, ifft
 from scipy.signal import hilbert
+
+SEC_PER_DAY_EARTH = 86400
+SEC_PER_DAY_MARS = 88775.2440
+
+
+def solify(UTC_time, sol0=UTCDateTime(2018, 11, 26, 5, 10, 50.33508)):
+    if type(UTC_time) is str:
+        UTC_time = UTCDateTime(UTC_time)
+    MIT = (UTC_time - sol0) / SEC_PER_DAY_MARS
+    t = UTCDateTime((MIT - 1) * SEC_PER_DAY_EARTH)
+    return t
+
+
+def UTCify(LMST_time, sol0=UTCDateTime(2018, 11, 26, 5, 10, 50.33508)):
+    MIT = float(LMST_time) / SEC_PER_DAY_EARTH + 1
+    UTC_time = UTCDateTime(MIT * SEC_PER_DAY_MARS + float(sol0))
+    return UTC_time
 
 
 def create_fnam_event(
@@ -383,7 +400,7 @@ def calc_PSD(tr, winlen_sec, detick_nfsamp=0):
     return f, p
 
 
-def detick(tr, detick_nfsamp, fill_val=None):
+def detick(tr, detick_nfsamp, fill_val=None, freq_tick=1.0):
     # simplistic deticking by muting detick_nfsamp freqeuency samples around
     # 1Hz
     tr_out = tr.copy()
@@ -391,7 +408,7 @@ def detick(tr, detick_nfsamp, fill_val=None):
     NFFT = next_pow_2(tr.stats.npts)
     tr.detrend()
     df = np.fft.rfft(tr.data, n=NFFT)
-    idx_1Hz = np.argmin(np.abs(np.fft.rfftfreq(NFFT) * Fs - 1.))
+    idx_1Hz = np.argmin(np.abs(np.fft.rfftfreq(NFFT) * Fs - freq_tick))
     if fill_val is None:
         fill_val = (df[idx_1Hz - detick_nfsamp - 1] + \
                     df[idx_1Hz + detick_nfsamp + 1]) / 2.
@@ -581,3 +598,53 @@ def autocorrelation(st, starttime, endtime, fmin=1.2, fmax=3.5, max_lag_sec=40):
     ax[0].set_title('Phase autocorrelation')
     # ax[1].set_title('CC autocorrelation')
     return fig, ax
+
+
+def linregression(x: np.array, y: np.array, q: float = 0.95) -> tuple:
+    # Do a linear regression for value pairs X, Y and return error estimate
+    # for slope and intercept
+    from scipy import stats
+    n = len(x)
+    slope, intercept, r_value, p_value, slope_err = stats.linregress(x, y)
+
+    intercept_err = slope_err * np.sqrt(1. / n * np.sum(x * x))
+
+    tstar = stats.t.ppf(q=q, df=n - 2)
+
+    return (intercept, intercept_err * tstar, slope, slope_err * tstar)
+
+
+def calc_specgram(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
+    from matplotlib.mlab import specgram
+    dt = tr.stats.delta
+
+    s, f, t = specgram(x=tr.data, NFFT=512, Fs=tr.stats.sampling_rate,
+                       noverlap=256, pad_to=1024)
+
+    # t = create_timevector(tr)
+    f_bol = np.asarray(((fmin < f),
+                        (f < fmax))).all(axis=0)
+
+    return s[f_bol, :], f[f_bol], t
+
+
+def calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
+    from obspy.signal.tf_misfit import cwt
+    dt = tr.stats.delta
+
+    scalogram = abs(cwt(tr.data, dt, w0=w0, nf=200,
+                        fmin=fmin, fmax=fmax))
+
+    # t = create_timevector(tr)
+    t = np.linspace(0, dt * tr.stats.npts, tr.stats.npts)
+    f = np.logspace(np.log10(fmin),
+                    np.log10(fmax),
+                    scalogram.shape[0])
+    return scalogram ** 2, f, t
+
+
+def create_timevector(tr, utct=False):
+    timevec = [utct(t +
+                    float(tr.stats.starttime)).datetime
+               for t in tr.times()]
+    return timevec
