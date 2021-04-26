@@ -17,6 +17,7 @@ from typing import Union
 import numpy as np
 import obspy
 from obspy import UTCDateTime as utct
+from obspy.taup import TauPyModel
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 
 from mqs_reports.annotations import Annotations
@@ -55,6 +56,7 @@ class Event:
                  publicid: str,
                  origin_publicid: str,
                  picks: dict,
+                 picks_sigma: dict,
                  quality: str,
                  latitude: float,
                  longitude: float,
@@ -66,6 +68,7 @@ class Event:
         self.publicid = publicid
         self.origin_publicid = origin_publicid
         self.picks = picks
+        self.picks_sigma = picks_sigma
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
 
@@ -193,6 +196,40 @@ class Event:
                                                  radius=RADIUS_MARS)
             origin_time = utct(self.picks['Sg']) - distance_km / vs
             return distance_degree, origin_time
+        else:
+            return None, None
+
+    def calc_distance_taup(self,
+                           model: TauPyModel,
+                           depth_in_km = 50.) -> Union[float, None]:
+        """
+        Calculate distance of event in a taup model, based on P and S picks, if available,
+        otherwise return None
+        :param model: TauPy model object
+        :param depth_in_km: Fixed depth of event
+        :return: distance in degree or None if no picks available
+        """
+        from taup_distance.taup_distance import get_dist, _get_SSmP
+
+        if len(self.picks['S']) > 0 and len(self.picks['P']) > 0:
+            deltat = float(utct(self.picks['S']) - utct(self.picks['P']))
+            distance = get_dist(model, tSmP=deltat, depth=depth_in_km)
+
+            deltat_sigma = np.sqrt(float(self.picks_sigma['P'])**2 +
+                                   float(self.picks_sigma['S'])**2)
+            if distance is None:
+                distance_sigma = None
+            else:
+                distance_sigma = deltat_sigma / _get_SSmP(distance=distance,
+                                                          model=model,
+                                                          tmeas=0.,
+                                                          phase_list=['P', 'S'],
+                                                          plot=False,
+                                                          depth=depth_in_km)
+
+            # distance_lower = get_dist(model, tSmP=deltat - deltat_sigma, depth=depth_in_km)
+            # distance_upper = get_dist(model, tSmP=deltat + deltat_sigma, depth=depth_in_km)
+            return distance, distance_sigma
         else:
             return None, None
 

@@ -51,6 +51,7 @@ def qml_get_pick_time_for_phase(event_element, pref_ori_publicid, phase_name):
             lxml_prefix_with_namespace("phase", XMLNS_QUAKEML_BED)))
 
     pick_time_str = ''
+    pick_unc_str = ''
 
     for ph in ph_el:
         if str(ph.text).strip() == phase_name:
@@ -65,10 +66,21 @@ def qml_get_pick_time_for_phase(event_element, pref_ori_publicid, phase_name):
                     lxml_prefix_with_namespace("time", XMLNS_QUAKEML_BED),
                     lxml_prefix_with_namespace("value", XMLNS_QUAKEML_BED)))
 
+            ev_pick_unc = event_element.find(
+                "./{}[@publicID='{}']/{}/{}".format(
+                    lxml_prefix_with_namespace("pick", XMLNS_QUAKEML_BED),
+                    pickid.text,
+                    lxml_prefix_with_namespace("time", XMLNS_QUAKEML_BED),
+                    lxml_prefix_with_namespace("lowerUncertainty", XMLNS_QUAKEML_BED)))
+
             pick_time_str = str(ev_pick_time.text).strip()
+            if ev_pick_unc is not None:
+                pick_unc_str = str(ev_pick_unc.text).strip()
+            else:
+                pick_unc_str = ''
             break
 
-    return pick_time_str
+    return pick_time_str, pick_unc_str
 
 
 def qml_get_event_info_for_event_waveform_files(xml_root,
@@ -146,9 +158,9 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             mars_event_type_str = str(mars_event_type.text).strip()
 
         picks = dict()
+        picks_sigma = dict()
         for phase in phase_list:
-            picks[phase] = qml_get_pick_time_for_phase(ev, pref_ori.text,
-                                                       phase)
+            picks[phase], picks_sigma[phase] = qml_get_pick_time_for_phase(ev, pref_ori.text, phase)
 
         latitude = ev.find("./{}[@publicID='{}']/{}/{}".format(
             lxml_prefix_with_namespace("origin", XMLNS_QUAKEML_BED),
@@ -177,6 +189,7 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             publicid=ev_publicid,
             origin_publicid=str(pref_ori.text).strip(),
             picks=picks,
+            picks_sigma=picks_sigma,
             quality=str(lq.text).strip(),
             latitude=float(latitude),
             longitude=float(longitude),
