@@ -1064,18 +1064,32 @@ class Catalog:
                 fmin = fmin_HF
                 fmax = fmax_HF
                 df = df_HF
+
             elif event.mars_event_type_short == 'VF':
-                if instrument is None:
-                    instrument = 'both'
-                if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
-                    t_S = utct(event.picks['Sg'])
-                    t_P = utct(event.picks['Pg'])
+                if event.available_sampling_rates()['SP_Z'] == 100.:
+                    if instrument is None:
+                        instrument = 'both'
+                    if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                        t_S = utct(event.picks['Sg'])
+                        t_P = utct(event.picks['Pg'])
+                    else:
+                        t_P = utct(event.starttime)
+                        t_S = None
+                    fmin = 1./8.
+                    fmax = 32.0 * np.sqrt(2.)
+                    df = df_HF
                 else:
-                    t_P = utct(event.starttime)
-                    t_S = None
-                fmin = 1./8.
-                fmax = 32.0 * np.sqrt(2.)
-                df = df_HF
+                    if instrument is None:
+                        instrument = 'SP'
+                    if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                        t_S = utct(event.picks['Sg'])
+                        t_P = utct(event.picks['Pg'])
+                    else:
+                        t_P = utct(event.starttime)
+                        t_S = None
+                    fmin = 1./8.
+                    fmax = 10.
+                    df = df_HF
 
             else: # Super High Frequency
                 if instrument is None:

@@ -539,7 +539,7 @@ def autocorrelation(st, starttime, endtime, fmin=1.2, fmax=3.5, max_lag_sec=40):
                      endtime=endtime)
         st_work.taper(max_percentage=0.05)
         acsum = np.zeros((max_lag, 4))
-        for tr in st_work:  # .select(channel='BHZ'):
+        for tr in st_work:
             data = whiten(tr.data)
             data = filt(data, Fs=tr.stats.sampling_rate,
                         freqs=(freq[0], freq[1]))

@@ -329,7 +329,18 @@ class Event:
                                                 twin_end + tpre_SP],
                                           fmin=fmin_SP)
         else:
-            self.waveforms_SP = None
+            filenam_SP_HG = 'XB.ELYSE.00.HH?.D.%04d.%03d'
+            fnam_SP = create_fnam_event(
+                filenam_inst=filenam_SP_HG,
+                sc3dir=sc3dir, time=self.picks['start'])
+            if len(glob(fnam_SP)) > 0:
+                self.waveforms_SP = read_data(fnam_SP, inv=inv, kind=kind,
+                                              twin=[twin_start - tpre_SP,
+                                                    twin_end + tpre_SP],
+                                              fmin=fmin_SP)
+            else:
+                filenam_SP_HG = 'XB.ELYSE.65.EH?.D.%04d.%03d'
+                self.waveforms_SP = None
 
         # Try for 02.BH? (20sps VBB)
         success_VBB = False
@@ -420,6 +431,22 @@ class Event:
                     available[chan] = st[0].stats.sampling_rate
                 else:
                     available[chan] = None
+
+        if available['SP_Z'] is None:
+            channels = {'SP_Z': 'HHZ',
+                        'SP_N': 'HHN',
+                        'SP_E': 'HHE'}
+
+            for chan, seed in channels.items():
+                if self.waveforms_SP is None:
+                    available[chan] = None
+                else:
+                    st = self.waveforms_SP.select(channel=seed)
+                    if len(st) > 0:
+                        available[chan] = st[0].stats.sampling_rate
+                    else:
+                        available[chan] = None
+
         return available
 
     def calc_spectra(self, winlen_sec, detick_nfsamp=0):
@@ -444,6 +471,7 @@ class Event:
                   (self.picks['P_spectral_end'])),
                  ((self.picks['S_spectral_start']),
                   (self.picks['S_spectral_end'])))
+        print(twins)
         self.spectra = dict()
         self.spectra_SP = dict()
         variables = ('all',
