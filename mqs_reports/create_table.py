@@ -69,8 +69,9 @@ def write_html(catalog, fnam_out):
                       'name',
                       'type',
                       'LQ',
-                      'Time<br>(UTC)',
-                      'Time<br>(LMST)',
+                      'Origin time<br>(UTC)',
+                      'Start time<br>(UTC)',
+                      'Start time<br>(LMST)',
                       'duration<br>[minutes]',
                       'distance<br>[degree]',
                       'SNR',
@@ -88,17 +89,17 @@ def write_html(catalog, fnam_out):
                       'VBB<br>rate',
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
-    formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
+    formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
                '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
                '%s', '%s', '%s')
     time_string = {'GUI': '%s<sup>[O]</sup>',
-                   'PgSg': '%s<sup>[S]</sup>',
-                   'aligned': '%s<sup>[S]</sup>',
-                   'unknown': '%s<sup>[S]</sup>'}
+                   'aligned': '%s<sup>[A]</sup>',
+                   'PgSg': '%s',
+                   'unknown': '%s'}
     dist_string = {'GUI': '%.3g',
-                   'PgSg': '<i>%.3g</i>*',
                    'aligned': '<i>%.3g</i>&dagger;',
+                   'PgSg': '<i>%.3g</i>*',
                    'unknown': '<i>%s</i>'}
     event_type_idx = {'LF': 1,
                       'BB': 2,
@@ -128,6 +129,12 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                      ievent,
                      path_images_local='/usr/share/nginx/html/InSight_plots',
                      path_images='http://mars.ethz.ch/InSight_plots'):
+
+    if event.origin_time == '':
+        origin_time = '-'
+    else:
+        origin_time = event.origin_time.strftime('%Y-%m-%d<br>%H:%M:%S')
+
     utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
     lmst_time = solify(event.starttime).strftime('%H:%M:%S')
     duration = event.duration.strftime('%M:%S')
@@ -180,6 +187,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                    None,
                    event_type_idx[event.mars_event_type_short],
                    None,
+                   float(utct(event.starttime)),
                    float(utct(event.starttime)),
                    float(solify(event.starttime)) % 86400,
                    None,
@@ -240,7 +248,8 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
              link_report,
              event.mars_event_type_short,
              event.quality,
-             time_string[event.distance_type] % utc_time,
+             time_string[event.distance_type] % origin_time,
+             utc_time,
              link_lmst,
              link_duration,
              dist_string[event.distance_type] % event.distance,

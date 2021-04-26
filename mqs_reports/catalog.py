@@ -84,6 +84,7 @@ class Catalog:
                                                             'Peak_M2.4',
                                                             'Peak_MbP',
                                                             'Peak_MbS',
+                                                            'x1', 'x2', 'x3',
                                                             'noise_start',
                                                             'noise_end',
                                                             'P_spectral_start',
@@ -1054,7 +1055,7 @@ class Catalog:
                 fmin = fmin_LF
                 fmax = fmax_LF
                 df = df_LF
-            elif event.mars_event_type_short in ['HF', 'VF', '24']:
+            elif event.mars_event_type_short in ['HF', '24']:
                 if instrument is None:
                     instrument = 'SP'
                 if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
@@ -1066,6 +1067,32 @@ class Catalog:
                 fmin = fmin_HF
                 fmax = fmax_HF
                 df = df_HF
+
+            elif event.mars_event_type_short == 'VF':
+                if event.available_sampling_rates()['SP_Z'] == 100.:
+                    if instrument is None:
+                        instrument = 'both'
+                    if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                        t_S = utct(event.picks['Sg'])
+                        t_P = utct(event.picks['Pg'])
+                    else:
+                        t_P = utct(event.starttime)
+                        t_S = None
+                    fmin = 1./8.
+                    fmax = 32.0 * np.sqrt(2.)
+                    df = df_HF
+                else:
+                    if instrument is None:
+                        instrument = 'SP'
+                    if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                        t_S = utct(event.picks['Sg'])
+                        t_P = utct(event.picks['Pg'])
+                    else:
+                        t_P = utct(event.starttime)
+                        t_S = None
+                    fmin = 1./8.
+                    fmax = 10.
+                    df = df_HF
 
             else: # Super High Frequency
                 if instrument is None:
@@ -1086,10 +1113,12 @@ class Catalog:
                                           endtime=event.endtime + 300.,
                                           instrument=instrument,
                                           fnam=fnam, fmin=fmin, fmax=fmax, df=df)
-                except IndexError:
+                except IndexError as err:
                     print('No data for %s' % event.name)
-                except AttributeError:
+                    print(err)
+                except AttributeError as err:
                     print('No data for %s' % event.name)
+                    print(err)
                 else:
                     nodata = False
 
