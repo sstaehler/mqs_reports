@@ -62,7 +62,7 @@ def M2_4(amplitude_dB, distance_degree):
 
 
 def MFB(amplitude_dB, distance_degree,
-        sigma_amplitude_dB, sigma_distance_degree):
+        sigma_distance_degree, sigma_amplitude_dB=10.):
     dist_term = 1.1
     offset = 21.475
 

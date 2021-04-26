@@ -61,6 +61,7 @@ class Event:
                  latitude: float,
                  longitude: float,
                  sso_distance: float,
+                 sso_distance_pdf: float,
                  sso_origin_time: str,
                  mars_event_type: str,
                  origin_time: str):
@@ -99,8 +100,11 @@ class Event:
                                                 lat2=LANDER_LAT,
                                                 lon2=LANDER_LON,
                                                 a=RADIUS_MARS)
-            self.distance = kilometers2degrees(dist_km,
-                                               radius=RADIUS_MARS)
+            # self.distance = kilometers2degrees(dist_km,
+            #                                    radius=RADIUS_MARS)
+            self.distance = sso_distance
+            self.distance_pdf = sso_distance_pdf # @TODO: implement fit to PDF
+            self.distance_sigma = 5.0 # @TODO: implement fit to PDF
             self.baz = baz
             self.az = az
             self.origin_time = utct(origin_time)
@@ -111,6 +115,8 @@ class Event:
         elif sso_distance is not None:
             self.origin_time = utct(sso_origin_time)
             self.distance = sso_distance
+            self.distance_pdf = sso_distance_pdf # @TODO: implement fit to PDF
+            self.distance_sigma = 5.0 # @TODO: implement fit to PDF
             self.distance_type = 'GUI'
             self.baz = None
 
@@ -685,6 +691,7 @@ class Event:
     def magnitude(self,
                   mag_type: str,
                   distance: float = None,
+                  distance_sigma: float = None,
                   instrument: str = 'VBB') -> Union[float, None]:
         """
         Calculate magnitude of an event
@@ -719,6 +726,7 @@ class Event:
             return None
         elif self.distance is not None and distance is None:
             distance = self.distance
+            distance_sigma = self.distance_sigma
         else:
             distance = distance
         if mag_type in ('mb_P', 'mb_S'):
@@ -747,7 +755,8 @@ class Event:
             return None
         else:
             return funcs[mag_type](amplitude_dB=amplitude,
-                                   distance_degree=distance)
+                                   distance_degree=distance,
+                                   distance_sigma_degree=distance_sigma)
 
     def plot_envelope(self, comp='Z',
                       figsize=(4, 3),
