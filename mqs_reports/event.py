@@ -1414,7 +1414,17 @@ class Event:
         import matplotlib.pyplot as plt
         from matplotlib.colorbar import make_axes
         from matplotlib.ticker import NullFormatter
-        import seaborn as sns
+        # import seaborn as sns
+        # from matplotlib.colors import ListedColormap
+        # from palettable.cartocolors.qualitative import Prism_10
+        # import palettable
+        from matplotlib.colors import LinearSegmentedColormap
+        
+        
+        # azi_colormap = ListedColormap(palettable.cartocolors.qualitative.Prism_10.mpl_colors) #discrete
+        # azi_colormap = Prism_10.mpl_colormap #continuous
+        custom_cmap =  LinearSegmentedColormap.from_list('', ['blue', 'cornflowerblue', 'goldenrod', 'gold', 'yellow', 'darkgreen', 'green', 'mediumseagreen', 'darkred', 'firebrick', 'tomato', 'midnightblue', 'blue']) #interpolated colormap - or use with bounds
+        bounds = [0, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345, 360]
         
         mod_180 = False #set to True if only mapping 0-180° azimuth, False maps 0-360°
         trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
@@ -1512,7 +1522,7 @@ class Event:
         else:
             gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],  # specgram, hist2d, hist2d
                                height_ratios=[1, 1, 1, 1],
-                               top=0.91,
+                               top=0.89,
                                bottom=0.05,
                                left=0.03, #0.05
                                right=0.94, #0.89
@@ -1524,15 +1534,11 @@ class Event:
             figsize_y = 9
             
             
-        # dx_cbar = 0.055
         dx_cbar = 0.028
         w_cbar = 0.005
         
-        # gridspec_kw['top'] = 0.91
         title = f'{self.name}'
-        
-        # fig, axes = plt.subplots(nrows=nrows, ncols=5, #sharey='all',
-        #                          figsize=(19, figsize_y), gridspec_kw=gridspec_kw) #16 og - 12 for 3 panel/row
+    
         
         # gridspec inside gridspec
         fig = plt.figure(figsize=(19, figsize_y))
@@ -1673,26 +1679,25 @@ class Event:
     
             iterables = [
                 (scalogram, vmin, vmax, np.ones_like(alpha),
-                 'amplitude\n/ dB', np.arange(vmin, vmax+1, 20), 'plasma'),
+                 'amplitude\n/ dB', np.arange(vmin, vmax+1, 20), 'plasma', None),
                 (np.rad2deg(azi1), 0, 360, alpha,
-                 'major azimuth\n/ degree', np.arange(0, 361, 90), 'tab20b'), #was 45 deg steps
+                 'major azimuth\n/ degree', np.arange(0, 361, 90), custom_cmap, bounds), #was 45 deg steps, tab20b
                 (elli, 0, 1, alpha,
-                 'ellipticity\n', np.arange(0, 1.1, 0.2), 'gnuplot'),
+                 'ellipticity\n', np.arange(0, 1.1, 0.2), 'gnuplot', None),
                 (np.rad2deg(abs(inc1)), -0, 90, alpha,
-                 'major inclination\n/ degree', np.arange(0, 91, 20),
-                 'gnuplot')]
+                 'major inclination\n/ degree', np.arange(0, 91, 20), 'gnuplot', None)]
             
             if plot_spec_azi_only:
                 del iterables[-2:]
             if plot_6C:
                 iterables.append(
                     (np.rad2deg(azi2), 0, 180, alpha2,
-                     'minor azimuth\n/ degree', np.arange(0, 181, 30), 'hsv'))
+                     'minor azimuth\n/ degree', np.arange(0, 181, 30), custom_cmap, bounds))
                 iterables.append(
                     (np.rad2deg(inc2), -90, 90, alpha2,
-                     'minor inclination\n/ degree', np.arange(-90, 91, 30), 'hsv'))
+                     'minor inclination\n/ degree', np.arange(-90, 91, 30), 'gnuplot', None))
     
-            for irow, [data, rmin, rmax, a, xlabel, xticks, cmap] in \
+            for irow, [data, rmin, rmax, a, xlabel, xticks, cmap, bounds] in \
                     enumerate(iterables):
     
                 ax = axes0[irow, 0]
@@ -1700,7 +1705,7 @@ class Event:
                 if log and kind == 'cwt':
                     # imshow can't do the log sampling in frequency
                     cm = polarization.pcolormesh_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
-                                          vmin=rmin, vmax=rmax)
+                                          vmin=rmin, vmax=rmax, bounds=bounds)
                 else:
                     cm = polarization.imshow_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
                                       vmin=rmin, vmax=rmax)
@@ -1728,15 +1733,14 @@ class Event:
                     #                                         range=(rmin, rmax),
                     #                                         weights=alpha[i,bol_signal_S_mask])[0]
     
-        date_fmt = mdates.DateFormatter('%Y-%m-%d \n %H:%M') #set time format: YYYY-MM-DD \n HH:MM in UTC
-        locator_dict = mdates.AutoDateLocator()
-        # locator_dict.intervald['MINUTELY'] = [1, 2, 5, 10, 15, 30]
+        # date_fmt = mdates.DateFormatter('%Y-%m-%d \n %H:%M') #set time format: YYYY-MM-DD \n HH:MM in UTC
+        # locator_dict = mdates.AutoDateLocator()
         loc = mdates.AutoDateLocator(tz=None, minticks=4, maxticks=6)
-    
+        formatter = mdates.ConciseDateFormatter(loc)
         
         for ax in axes0:
             ax[0].set_xlim(utct(tstart).datetime, utct(tend).datetime)
-            ax[0].xaxis.set_major_formatter(date_fmt)
+            ax[0].xaxis.set_major_formatter(formatter)
             ax[0].xaxis.set_major_locator(loc)
             
             for a in ax[:]:
@@ -1798,8 +1802,8 @@ class Event:
         axes0[0, 0].text(utct(self.picks[phase_S]).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
         
     
-        linewidth_twofour = 1.0
-        for irow, [data, rmin, rmax, a, xlabel, xticks, cmap] in \
+        # linewidth_twofour = 1.0
+        for irow, [data, rmin, rmax, a, xlabel, xticks, cmap, bounds] in \
                 enumerate(iterables):
             
             #hist plot: signal P
