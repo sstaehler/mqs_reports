@@ -1415,15 +1415,15 @@ class Event:
         from matplotlib.colorbar import make_axes
         from matplotlib.ticker import NullFormatter
         # import seaborn as sns
-        # from matplotlib.colors import ListedColormap
         # from palettable.cartocolors.qualitative import Prism_10
         # import palettable
-        from matplotlib.colors import LinearSegmentedColormap
+        from matplotlib.colors import LinearSegmentedColormap, ListedColormap
         
         
         # azi_colormap = ListedColormap(palettable.cartocolors.qualitative.Prism_10.mpl_colors) #discrete
         # azi_colormap = Prism_10.mpl_colormap #continuous
-        custom_cmap =  LinearSegmentedColormap.from_list('', ['blue', 'cornflowerblue', 'goldenrod', 'gold', 'yellow', 'darkgreen', 'green', 'mediumseagreen', 'darkred', 'firebrick', 'tomato', 'midnightblue', 'blue']) #interpolated colormap - or use with bounds
+        color_list = ['blue', 'cornflowerblue', 'goldenrod', 'gold', 'yellow', 'darkgreen', 'green', 'mediumseagreen', 'darkred', 'firebrick', 'tomato', 'midnightblue', 'blue']
+        custom_cmap =  LinearSegmentedColormap.from_list('', color_list) #interpolated colormap - or use with bounds
         bounds = [0, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345, 360]
         
         mod_180 = False #set to True if only mapping 0-180° azimuth, False maps 0-360°
@@ -1529,6 +1529,7 @@ class Event:
                                hspace=0.15,
                                wspace=0.08) #0.02 original
             box_legend = (1.3, 1.45)
+            box_azimuth_colormap = ()
             nrows = 4
             dy_lmst = -0.25
             figsize_y = 9
@@ -1697,7 +1698,7 @@ class Event:
                     (np.rad2deg(inc2), -90, 90, alpha2,
                      'minor inclination\n/ degree', np.arange(-90, 91, 30), 'gnuplot', None))
     
-            for irow, [data, rmin, rmax, a, xlabel, xticks, cmap, bounds] in \
+            for irow, [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] in \
                     enumerate(iterables):
     
                 ax = axes0[irow, 0]
@@ -1705,7 +1706,7 @@ class Event:
                 if log and kind == 'cwt':
                     # imshow can't do the log sampling in frequency
                     cm = polarization.pcolormesh_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
-                                          vmin=rmin, vmax=rmax, bounds=bounds)
+                                          vmin=rmin, vmax=rmax, bounds=boundaries)
                 else:
                     cm = polarization.imshow_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
                                       vmin=rmin, vmax=rmax)
@@ -1803,7 +1804,7 @@ class Event:
         
     
         # linewidth_twofour = 1.0
-        for irow, [data, rmin, rmax, a, xlabel, xticks, cmap, bounds] in \
+        for irow, [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] in \
                 enumerate(iterables):
             
             #hist plot: signal P
@@ -1921,6 +1922,32 @@ class Event:
         chartBox = axes1[0].get_position()
         axes1[0].set_position([chartBox.x0, chartBox.y0, chartBox.width, chartBox.height])
         axes1[0].legend(loc='upper right', bbox_to_anchor=box_legend, ncol=1)
+        
+        #add compass rose-type plot to see in which direction azimuth colormap lies with respect to NESW
+        rose_axes = fig.add_axes([0.01, 0.91, 0.06, 0.06], polar=True) # Left, Bottom, Width, Height
+        if 'ZNE' not in rotation: #rotate the colormap so that 0° is in direction of the BAZ
+            theta = [x+BAZ for x in bounds]
+            theta = np.array(theta)
+            theta[theta > 360] = theta[theta > 360] - 360 #remap values over 360°
+        else:
+            theta = bounds
+        radii = [1]*len(theta)
+        #Width of pie segments: first and last entry separately since blue is both at beginning and end of the color list= half the width each
+        width = [30]*(len(theta)-2)
+        width.insert(0, 15)
+        width.insert((len(width)), 15)
+        
+        rose_axes.bar(np.radians(theta), radii, width=np.radians(width), color=color_list, align='edge')
+        
+        rose_axes.set_theta_zero_location("N")
+        rose_axes.set_theta_direction('clockwise')
+        rose_axes.set_xticks(np.radians(range(0, 360, 90)))
+        rose_axes.set_xticklabels(['N', 'E', 'S', 'W'], fontsize=8)
+        rose_axes.set_yticklabels('')
+        rose_axes.tick_params(grid_color="palegoldenrod", pad=0.1)
+        if self.baz:
+            rose_axes.axvline(x=np.radians(self.baz), color='crimson')
+            rose_axes.text(np.radians(self.baz), 1.3, 'BAZ', c='crimson', fontsize=8)
     
         fig.suptitle(title, fontsize=15)
     
