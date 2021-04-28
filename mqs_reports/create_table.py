@@ -41,7 +41,7 @@ def create_row(list, fmts=None, extras=None):
                 row += ind_string + '<td>' + fmt % (li) + '</td>\n'
     else:
         for li, fmt, extra in zip(list, fmts, extras):
-            if li is None:
+            if li is None or (type(li) is tuple and not all(li)):
                 row += ind_string + '<td>-</td>\n'
             else:
                 if extra is None:
@@ -180,7 +180,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
             snr = calc_stalta(event, fmin=2.2, fmax=2.8)
             snr_string = '%.1f (2.4Hz)' % snr
         elif event.mars_event_type_short == ('SF'):
-            snr, snr_win = calc_SNR(event, fmin=8.0, fmax=12., 
+            snr, snr_win = calc_SNR(event, fmin=8.0, fmax=12.,
                                     SP=True, hor=True)
             snr_string = '%.1f (%s, 8-12Hz)' % (snr, snr_win)
         else:

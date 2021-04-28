@@ -735,7 +735,7 @@ class Event:
                  'MFB_HF': mag.MFB_HF
                  }
         if self.distance is None and distance is None:
-            return None
+            return None, None
         elif self.distance is not None and distance is None:
             distance = self.distance
             distance_sigma = self.distance_sigma

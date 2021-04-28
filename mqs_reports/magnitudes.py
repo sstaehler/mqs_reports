@@ -45,7 +45,7 @@ def calc_magnitude(amplitude_dB: float,
             amplitude_log +
             mag_variables['ai'] * np.log10(distance_degree) +
             mag_variables['ci']
-    )
+          )
     if mag_variables['sigma'] is not None:
         sigma = mag_variables['sigma']
     else:
