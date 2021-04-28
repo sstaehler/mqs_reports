@@ -9,7 +9,7 @@
 """
 
 import numpy as np
-
+from mqs_reports import constants
 from mqs_reports.utils import linregression
 
 
@@ -21,7 +21,49 @@ def get_M0(Mw):
     return 10 ** (1.5 * Mw + 9.1)
 
 
-def mb_P(amplitude_dB, distance_degree):
+def calc_magnitude(amplitude_dB: float,
+                   distance_degree: float,
+                   mag_type: str, version: str,
+                   distance_sigma_degree: float,
+                   amplitude_sigma_dB: float):
+    """
+
+    :param amplitude_dB: Relevant amplitude in dB. Please note that this should be an amplitude, not a power.
+                         If it is a power, divide it by 2.
+    :param distance_degree: Distance of event
+    :param mag_type: allowed values: 'MwspecHF', 'MwspecLF', 'mb_P', 'mb_S', 'm24pick', 'm24spec'
+    :param version: 'Giardini2020' or 'Boese2021'
+    :param distance_sigma_degree: uncertainty of distance
+    :param amplitude_sigma_dB: uncertainty of amplitude in dB
+    :return: mag, sigma
+    """
+    mag_variables = constants.magnitude[version][mag_type]
+    amplitude_log = amplitude_dB / 10.
+    amplitude_sigma_log = amplitude_sigma_dB / 10.
+
+    mag = mag_variables['fac'] * (
+            amplitude_log +
+            mag_variables['ai'] * np.log10(distance_degree) +
+            mag_variables['ci']
+    )
+    if mag_variables['sigma'] is not None:
+        sigma = mag_variables['sigma']
+    else:
+        distance_sigma_log = (np.log10(distance_degree + distance_sigma_degree) -
+                              np.log10(distance_degree - distance_sigma_degree))
+        sigma = mag_variables['fac'] * \
+                np.sqrt(
+                    amplitude_sigma_log ** 2. +
+                    np.log10(distance_degree) ** 2. * mag_variables['ai_sigma'] ** 2. +
+                    mag_variables['ai'] ** 2. * distance_sigma_log ** 2. +
+                    mag_variables['ci_sigma'] ** 2.
+                )
+
+    return mag, sigma
+
+
+def mb_P(amplitude_dB, distance_degree,
+         distance_sigma_degree, amplitude_sigma_dB=10.):
     dist_term = 0.8
     amp_term = 0.6403
     offset = 8.1130
@@ -33,7 +75,8 @@ def mb_P(amplitude_dB, distance_degree):
     return mag, sigma_mb_P
 
 
-def mb_S(amplitude_dB, distance_degree):
+def mb_S(amplitude_dB, distance_degree,
+         distance_sigma_degree, amplitude_sigma_dB=10.):
     dist_term = 0.9333
     amp_term = 0.6055
     offset = 7.3797
@@ -46,7 +89,8 @@ def mb_S(amplitude_dB, distance_degree):
     return mag, sigma_mb_S
 
 
-def M2_4(amplitude_dB, distance_degree):
+def M2_4(amplitude_dB, distance_degree,
+         distance_sigma_degree, amplitude_sigma_dB=10.):
     dist_term = 0.6
     amp_term = 0.512
     offset = 6.3648
@@ -62,7 +106,7 @@ def M2_4(amplitude_dB, distance_degree):
 
 
 def MFB(amplitude_dB, distance_degree,
-        sigma_distance_degree, sigma_amplitude_dB=10.):
+        distance_sigma_degree, amplitude_sigma_dB=10.):
     dist_term = 1.1
     offset = 21.475
 
@@ -73,15 +117,17 @@ def MFB(amplitude_dB, distance_degree,
                 dist_term * np.log10(distance_degree) + \
                 offset
         mag = 2. / 3. * (logM0 - 9.1)
-
-        sigma_mag = 0.44 * sigma_amplitude_dB ** 2 \
-            + 0.044 * np.log10(distance_degree) ** 2 \
-            + 0.44 * sigma_distance_degree ** 2 \
-            + 0.13
+        distance_sigma_log = (np.log10(distance_degree + distance_sigma_degree) -
+                              np.log10(distance_degree - distance_sigma_degree))
+        sigma_mag = 0.44 * (amplitude_sigma_dB / 10.) ** 2 \
+                    + 0.044 * np.log10(distance_degree) ** 2 \
+                    + 0.44 * distance_sigma_log ** 2 \
+                    + 0.13
         return mag, sigma_mag
 
 
-def MFB_HF(amplitude_dB, distance_degree):
+def MFB_HF(amplitude_dB, distance_degree,
+           distance_sigma_degree, amplitude_sigma_dB=10.):
     dist_term = 0.9
     offset = 21.475
     sigma = 0.2

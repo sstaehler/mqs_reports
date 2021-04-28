@@ -1,0 +1,134 @@
+{
+  "Giardini2020": {
+    "MwspecHF": {
+      "fac": 0.6666666666666666,
+      "ai": 0.9,
+      "ai_sigma": null,
+      "ci": 12.375000000000002,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "MwspecLF": {
+      "fac": 0.6666666666666666,
+      "ai": 1.1,
+      "ai_sigma": null,
+      "ci": 12.375000000000002,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "MFB_HF": {
+      "fac": 0.6666666666666666,
+      "ai": 0.9,
+      "ai_sigma": null,
+      "ci": 12.375000000000002,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "MFB": {
+      "fac": 0.6666666666666666,
+      "ai": 1.1,
+      "ai_sigma": null,
+      "ci": 12.375000000000002,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "mb_P": {
+      "fac": 0.6403,
+      "ai": 1.2494143370295174,
+      "ai_sigma": null,
+      "ci": 12.670623145400594,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "mb_S": {
+      "fac": 0.6055,
+      "ai": 1.5413707679603632,
+      "ai_sigma": null,
+      "ci": 12.187778695293146,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "m24pick": {
+      "fac": 0.512,
+      "ai": 1.171875,
+      "ai_sigma": null,
+      "ci": 12.431249999999999,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "m24spec": {
+      "fac": 0.512,
+      "ai": 1.171875,
+      "ai_sigma": null,
+      "ci": 12.431249999999999,
+      "ci_sigma": null,
+      "sigma": 0.5
+    }
+  },
+  "Boese2021": {
+    "MwspecHF": {
+      "fac": 0.6666666666666666,
+      "ai": 0.8,
+      "ai_sigma": 0.1,
+      "ci": 12.8,
+      "ci_sigma": null,
+      "sigma": 0.2
+    },
+    "MwspecLF": {
+      "fac": 0.6666666666666666,
+      "ai": 1.0,
+      "ai_sigma": 0.1,
+      "ci": 12.6,
+      "ci_sigma": 0.5,
+      "sigma": null
+    },
+    "MFB_HF": {
+      "fac": 0.6666666666666666,
+      "ai": 0.8,
+      "ai_sigma": 0.1,
+      "ci": 12.8,
+      "ci_sigma": null,
+      "sigma": 0.2
+    },
+    "MFB": {
+      "fac": 0.6666666666666666,
+      "ai": 1.0,
+      "ai_sigma": 0.1,
+      "ci": 12.6,
+      "ci_sigma": 0.5,
+      "sigma": null
+    },
+    "mb_P": {
+      "fac": 1.0,
+      "ai": 0.73,
+      "ai_sigma": null,
+      "ci": 11.8,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "mb_S": {
+      "fac": 1.0,
+      "ai": 1.06,
+      "ai_sigma": null,
+      "ci": 10.9,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "m24pick": {
+      "fac": 1.0,
+      "ai": 1.0,
+      "ai_sigma": null,
+      "ci": 10.8,
+      "ci_sigma": null,
+      "sigma": 0.5
+    },
+    "m24spec": {
+      "fac": 1.0,
+      "ai": 1.06,
+      "ai_sigma": null,
+      "ci": 11.0,
+      "ci_sigma": null,
+      "sigma": 0.5
+    }
+  }
+}

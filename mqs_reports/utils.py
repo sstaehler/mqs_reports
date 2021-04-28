@@ -5,15 +5,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from matplotlib import mlab as mlab
+from mqs_reports.constants import SEC_PER_DAY_EARTH, SEC_PER_DAY_MARS
 from obspy import UTCDateTime as utct, UTCDateTime
 from obspy.signal.filter import envelope
 from obspy.signal.rotate import rotate2zne
 from obspy.signal.util import next_pow_2
 from scipy.fftpack import fft, ifft
 from scipy.signal import hilbert
-
-SEC_PER_DAY_EARTH = 86400
-SEC_PER_DAY_MARS = 88775.2440
 
 
 def solify(UTC_time, sol0=UTCDateTime(2018, 11, 26, 5, 10, 50.33508)):
@@ -754,8 +752,24 @@ def calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
     return scalogram ** 2, f, t
 
 
-def create_timevector(tr, utct=False):
+def create_timevector(tr):
     timevec = [utct(t +
                     float(tr.stats.starttime)).datetime
                for t in tr.times()]
     return timevec
+
+
+def uncertainty_from_pdf(variable: np.array, p: np.array):
+    """
+    Fit a Gaussian through the pdf expressed by variable, p
+    From Savas Ceylan
+    """
+    from scipy.interpolate import UnivariateSpline
+    spline = UnivariateSpline(variable, p - np.nanmax(p) / 4, s=0)
+    _roots = spline.roots()
+    print(_roots, variable[p == np.nanmax(p)])
+
+    r1 = _roots[0]
+    r2 = _roots[1]
+
+    return r1, r2

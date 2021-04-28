@@ -16,11 +16,6 @@ import matplotlib.ticker
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import degrees2kilometers
-from scipy import stats
-from tqdm import tqdm
-
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
     EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
@@ -28,6 +23,10 @@ from mqs_reports.magnitudes import M2_4, lorentz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.snr import calc_stalta
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec, solify
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import degrees2kilometers
+from scipy import stats
+from tqdm import tqdm
 
 
 class Catalog:
@@ -239,14 +238,14 @@ class Catalog:
             event.calc_spectra(winlen_sec=winlen_sec,
                                detick_nfsamp=detick_nfsamp)
 
-    def save_magnitudes(self, fnam):
+    def save_magnitudes(self, fnam, version='Giardini2020'):
         mags = []
         for event in self:
             mags.append([event.name,
-                         event.magnitude(mag_type='mb_P'),
-                         event.magnitude(mag_type='mb_S'),
-                         event.magnitude(mag_type='m2.4'),
-                         event.magnitude(mag_type='MFB')
+                         event.magnitude(mag_type='mb_P', version=version),
+                         event.magnitude(mag_type='mb_S', version=version),
+                         event.magnitude(mag_type='m2.4', version=version),
+                         event.magnitude(mag_type='MFB', version=version)
                          ])
         np.savetxt(fnam, mags, fmt=('%s'))
 
@@ -849,15 +848,16 @@ class Catalog:
 
 
     def plot_magnitude_distance(
-         self, mag_type='m2.4',
-         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
-                 'VERY_HIGH_FREQUENCY': 'C0'},
-         markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
-                  'VERY_HIGH_FREQUENCY': '^'},
-         xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP/CRUST_VS:3.1f}]',
-         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
-         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
-         fig=None, show=True):
+            self, mag_type='m2.4',
+            version='Giardini2020',
+            colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+                    'VERY_HIGH_FREQUENCY': 'C0'},
+            markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
+                     'VERY_HIGH_FREQUENCY': '^'},
+            xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP / CRUST_VS:3.1f}]',
+            markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+            markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+            fig=None, show=True):
 
         if fig is None:
             fig = plt.figure()
@@ -873,7 +873,7 @@ class Catalog:
 
                 # collect properties for plotting
                 M, Msigma, dist = np.array([
-                    (*event.magnitude(mag_type=mag_type, distance=event.distance),
+                    (*event.magnitude(mag_type=mag_type, distance=event.distance, version=version),
                      event.distance) for event in cat]).T.astype(float)
 
                 S = np.array([markersize[event.quality] for event in cat])
@@ -1023,7 +1023,7 @@ class Catalog:
                 fnam_report = pjoin(dir_out,
                                     'mag_report_%s_%s' %
                                     (event.name, chan))
-                if not pexists(fnam_report + '.pdf'):
+                if not pexists(fnam_report + '.html'):
                     event.make_report(fnam_out=fnam_report,
                                       chan=chan,
                                       annotations=annotations)
@@ -1405,14 +1405,15 @@ class Catalog:
                 ievent += 1
 
     def write_table(self,
-                    fnam_out: str = 'overview.html') -> None:
+                    fnam_out: str = 'overview.html',
+                    magnitude_version='Giardini2020') -> None:
         """
         Create HTML overview table for catalog
         :param fnam_out: filename to write to
         """
         from mqs_reports.create_table import write_html
 
-        write_html(self, fnam_out=fnam_out)
+        write_html(self, fnam_out=fnam_out, magnitude_version=magnitude_version)
 
     def get_event_count_table(self, style='html') -> str:
         """

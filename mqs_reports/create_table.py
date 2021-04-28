@@ -12,11 +12,10 @@ from argparse import ArgumentParser
 from os.path import exists as pexists, join as pjoin
 
 import obspy
-from obspy import UTCDateTime as utct
-from tqdm import tqdm
-
 from mqs_reports.snr import calc_SNR, calc_stalta
 from mqs_reports.utils import solify
+from obspy import UTCDateTime as utct
+from tqdm import tqdm
 
 
 def create_row_header(list):
@@ -61,7 +60,7 @@ def create_row(list, fmts=None, extras=None):
     return row
 
 
-def write_html(catalog, fnam_out):
+def write_html(catalog, fnam_out, magnitude_version):
     output = create_html_header()
     output += catalog.get_event_count_table()
     output += create_table_head(
@@ -90,7 +89,7 @@ def write_html(catalog, fnam_out):
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-               '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
+               '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%7.1E&plusmn;%7.1E',
                '%3.1f&plusmn;%3.1f', '%3.1f&plusmn;%3.1f',
                '%3.1f&plusmn;%3.1f', '%3.1f&plusmn;%3.1f',
                '%3.1f', '%5.3f',
@@ -117,7 +116,8 @@ def write_html(catalog, fnam_out):
                                event,
                                event_type_idx,
                                formats,
-                               ievent)
+                               ievent,
+                               magnitude_version=magnitude_version)
 
         output += row
         ievent -= 1
@@ -129,6 +129,7 @@ def write_html(catalog, fnam_out):
 
 def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                      ievent,
+                     magnitude_version='Giardini2020',
                      path_images_local='/usr/share/nginx/html/InSight_plots',
                      path_images='http://mars.ethz.ch/InSight_plots'):
 
@@ -269,12 +270,14 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                                   fmin=2.2, fmax=2.6),
              10 ** (event.amplitudes['A_24'] / 20.)
              if event.amplitudes['A_24'] is not None else None,
-             10 ** (event.amplitudes['A0'] / 20.)
-             if event.amplitudes['A0'] is not None else None,
-             event.magnitude(mag_type='mb_P'),
-             event.magnitude(mag_type='mb_S'),
-             event.magnitude(mag_type='m2.4'),
-             event.magnitude(mag_type='MFB'),
+             (10 ** (event.amplitudes['A0'] / 20.)
+              if event.amplitudes['A0'] is not None else None,
+              10 ** (event.amplitudes['A0_err'] / 20)
+              if event.amplitudes['A0_err'] is not None else None),
+             event.magnitude(mag_type='mb_P', version=magnitude_version),
+             event.magnitude(mag_type='mb_S', version=magnitude_version),
+             event.magnitude(mag_type='m2.4', version=magnitude_version),
+             event.magnitude(mag_type='MFB', version=magnitude_version),
              event.amplitudes['f_c'],
              event.amplitudes['tstar'],
              event.available_sampling_rates()['VBB_Z'],
