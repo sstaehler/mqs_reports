@@ -794,7 +794,7 @@ class Event:
         # print('%s, Mags: %4.2f+-%4.2f (old), %4.2f+-%4.2f (new), %4.2f+-%4.2f (Boese)' %
         #       (self.name, mag_old, sigma_old, mag_new, sigma_new, mag_new2, sigma_new2))
         if power_dB is None:
-            return None
+            return None, None
         else:
             return calc_magnitude(mag_type=mag_type,
                                   version=version,

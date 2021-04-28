@@ -78,7 +78,7 @@ def write_html(catalog, fnam_out, magnitude_version):
                       'S-amp<br>[m]',
                       '2.4 Hz<br>pick [m]',
                       '2.4 Hz<br>fit [m]',
-                      'A0<br>[m]',
+                      'A0<sup>2</sup><br>[dB]',
                       'MbP',
                       'MbS',
                       'M2.4',
@@ -89,9 +89,10 @@ def write_html(catalog, fnam_out, magnitude_version):
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-               '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%7.1E&plusmn;%7.1E',
-               '%3.1f&plusmn;%3.1f', '%3.1f&plusmn;%3.1f',
-               '%3.1f&plusmn;%3.1f', '%3.1f&plusmn;%3.1f',
+               '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
+               '%4d&plusmn;%d',
+               '%3.1f', '%3.1f',
+               '%3.1f', '%3.1f&plusmn;%3.1f',
                '%3.1f', '%5.3f',
                '%s', '%s', '%s')
     time_string = {'GUI': '%s<sup>[O]</sup>',
@@ -270,13 +271,13 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                                   fmin=2.2, fmax=2.6),
              10 ** (event.amplitudes['A_24'] / 20.)
              if event.amplitudes['A_24'] is not None else None,
-             (10 ** (event.amplitudes['A0'] / 20.)
+             (event.amplitudes['A0']
               if event.amplitudes['A0'] is not None else None,
-              10 ** (event.amplitudes['A0_err'] / 20)
+              event.amplitudes['A0_err']
               if event.amplitudes['A0_err'] is not None else None),
-             event.magnitude(mag_type='mb_P', version=magnitude_version),
-             event.magnitude(mag_type='mb_S', version=magnitude_version),
-             event.magnitude(mag_type='m2.4', version=magnitude_version),
+             event.magnitude(mag_type='mb_P', version=magnitude_version)[0],
+             event.magnitude(mag_type='mb_S', version=magnitude_version)[0],
+             event.magnitude(mag_type='m2.4', version=magnitude_version)[0],
              event.magnitude(mag_type='MFB', version=magnitude_version),
              event.amplitudes['f_c'],
              event.amplitudes['tstar'],
