@@ -18,6 +18,7 @@ from obspy import UTCDateTime as utct
 from tqdm import tqdm
 
 from mqs_reports.catalog import Catalog
+from mqs_reports.event import EVENT_TYPES_PRINT
 from mqs_reports.utils import create_ZNE_HG, remove_sensitivity_stable, solify
 
 
@@ -471,8 +472,7 @@ class Noise:
                        color='black', lw=1)
         if data_apss:
             ax_apss.axvline(x=sol_start + SOLS_PER_YEAR, ls='dashed',
-                       color='black', lw=1)
-
+                            color='black', lw=1)
 
         HF_times = []
         HF_amps = []
@@ -719,32 +719,11 @@ class Noise:
                 values_LF = np.nanquantile(disp_LF, q=qs)
                 values_HF = np.nanquantile(disp_HF, q=qs)
                 values_press = np.nanquantile(disp_press, q=qs)
-                # for iwindow, time_window in enumerate(time_windows_hour):
-                #     if time_window[0] < time_window[1]:
-                #         bol_hours = np.array((
-                #                 (time_window[0] < times_this_sol),
-                #                 (times_this_sol < time_window[1]))).all(axis=0)
-                #     else:
-                #         bol_hours = np.array((
-                #                 (time_window[0] < times_this_sol),
-                #                 (times_this_sol < time_window[1]))).any(axis=0)
-
-                #     disp_LF = self.stds_LF[bol_sol] ** 2. / df_LF
-                #     disp_HF = self.stds_HF[bol_sol] ** 2. / df_HF
-                #     disp_press = self.stds_press[bol_sol] ** 2. / df_press
-                #     values_LF[iwindow] = np.nanmedian(disp_LF[bol_hours])
-                #     values_HF[iwindow] = np.nanmedian(disp_HF[bol_hours])
-                #     values_press[iwindow] = np.nanmedian(disp_press[bol_hours])
 
                 self.quantiles_HF[i, :] = np.nan_to_num(values_HF)
                 self.quantiles_LF[i, :] = np.nan_to_num(values_LF)
                 self.quantiles_press[i, :] = np.nan_to_num(values_press)
             i += 1
-
-            # quantiles_LF, quantiles_HF = self.calc_noise_quantiles(
-            #          qs=[0.05, 0.25, 0.5, 0.9], sol_start=isol, sol_end=isol + 1)
-            # self.quantiles_HF[i, :] = np.nan_to_num(quantiles_HF)
-            # self.quantiles_LF[i, :] = np.nan_to_num(quantiles_LF)
 
         # Mask outliers
         self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-23)
@@ -803,7 +782,6 @@ class Noise:
                 self.quantiles_press[i, :] = np.nan_to_num(values_press)
             i += 1
 
-
         # Mask outliers
         self.quantiles_LF = np.ma.masked_less(self.quantiles_LF, value=1e-23)
         self.quantiles_HF = np.ma.masked_less(self.quantiles_HF, value=1e-23)
@@ -813,7 +791,6 @@ class Noise:
         self.quantiles_HF = np.ma.masked_greater(self.quantiles_HF, value=1e-8)
         self.quantiles_press = np.ma.masked_greater(self.quantiles_press,
                                                     value=1e-2)
-
 
     def compare_events(self,
                        catalog=None,
@@ -880,7 +857,6 @@ if __name__ == '__main__':
     # noise.save('noise_0301_1025.npz')
     noise = read_noise('noise_0301_1025.npz')
     noise.plot_noise_stats()
-    #noise.read_quantiles(fnam='quantiles.npz')
 
     cat = Catalog(fnam_quakeml='mqs_reports/data/catalog_20191024.xml',
                   quality=['A', 'B'])

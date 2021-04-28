@@ -306,7 +306,8 @@ def qml_get_sso_info_for_event_element(xml_root, ev):
                 ))).split(' ')
 
         if distance_pdf_variable is not None:
-            sso_info['distance_pdf'] = np.asarray((distance_pdf_variable, distance_pdf_prob), dtype=float)
+            sso_info['distance_pdf'] = np.asarray((distance_pdf_variable, distance_pdf_prob),
+                                                  dtype=float)
 
     if pref_ori_time_id is not None:
         origin_time = lxml_text_or_none(
