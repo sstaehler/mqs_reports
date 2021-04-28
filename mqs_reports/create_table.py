@@ -382,6 +382,10 @@ def define_arguments():
     parser.add_argument('-d', '--distances', help=helptext,
                         default='all')
 
+    helptext = 'Magnitude version to use: "Giardini2020" (default), "Boese2021"'
+    parser.add_argument('-m', '--mag_version', help=helptext,
+                        default='Giardini2020')
+
     helptext = 'Event types'
     parser.add_argument('-t', '--types', help=helptext,
                         default='all')
@@ -424,4 +428,4 @@ if __name__ == '__main__':
     catalog.make_report(dir_out='reports', annotations=ann)
 
     print('Create table')
-    catalog.write_table(fnam_out=fnam_out)
+    catalog.write_table(fnam_out=fnam_out, magnitude_version=args.mag_version)
