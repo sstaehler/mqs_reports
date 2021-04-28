@@ -1503,6 +1503,7 @@ class Event:
                                hspace=0.15,
                                wspace=0.08)
             box_legend = (1.3, 1.5)
+            box_compass_colormap = [0.01, 0.01, 0.06] #offset left, top, width/height
             nrows = 6
             dy_lmst = -0.4
             figsize_y = 12
@@ -1516,6 +1517,7 @@ class Event:
                                hspace=0.2,
                                wspace=0.08)
             box_legend = (1.3, 1.4)
+            box_compass_colormap = [0.04, -0.02, 0.09] #offset left, top, width/height
             nrows = 2
             dy_lmst = -0.4
             figsize_y = 6
@@ -1529,7 +1531,7 @@ class Event:
                                hspace=0.15,
                                wspace=0.08) #0.02 original
             box_legend = (1.3, 1.45)
-            box_azimuth_colormap = ()
+            box_compass_colormap = [0.03, -0.02, 0.06] #offset left, top, width/height
             nrows = 4
             dy_lmst = -0.25
             figsize_y = 9
@@ -1924,7 +1926,9 @@ class Event:
         axes1[0].legend(loc='upper right', bbox_to_anchor=box_legend, ncol=1)
         
         #add compass rose-type plot to see in which direction azimuth colormap lies with respect to NESW
-        rose_axes = fig.add_axes([0.01, 0.91, 0.06, 0.06], polar=True) # Left, Bottom, Width, Height
+        rose_axes = fig.add_axes([gridspec_kw['left']-box_compass_colormap[0],
+                                  gridspec_kw['top']-box_compass_colormap[1], 
+                                  box_compass_colormap[2], box_compass_colormap[2]], polar=True) # Left, Bottom, Width, Height
         if 'ZNE' not in rotation: #rotate the colormap so that 0° is in direction of the BAZ
             theta = [x+BAZ for x in bounds]
             theta = np.array(theta)
@@ -1944,7 +1948,8 @@ class Event:
         rose_axes.set_xticks(np.radians(range(0, 360, 90)))
         rose_axes.set_xticklabels(['N', 'E', 'S', 'W'], fontsize=8)
         rose_axes.set_yticklabels('')
-        rose_axes.tick_params(grid_color="palegoldenrod", pad=0.1)
+        rose_axes.tick_params(grid_color="palegoldenrod", pad=0.0)
+        #TODO: figure out a solution for impact BAZ
         if self.baz:
             rose_axes.axvline(x=np.radians(self.baz), color='crimson')
             rose_axes.text(np.radians(self.baz), 1.3, 'BAZ', c='crimson', fontsize=8)
@@ -1960,4 +1965,8 @@ class Event:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
                 path = 'Plots/Test'
-            fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
+            # fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
+            fig.savefig(f'polarisation_{savename}.png',
+                        dpi=200)
+        
+        plt.close()
