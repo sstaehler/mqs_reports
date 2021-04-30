@@ -767,7 +767,7 @@ def uncertainty_from_pdf(variable: np.array, p: np.array):
     from scipy.interpolate import UnivariateSpline
     spline = UnivariateSpline(variable, p - np.nanmax(p) / 4, s=0)
     _roots = spline.roots()
-    print(_roots, variable[p == np.nanmax(p)])
+    # print(_roots, variable[p == np.nanmax(p)], np.diff(_roots) / 2.)
 
     r1 = _roots[0]
     r2 = _roots[1]

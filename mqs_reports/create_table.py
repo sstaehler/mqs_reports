@@ -99,8 +99,8 @@ def write_html(catalog, fnam_out, magnitude_version):
                    'aligned': '%s<sup>[A]</sup>',
                    'PgSg': '%s',
                    'unknown': '%s'}
-    dist_string = {'GUI': '%.3g',
-                   'aligned': '<i>%.3g</i>&dagger;',
+    dist_string = {'GUI': '%.3g&plusmn;%.2g',
+                   'aligned': '<i>%.3g&plusmn;%.2g</i>&dagger;',
                    'PgSg': '<i>%.3g</i>*',
                    'unknown': '<i>%s</i>'}
     event_type_idx = {'LF': 1,
@@ -256,7 +256,8 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
              utc_time,
              link_lmst,
              link_duration,
-             dist_string[event.distance_type] % event.distance,
+             dist_string[event.distance_type] % \
+                 (event.distance, event.distance_sigma),
              snr_string,
              event.pick_amplitude('Peak_MbP',
                                   comp='vertical',
