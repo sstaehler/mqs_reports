@@ -66,22 +66,6 @@
     }
   },
   "Boese2021": {
-    "MwspecHF": {
-      "fac": 0.6666666666666666,
-      "ai": 0.8,
-      "ai_sigma": 0.1,
-      "ci": 12.8,
-      "ci_sigma": null,
-      "sigma": 0.2
-    },
-    "MwspecLF": {
-      "fac": 0.6666666666666666,
-      "ai": 1.0,
-      "ai_sigma": 0.1,
-      "ci": 12.6,
-      "ci_sigma": 0.5,
-      "sigma": null
-    },
     "MFB_HF": {
       "fac": 0.6666666666666666,
       "ai": 0.8,
@@ -110,7 +94,7 @@
       "fac": 1.0,
       "ai": 1.06,
       "ai_sigma": null,
-      "ci": 10.9,
+      "ci": 10.93,
       "ci_sigma": null,
       "sigma": 0.5
     },
@@ -118,7 +102,7 @@
       "fac": 1.0,
       "ai": 1.0,
       "ai_sigma": null,
-      "ci": 10.8,
+      "ci": 10.76,
       "ci_sigma": null,
       "sigma": 0.5
     },
@@ -126,7 +110,7 @@
       "fac": 1.0,
       "ai": 1.06,
       "ai_sigma": null,
-      "ci": 11.0,
+      "ci": 11.04,
       "ci_sigma": null,
       "sigma": 0.5
     }

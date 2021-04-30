@@ -183,6 +183,7 @@ class Event:
                         self.distance = float(row['distance'])
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
+                        self.distance_sigma = 20.
                         # print('Found aligned distance %f for event %s' %
                         #       (self.distance, self.name))
 
