@@ -751,22 +751,22 @@ class Event:
                                                 instrument=instrument
                                                 )
             if amplitude_abs is not None:
-                power_dB = 20 * np.log10(amplitude_abs)
+                amplitude_dB = 10 * np.log10(amplitude_abs)
             else:
-                power_dB = None
-            power_dB_sigma = 10.
+                amplitude_dB = None
+            amplitude_dB_sigma = 5.
 
         elif mag_type == 'MFB':
             if self.mars_event_type_short in ['24', 'HF', 'VF']:
                 mag_type = 'MFB_HF'
-            power_dB = self.amplitudes['A0'] \
-                if 'A0' in self.amplitudes else None
-            power_dB_sigma = self.amplitudes['A0_err'] \
-                if 'A0_err' in self.amplitudes else None
+            amplitude_dB = self.amplitudes['A0'] / 2. \
+                if 'A0' in self.amplitudes and self.amplitudes['A0'] is not None else None
+            amplitude_dB_sigma = self.amplitudes['A0_err'] / 2. \
+                if 'A0_err' in self.amplitudes and self.amplitudes['A0_err'] is not None else None
         elif mag_type == 'm2.4':
-            power_dB = self.amplitudes['A_24'] \
-                if 'A_24' in self.amplitudes else None
-            power_dB_sigma = 10.
+            amplitude_dB = self.amplitudes['A_24'] / 2. \
+                if 'A_24' in self.amplitudes and self.amplitudes['A_24'] is not None else None
+            amplitude_dB_sigma = 5.
 
         else:
             raise ValueError('unknown magnitude type %s' % mag_type)
@@ -793,15 +793,15 @@ class Event:
 
         # print('%s, Mags: %4.2f+-%4.2f (old), %4.2f+-%4.2f (new), %4.2f+-%4.2f (Boese)' %
         #       (self.name, mag_old, sigma_old, mag_new, sigma_new, mag_new2, sigma_new2))
-        if power_dB is None:
+        if amplitude_dB is None:
             return None, None
         else:
             return calc_magnitude(mag_type=mag_type,
                                   version=version,
-                                  amplitude_dB=power_dB / 2.,
+                                  amplitude_dB=amplitude_dB,
                                   distance_degree=distance,
                                   distance_sigma_degree=distance_sigma,
-                                  amplitude_sigma_dB=power_dB_sigma / 2.)
+                                  amplitude_sigma_dB=amplitude_dB_sigma)
 
     def plot_envelope(self, comp='Z',
                       figsize=(4, 3),
