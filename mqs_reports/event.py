@@ -121,12 +121,12 @@ class Event:
 
         # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
-            distance_tmp, otime_tmp = self.calc_distance()
+            distance_tmp, otime_tmp, distance_sigma_tmp = self.calc_distance()
             if distance_tmp is not None:
                 self.distance = distance_tmp
                 self.origin_time = utct(otime_tmp)
                 self.distance_type = 'PgSg'
-                self.distance_sigma = distance_tmp * 0.25
+                self.distance_sigma = distance_sigma_tmp
             else:
                 self.distance = None
                 self.distance_sigma = None
@@ -181,15 +181,17 @@ class Event:
                 if overwrite or (self.distance is None):
                     if self.name == row['name']:
                         self.distance = float(row['distance'])
+                        if self.distance_sigma is None:
+                            self.distance_sigma = 20.
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
-                        self.distance_sigma = 20.
                         # print('Found aligned distance %f for event %s' %
                         #       (self.distance, self.name))
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
                       vs: float = CRUST_VS) -> (Union[float, None],
+                                                Union[float, None],
                                                 Union[float, None]):
         """
         Calculate distance of event based on Pg and Sg picks, if available,
@@ -197,16 +199,23 @@ class Event:
         :param vp: P-velocity
         :param vs: S-velocity
         :return: distance in degree or None if no picks available
+                 origin time as UTCDateTime object
+                 sigma of distance in degree (only based on pick uncertainty)
         """
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
+            deltat_sigma = np.sqrt(np.float(self.picks_sigma['Sg'])**2. + \
+                                   np.float(self.picks_sigma['Pg'])**2.)
             distance_km = deltat / (1. / vs - 1. / vp)
+            distance_sigma_km = deltat_sigma / (1. / vs - 1. / vp)
             distance_degree = kilometers2degrees(distance_km,
                                                  radius=RADIUS_MARS)
+            distance_sigma_degree = kilometers2degrees(distance_sigma_km,
+                                                       radius=RADIUS_MARS)
             origin_time = utct(self.picks['Sg']) - distance_km / vs
-            return distance_degree, origin_time
+            return distance_degree, origin_time, distance_sigma_degree
         else:
-            return None, None
+            return None, None, None
 
     def calc_distance_taup(self,
                            model: TauPyModel,

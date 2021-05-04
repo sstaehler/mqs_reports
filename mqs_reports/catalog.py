@@ -1438,7 +1438,7 @@ class Catalog:
                   value=[f'{EVENT_TYPES_PRINT[e]}' for e in EVENT_TYPES])
 
         if style == 'html':
-            return ('<H1>MQS events until %s</H1><br>' %
+            return ('<H1>MQS events until %s</H1>\n<br>\n' %
                     utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
                     df.to_html(index=False, table_id='events_all',
                                col_space=40)

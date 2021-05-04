@@ -39,7 +39,10 @@ def calc_magnitude(amplitude_dB: float,
     """
     mag_variables = constants.magnitude[version][mag_type]
     amplitude_log = amplitude_dB / 10.
-    amplitude_sigma_log = amplitude_sigma_dB / 10.
+    if amplitude_sigma_dB is None:
+        amplitude_sigma_log = 1.
+    else:
+        amplitude_sigma_log = amplitude_sigma_dB / 10.
 
     mag = mag_variables['fac'] * (
             amplitude_log +
@@ -49,8 +52,11 @@ def calc_magnitude(amplitude_dB: float,
     if mag_variables['sigma'] is not None:
         sigma = mag_variables['sigma']
     else:
-        distance_sigma_log = (np.log10(distance_degree + distance_sigma_degree) -
-                              np.log10(distance_degree - distance_sigma_degree))
+        if distance_sigma_degree is None:
+            distance_sigma_log = np.log10(1.25)
+        else:
+            distance_sigma_log = (np.log10(distance_degree + distance_sigma_degree) -
+                                  np.log10(distance_degree - distance_sigma_degree))
         sigma = mag_variables['fac'] * \
                 np.sqrt(
                     amplitude_sigma_log ** 2. +
