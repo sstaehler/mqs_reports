@@ -59,10 +59,14 @@ def create_row(list, fmts=None, extras=None):
     row += 4 * ' ' + '</tr>\n'
     return row
 
+def add_information():
+    string = '<H2>Distance types: &dagger;: alignment, *: Pg/Sg based; GUI-based otherwise</H2><br>\n\n'
+    return string
 
 def write_html(catalog, fnam_out, magnitude_version):
     output = create_html_header()
     output += catalog.get_event_count_table()
+    output += add_information()
     output += create_table_head(
         column_names=(' ',
                       'name',
@@ -101,7 +105,7 @@ def write_html(catalog, fnam_out, magnitude_version):
                    'unknown': '%s'}
     dist_string = {'GUI': '{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}',
                    'aligned': '<i>{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}</i>&dagger;',
-                   'PgSg': '<i>{0.distance:.3g}</i>*',
+                   'PgSg': '<i>{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}</i>*',
                    'unknown': '<i>-</i>'}
     event_type_idx = {'LF': 1,
                       'BB': 2,
@@ -195,7 +199,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                    float(utct(event.starttime)),
                    float(solify(event.starttime)) % 86400,
                    None,
-                   None,
+                   event.distance,
                    snr,
                    event.pick_amplitude('Peak_MbP',
                                         comp='vertical',
