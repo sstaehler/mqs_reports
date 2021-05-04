@@ -185,8 +185,7 @@ class Event:
                             self.distance_sigma = 20.
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
-                        # print('Found aligned distance %f for event %s' %
-                        #       (self.distance, self.name))
+                        self.distance_sigma = self.distance * 0.2
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
@@ -713,6 +712,7 @@ class Event:
                   distance: float = None,
                   distance_sigma: float = None,
                   version: str = 'Giardini2020',
+                  verbose = False,
                   instrument: str = 'VBB') -> Union[float, None]:
         """
         Calculate magnitude of an event
@@ -723,6 +723,8 @@ class Event:
         :return:
         """
         import mqs_reports.magnitudes as mag
+        if verbose:
+            print('*** {0} {1}'.format(self.name, mag_type))
         pick_name = {'mb_P': 'Peak_MbP',
                      'mb_S': 'Peak_MbS',
                      'm2.4': None,
@@ -811,7 +813,8 @@ class Event:
                                   amplitude_dB=amplitude_dB,
                                   distance_degree=distance,
                                   distance_sigma_degree=distance_sigma,
-                                  amplitude_sigma_dB=amplitude_dB_sigma)
+                                  amplitude_sigma_dB=amplitude_dB_sigma,
+                                  verbose=verbose)
 
     def plot_envelope(self, comp='Z',
                       figsize=(4, 3),

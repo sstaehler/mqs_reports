@@ -238,14 +238,14 @@ class Catalog:
             event.calc_spectra(winlen_sec=winlen_sec,
                                detick_nfsamp=detick_nfsamp)
 
-    def save_magnitudes(self, fnam, version='Giardini2020'):
+    def save_magnitudes(self, fnam, version='Giardini2020', verbose=False):
         mags = []
         for event in self:
             mags.append([event.name,
-                         event.magnitude(mag_type='mb_P', version=version),
-                         event.magnitude(mag_type='mb_S', version=version),
-                         event.magnitude(mag_type='m2.4', version=version),
-                         event.magnitude(mag_type='MFB', version=version)
+                         event.magnitude(mag_type='mb_P', version=version, verbose=verbose),
+                         event.magnitude(mag_type='mb_S', version=version, verbose=verbose),
+                         event.magnitude(mag_type='m2.4', version=version, verbose=verbose),
+                         event.magnitude(mag_type='MFB', version=version, verbose=verbose)
                          ])
         np.savetxt(fnam, mags, fmt=('%s'))
 

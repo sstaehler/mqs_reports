@@ -25,7 +25,8 @@ def calc_magnitude(amplitude_dB: float,
                    distance_degree: float,
                    mag_type: str, version: str,
                    distance_sigma_degree: float,
-                   amplitude_sigma_dB: float):
+                   amplitude_sigma_dB: float,
+                   verbose = False):
     """
 
     :param amplitude_dB: Relevant amplitude in dB. Please note that this should be an amplitude, not a power.
@@ -53,7 +54,7 @@ def calc_magnitude(amplitude_dB: float,
         sigma = mag_variables['sigma']
     else:
         if distance_sigma_degree is None:
-            distance_sigma_log = np.log10(1.25)
+            distance_sigma_log = np.log10(1.2)
         else:
             distance_sigma_log = (np.log10(distance_degree + distance_sigma_degree) -
                                   np.log10(distance_degree - distance_sigma_degree))
@@ -64,6 +65,15 @@ def calc_magnitude(amplitude_dB: float,
                     mag_variables['ai'] ** 2. * distance_sigma_log ** 2. +
                     mag_variables['ci_sigma'] ** 2.
                 )
+        if verbose:
+            print('Sigma: term1: %6.4f, term2: %6.4f, term3: %6.4f, term4: %6.4f, sum: %6.4f' %
+                  (4. / 9. * amplitude_sigma_log ** 2.,
+                   4. / 9. * np.log10(distance_degree) ** 2. * mag_variables['ai_sigma'] ** 2.,
+                   4. / 9. * mag_variables['ai'] ** 2. * distance_sigma_log ** 2.,
+                   4. / 9. * mag_variables['ci_sigma'] ** 2.,
+                   sigma
+                  )
+            )
 
     return mag, sigma
 
