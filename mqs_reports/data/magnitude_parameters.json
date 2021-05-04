@@ -108,7 +108,7 @@
     },
     "m2.4": {
       "fac": 1.0,
-      "ai": 1.06,
+      "ai": 1.0,
       "ai_sigma": null,
       "ci": 11.04,
       "ci_sigma": null,
