@@ -1397,7 +1397,7 @@ class Event:
                                   nf=100, w0=20,
                                   use_alpha=True, use_alpha2=False, 
                                   alpha_inc = 1.0, alpha_elli = 1.0, alpha_azi = 1.0,
-                                  plot_6C=True, plot_spec_azi_only = False,
+                                  plot_6C=True, plot_spec_azi_only = False, zoom = False,
                                   differentiate=False, detick_1Hz=False,
                                   impact = False):
         
@@ -1466,7 +1466,7 @@ class Event:
         except ValueError: #if noise window is picked after the event
             st_Copy.trim(starttime=utct(self.picks[phase_P]) - trim_time[0], #og: -50, +850
                          endtime=utct(self.picks['noise_end']) + trim_time[0])
-        
+            
                                                                
         st_Z = Stream(traces=[st_Copy.select(component=components[0])[0]])
         st_N = Stream(traces=[st_Copy.select(component=components[1])[0]])
@@ -1748,7 +1748,10 @@ class Event:
         formatter = mdates.ConciseDateFormatter(loc_major)
         
         for ax in axes0:
-            ax[0].set_xlim(utct(tstart).datetime, utct(tend).datetime)
+            if zoom:
+                ax[0].set_xlim(utct(utct(self.picks[phase_P]) - 120).datetime, utct(utct(self.picks[phase_S]) + 120).datetime)
+            else:
+                ax[0].set_xlim(utct(tstart).datetime, utct(tend).datetime)
             ax[0].xaxis.set_major_formatter(formatter)
             ax[0].xaxis.set_major_locator(loc_major)
             ax[0].xaxis.set_minor_locator(loc_minor)
@@ -1889,8 +1892,8 @@ class Event:
            #density curves over some frequency band
             ax = axes1[irow]
 
-            sns.kdeplot(data=kde_dataframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[0], color_windows[1]], legend=False)  
-            sns.kdeplot(data=kde_noiseframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[2]], fill=True, legend=False)
+            sns.kdeplot(data=kde_dataframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[0], color_windows[1]], legend=False, bw_adjust=.6)  
+            sns.kdeplot(data=kde_noiseframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[2]], fill=True, legend=False, bw_adjust=.6)
 
             
             ax.set_xticks(xticks)
@@ -1962,12 +1965,18 @@ class Event:
             plt.show()
         else:
             savename = f'{fname}_diff' if differentiate else f'{fname}'
-            # fig.savefig(f'Plots/Polarisation/{savename}.png', dpi=200) 
+            if plot_spec_azi_only:
+                savename += '_2Row'
+            elif plot_6C:
+                savename += '_6Row'
+            if zoom:
+                savename += '_zoom'
+
             if impact:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
-                path = 'Plots/Test'
-            fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels_test.png', dpi=200)
-            # fig.savefig(f'polarisation_{savename}.png', dpi=200)
+                path = 'Plots'
+            # fig.savefig(f'{path}/{savename}.png', dpi=200)
+            fig.savefig(f'polarisation_{savename}.png', dpi=200)
         
         plt.close()

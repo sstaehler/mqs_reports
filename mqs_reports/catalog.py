@@ -1430,15 +1430,16 @@ class Catalog:
         
         for event in tqdm(self):
             if event.quality in ['A', 'B', 'C'] and not pexists(f'polarisation_{event.name}_diff.png'):
-                event.plot_polarization_event_noise(t_pick_P, t_pick_S,
-                                                    rotation = 'ZNE', BAZ=event.baz,
-                                                    kind='cwt', fmin=0.2, fmax=10.,
-                                                    winlen_sec=20., overlap=0.5,
-                                                    tstart=None, tend=None, vmin=-220,
-                                                    vmax=-150, log=True, fname=f'{event.name}',
-                                                    dop_winlen=20, dop_specwidth=1.3, #10
-                                                    nf=100, w0=20,
-                                                    use_alpha=True, use_alpha2=False, 
-                                                    alpha_inc = False, alpha_elli = 2.0, alpha_azi = False,
-                                                    plot_6C=False, plot_spec_azi_only = False,
-                                                    differentiate=True, detick_1Hz=True)
+                for zoom in [False, True]:
+                    event.plot_polarization_event_noise(t_pick_P, t_pick_S,
+                                                        rotation = 'ZNE', BAZ=event.baz,
+                                                        kind='cwt', fmin=0.2, fmax=10.,
+                                                        winlen_sec=20., overlap=0.5,
+                                                        tstart=None, tend=None, vmin=-220,
+                                                        vmax=-150, log=True, fname=f'{event.name}',
+                                                        dop_winlen=20, dop_specwidth=1.3, #10
+                                                        nf=100, w0=20,
+                                                        use_alpha=True, use_alpha2=False, 
+                                                        alpha_inc = False, alpha_elli = 2.0, alpha_azi = False,
+                                                        plot_6C=False, plot_spec_azi_only = False, zoom=zoom,
+                                                        differentiate=True, detick_1Hz=True)
