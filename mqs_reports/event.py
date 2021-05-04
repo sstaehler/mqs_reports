@@ -1413,11 +1413,12 @@ class Event:
         from obspy.signal.util import next_pow_2
         import matplotlib.pyplot as plt
         from matplotlib.colorbar import make_axes
-        from matplotlib.ticker import NullFormatter
-        # import seaborn as sns
+        from matplotlib.ticker import NullFormatter, MultipleLocator
+        import seaborn as sns
         # from palettable.cartocolors.qualitative import Prism_10
         # import palettable
         from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+        from matplotlib.lines import Line2D
         
         
         # azi_colormap = ListedColormap(palettable.cartocolors.qualitative.Prism_10.mpl_colors) #discrete
@@ -1433,6 +1434,8 @@ class Event:
         st_Copy = self.waveforms_VBB.copy() 
         phase_P = 'P' if self.picks['P'] else 'Pg'
         phase_S = 'S' if self.picks['S'] else 'Sg'
+        
+        name_timewindows = ['Signal P', 'Signal S', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
         
         #Rotate the waveforms into different coordinate system: ZRT or LQT
         if 'ZNE' not in rotation:
@@ -1471,14 +1474,10 @@ class Event:
         
         tstart_signal_P = utct(self.picks[phase_P]) + t_pick_P[0]
         tend_signal_P = utct(self.picks[phase_S]) - 20 if (utct(self.picks[phase_P]) + t_pick_P[1]) > (utct(self.picks[phase_S]) - 1) else  utct(self.picks[phase_P]) + t_pick_P[1]
-        # tend_signal_P = utct(self.picks[phase_P]) + t_pick_P[1]
         
         tstart_signal_S = utct(self.picks[phase_S]) + t_pick_S[0]
         tend_signal_S = utct(self.picks[phase_S]) + t_pick_S[1]
-        
-        # #manual adjustment list
-        # if self.name == 'S0734a' or self.name == 'S0756a':
-        #     tend_signal_S = utct(self.picks[phase_S]) + 50
+
         
         #Noise window: MQS picks
         tstart_noise = utct(self.picks['noise_start']) # -120
@@ -1530,7 +1529,7 @@ class Event:
                                right=0.94, #0.89
                                hspace=0.15,
                                wspace=0.08) #0.02 original
-            box_legend = (1.3, 1.45)
+            box_legend = (1.3, 1.5)
             box_compass_colormap = [0.03, -0.02, 0.06] #offset left, top, width/height
             nrows = 4
             dy_lmst = -0.25
@@ -1600,16 +1599,21 @@ class Event:
             binned_data_noise = np.zeros_like(binned_data_signal_P)
             
             #For histogram curve
-            histogram_data_signal_P = np.zeros_like(binned_data_signal_P)
-            histogram_data_signal_S = np.zeros_like(binned_data_signal_P)
+            kde_list = [[[] for j in range(3)] for i in range(nrows)]
+            kde_dataframe = [[] for i in range(nrows)]
+            kde_noiseframe = [[] for i in range(nrows)]
+            
         else:
             binned_data_signal_P = np.zeros((nrows, nf // dsfacf, nbins))
             binned_data_signal_S = np.zeros_like(binned_data_signal_P)
             binned_data_noise = np.zeros_like(binned_data_signal_P)
             
+            
             #For histogram curve
-            histogram_data_signal_P = np.zeros_like(binned_data_signal_P)
-            histogram_data_signal_S = np.zeros_like(binned_data_signal_P)
+            kde_list = [[[] for j in range(3)] for i in range(nrows)]
+            kde_dataframe = [[] for i in range(nrows)]
+            kde_noiseframe = [[] for i in range(nrows)]
+
     
         for tr_Z, tr_N, tr_E in zip(st_Z, st_N, st_E):
             if tr_Z.stats.npts < winlen * 4:
@@ -1637,7 +1641,12 @@ class Event:
             bol_noise_mask= np.array((t > tstart_noise, t< tend_noise)).all(axis=0)
             
             #get indexes where f lies in the defined f-band for density subplot
-            idx_density = np.where((f > f_band_density[0]) & (f < f_band_density[1]))
+            # idx_density = np.where((f > f_band_density[0]) & (f < f_band_density[1]))
+            
+            bol_density_f_mask = np.array((f > f_band_density[0], f < f_band_density[1])).all(axis=0)
+            twodmask_P = bol_density_f_mask[:, None] & bol_signal_P_mask[None, :]
+            twodmask_S = bol_density_f_mask[:, None] & bol_signal_S_mask[None, :]
+            twodmask_noise = bol_density_f_mask[:, None] & bol_noise_mask[None, :]
     
     
             #Scalogram and alpha/masking of signals
@@ -1718,6 +1727,10 @@ class Event:
                                         pad=0.09) #pad=0.07
                     plt.colorbar(cm, cax=cax, ticks=xticks, **kw)
     
+                
+                kde_list[irow][0] = data[twodmask_P]
+                kde_list[irow][1] = data[twodmask_S]
+                kde_list[irow][2] = data[twodmask_noise]
                 for i in range(len(f)):
                     binned_data_signal_P[irow, i, :] += np.histogram(data[i,bol_signal_P_mask], bins=nbins,
                                                             range=(rmin, rmax),
@@ -1729,22 +1742,16 @@ class Event:
                                                             range=(rmin, rmax),
                                                             weights=alpha[i,bol_noise_mask], density=True)[0]
                     
-                    # histogram_data_signal_P[irow, i, :] += np.histogram(data[i,bol_signal_P_mask], bins=nbins,
-                    #                                         range=(rmin, rmax),
-                    #                                         weights=alpha[i,bol_signal_P_mask])[0]
-                    # histogram_data_signal_S[irow, i, :] += np.histogram(data[i,bol_signal_S_mask], bins=nbins,
-                    #                                         range=(rmin, rmax),
-                    #                                         weights=alpha[i,bol_signal_S_mask])[0]
-    
-        # date_fmt = mdates.DateFormatter('%Y-%m-%d \n %H:%M') #set time format: YYYY-MM-DD \n HH:MM in UTC
-        # locator_dict = mdates.AutoDateLocator()
-        loc = mdates.AutoDateLocator(tz=None, minticks=4, maxticks=6)
-        formatter = mdates.ConciseDateFormatter(loc)
+            
+        loc_major = mdates.AutoDateLocator(tz=None, minticks=4, maxticks=15)
+        loc_minor = mdates.AutoDateLocator(tz=None, minticks=4, maxticks=20)
+        formatter = mdates.ConciseDateFormatter(loc_major)
         
         for ax in axes0:
             ax[0].set_xlim(utct(tstart).datetime, utct(tend).datetime)
             ax[0].xaxis.set_major_formatter(formatter)
-            ax[0].xaxis.set_major_locator(loc)
+            ax[0].xaxis.set_major_locator(loc_major)
+            ax[0].xaxis.set_minor_locator(loc_minor)
             
             for a in ax[:]:
                 a.set_ylim(fmin, fmax)
@@ -1794,13 +1801,18 @@ class Event:
             ax.set_xticklabels('')
             
             
-        axes0[0, signal_P_row].set_title(f'Signal P \n {t_pick_P[1]-t_pick_P[0]}s')
-        axes0[0, signal_S_row].set_title(f'Signal S \n {t_pick_S[1]-t_pick_S[0]}s')
-        axes0[0, noise_row].set_title(f'Noise \n {tend_noise-tstart_noise:.0f}s')
+        for i in range(nrows):
+            kde_dataframe[i] = {'P': kde_list[i][0],
+                                'S': kde_list[i][1]}
+            kde_noiseframe[i] = {'Noise': kde_list[i][2]}
+            
+        axes0[0, signal_P_row].set_title(f'{name_timewindows[0]} \n {t_pick_P[1]-t_pick_P[0]}s')
+        axes0[0, signal_S_row].set_title(f'{name_timewindows[1]} \n {t_pick_S[1]-t_pick_S[0]}s')
+        axes0[0, noise_row].set_title(f'{name_timewindows[2]} \n {tend_noise-tstart_noise:.0f}s')
         axes1[0].set_title(f'Density \n {f_band_density[0]}-{f_band_density[1]} Hz')
-        axes0[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, 'Signal P', c=color_windows[0], fontsize=12)
-        axes0[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, 'Signal S', c=color_windows[1], fontsize=12)
-        axes0[0, 0].text(utct(tstart_noise).datetime, fmax+1, 'Noise', c=color_windows[2], fontsize=12)
+        axes0[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, f'{name_timewindows[0]}', c=color_windows[0], fontsize=12)
+        axes0[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, f'{name_timewindows[1]}', c=color_windows[1], fontsize=12)
+        axes0[0, 0].text(utct(tstart_noise).datetime, fmax+1, f'{name_timewindows[2]}', c=color_windows[2], fontsize=12)
         axes0[0, 0].text(utct(self.picks[phase_P]).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
         axes0[0, 0].text(utct(self.picks[phase_S]).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
         
@@ -1875,25 +1887,15 @@ class Event:
                
                 
            #density curves over some frequency band
-            hx_P = np.nansum(binned_data_signal_P[irow,idx_density[0],:], axis=0)
-            hx_S = np.nansum(binned_data_signal_S[irow,idx_density[0],:], axis=0)
-            hx_noise = np.nansum(binned_data_noise[irow,idx_density[0],:], axis=0)
             ax = axes1[irow]
-            # sns.kdeplot(x=hx_P, ax=ax, color=color_windows[0])
-            # sns.kdeplot(x=hx_S, ax=ax, color=color_windows[1])
-            ax.fill_between(np.linspace(rmin, rmax, nbins), hx_noise, 0,
-                 facecolor="grey", # The fill color
-                 color='grey',       # The outline color
-                 alpha=0.2,         # Transparency of the fill
-                 label = 'Noise')          
-            ax.plot(np.linspace(rmin, rmax, nbins),hx_P, color=color_windows[0], label = 'P')
-            ax.plot(np.linspace(rmin, rmax, nbins),hx_S, color=color_windows[1], label = 'S')
-            # ax.plot(np.linspace(rmin, rmax, nbins),hx_noise, color=color_windows[-1])
+
+            sns.kdeplot(data=kde_dataframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[0], color_windows[1]], legend=False)  
+            sns.kdeplot(data=kde_noiseframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[2]], fill=True, legend=False)
+
             
             ax.set_xticks(xticks)
-            ax.set_ylim(0,max(max(hx_P),max(hx_S))+0.05*max(max(hx_P),max(hx_S)))
             ax.set_xlim(rmin,rmax)
-            
+            ax.set_ylabel('')
             for spine in ax.spines.values():
                 spine.set_edgecolor(color_windows[3])
                 spine.set_linewidth(2)
@@ -1905,9 +1907,7 @@ class Event:
                 ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
             ax = axes1[1]
             ax.axvline(x=self.baz,ls='dashed',c='darkgrey')
-        # for ax in axes0[:, 1:].flatten():
-        #     ax.axhline(y=2.0,c='black', lw=linewidth_twofour)
-        #     ax.axhline(y=2.8,c='black', lw=linewidth_twofour)
+
         for ax in axes0[1:, 1:].flatten():
             ax.grid(b=True, which='both', axis='x', linewidth=0.2, color='grey')
         #Turn off y-axis ticks for left and middle histograms
@@ -1921,9 +1921,11 @@ class Event:
         plt.colorbar(cm, cax=cbar_axes, label='weighted relative frequency')
         
         #Legend for density column
-        chartBox = axes1[0].get_position()
-        axes1[0].set_position([chartBox.x0, chartBox.y0, chartBox.width, chartBox.height])
-        axes1[0].legend(loc='upper right', bbox_to_anchor=box_legend, ncol=1)
+        colors = color_windows[:-1]
+        lines = [Line2D([0], [0], color=c, linewidth=3, linestyle='-') for c in colors]
+        labels = [f'{name_timewindows[-2]}', f'{name_timewindows[-1]}', f'{name_timewindows[2]}']
+        axes1[0].legend(lines, labels, loc='upper right', bbox_to_anchor=box_legend)
+        
         
         #add compass rose-type plot to see in which direction azimuth colormap lies with respect to NESW
         rose_axes = fig.add_axes([gridspec_kw['left']-box_compass_colormap[0],
@@ -1965,8 +1967,7 @@ class Event:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
                 path = 'Plots/Test'
-            # fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels.png', dpi=200)
-            fig.savefig(f'polarisation_{savename}.png',
-                        dpi=200)
+            fig.savefig(f'{path}/{savename}.png', dpi=200) if plot_6C or plot_spec_azi_only else fig.savefig(f'{path}/{savename}_4panels_test.png', dpi=200)
+            # fig.savefig(f'polarisation_{savename}.png', dpi=200)
         
         plt.close()
