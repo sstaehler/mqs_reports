@@ -58,7 +58,7 @@ def calc_magnitude(amplitude_dB: float,
         else:
             distance_sigma_log = (np.log10(distance_degree + distance_sigma_degree) -
                                   np.log10(distance_degree - distance_sigma_degree))
-        sigma = mag_variables['fac'] * \
+        sigma = mag_variables['fac'] * 2. / 3. *\
                 np.sqrt(
                     amplitude_sigma_log ** 2. +
                     np.log10(distance_degree) ** 2. * mag_variables['ai_sigma'] ** 2. +
@@ -337,6 +337,7 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                         f[bol_1Hz_mask],
                         p_sig[bol_1Hz_mask],
                         A0_max, tstar_min)
+                    A0_err = 5.
                 except RuntimeError:
                     pass
 
