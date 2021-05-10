@@ -740,12 +740,6 @@ class Event:
                      'm2.4': None,
                      'MFB': None
                      }
-        funcs = {'mb_P': mag.mb_P,
-                 'mb_S': mag.mb_S,
-                 'm2.4': mag.M2_4,
-                 'MFB': mag.MFB,
-                 'MFB_HF': mag.MFB_HF
-                 }
         if self.distance is None and distance is None:
             return None, None
         elif self.distance is not None and distance is None:

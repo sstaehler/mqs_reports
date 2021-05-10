@@ -19,7 +19,7 @@ from matplotlib.lines import Line2D
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
     EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
-from mqs_reports.magnitudes import M2_4, lorentz_att
+from mqs_reports.magnitudes import lorentz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.snr import calc_stalta
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec, solify
@@ -847,69 +847,69 @@ class Catalog:
             return fig
 
 
-    def plot_magnitude_distance(
-            self, mag_type='m2.4',
-            version='Giardini2020',
-            colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
-                    'VERY_HIGH_FREQUENCY': 'C0'},
-            markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
-                     'VERY_HIGH_FREQUENCY': '^'},
-            xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP / CRUST_VS:3.1f}]',
-            markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
-            markerfill={'A': True, 'B': True, 'C': False, 'D': False},
-            fig=None, show=True):
+    # def plot_magnitude_distance(
+    #         self, mag_type='m2.4',
+    #         version='Giardini2020',
+    #         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+    #                 'VERY_HIGH_FREQUENCY': 'C0'},
+    #         markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
+    #                  'VERY_HIGH_FREQUENCY': '^'},
+    #         xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP / CRUST_VS:3.1f}]',
+    #         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+    #         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+    #         fig=None, show=True):
 
-        if fig is None:
-            fig = plt.figure()
+    #     if fig is None:
+    #         fig = plt.figure()
 
-        legend_elements = []
+    #     legend_elements = []
 
-        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
-            for quality in 'ABCD':
-                cat = self.select(quality=quality, event_type=event_type)
+    #     for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+    #         for quality in 'ABCD':
+    #             cat = self.select(quality=quality, event_type=event_type)
 
-                if len(cat) == 0:
-                    continue
+    #             if len(cat) == 0:
+    #                 continue
 
-                # collect properties for plotting
-                M, Msigma, dist = np.array([
-                    (*event.magnitude(mag_type=mag_type, distance=event.distance, version=version),
-                     event.distance) for event in cat]).T.astype(float)
+    #             # collect properties for plotting
+    #             M, Msigma, dist = np.array([
+    #                 (*event.magnitude(mag_type=mag_type, distance=event.distance, version=version),
+    #                  event.distance) for event in cat]).T.astype(float)
 
-                S = np.array([markersize[event.quality] for event in cat])
-                names = np.array([f'{event.name} {event.duration_s:.0f}' for event in cat])
+    #             S = np.array([markersize[event.quality] for event in cat])
+    #             names = np.array([f'{event.name} {event.duration_s:.0f}' for event in cat])
 
-                mask = np.logical_not(np.isnan(M))
-                M = M[mask]
-                dist = dist[mask]
-                S = S[mask]
-                names = names[mask]
+    #             mask = np.logical_not(np.isnan(M))
+    #             M = M[mask]
+    #             dist = dist[mask]
+    #             S = S[mask]
+    #             names = names[mask]
 
-                if markerfill[quality]:
-                    colorargs = {'c': colors[event_type]}
-                else:
-                    colorargs = {'edgecolors': colors[event_type],
-                                 'facecolor': 'none'}
+    #             if markerfill[quality]:
+    #                 colorargs = {'c': colors[event_type]}
+    #             else:
+    #                 colorargs = {'edgecolors': colors[event_type],
+    #                              'facecolor': 'none'}
 
-                scatter_annot(dist, M, s=S, fig=fig, names=names,
-                              marker=markers[event_type],
-                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
-                              **colorargs)
+    #             scatter_annot(dist, M, s=S, fig=fig, names=names,
+    #                           marker=markers[event_type],
+    #                           label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
+    #                           **colorargs)
 
-        dist = np.linspace(3, 50)
-        magc_24 = M2_4(-219, dist)
-        magc_HF = M2_4(-212.5, dist)
-        plt.plot(dist, magc_24, label='M2.4(-219.0 dB)', color='C3')
-        plt.plot(dist, magc_HF, label='M2.4(-212.5 dB)', color='C3', ls='--')
+    #     dist = np.linspace(3, 50)
+    #     magc_24 = M2_4(-219, dist)
+    #     magc_HF = M2_4(-212.5, dist)
+    #     plt.plot(dist, magc_24, label='M2.4(-219.0 dB)', color='C3')
+    #     plt.plot(dist, magc_HF, label='M2.4(-212.5 dB)', color='C3', ls='--')
 
-        plt.xlabel(xlabel)
-        plt.ylabel('M2.4')
-        plt.legend()
+    #     plt.xlabel(xlabel)
+    #     plt.ylabel('M2.4')
+    #     plt.legend()
 
-        if show:
-            plt.show()
-        else:
-            return fig
+    #     if show:
+    #         plt.show()
+    #     else:
+    #         return fig
 
     def plot_distance_hist(self, show=True):
 
