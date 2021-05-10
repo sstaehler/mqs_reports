@@ -92,6 +92,14 @@ def write_html(catalog, fnam_out, magnitude_version):
                       'VBB<br>rate',
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
+    output_error = create_table_head(
+        table_head='Events with errors',
+        column_names=(' ',
+                      'name',
+                      'type',
+                      'LQ',
+                      'missing picks',
+                      'picks in wrong order'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
                '%4d&plusmn;%d',
@@ -115,22 +123,80 @@ def write_html(catalog, fnam_out, magnitude_version):
                       'SF': 6}
     ievent = len(catalog)
     print('Filling HTML table with event entries')
+    error_events = False
     for event in tqdm(catalog):
-        row = create_event_row(dist_string,
-                               time_string,
-                               event,
-                               event_type_idx,
-                               formats,
-                               ievent,
-                               magnitude_version=magnitude_version)
+        picks_check = check_picks(ievent, event)
+        if picks_check is not None:
+            row = '<tr> ' + picks_check + '</tr>\n'
+            output_error += row
+            error_events = True
 
-        output += row
+        else:
+            try:
+                row = create_event_row(dist_string,
+                                       time_string,
+                                       event,
+                                       event_type_idx,
+                                       formats,
+                                       ievent,
+                                       magnitude_version=magnitude_version)
+            except KeyError as e:
+                print('Problem with event %s (%s-%s):' %
+                      (event.name, event.mars_event_type_short, event.quality))
+
+                print(e)
+                print(event.picks)
+                print(event.amplitudes)
+                raise e
+            else:
+                output += row
         ievent -= 1
     footer = create_footer()
     output += footer
+    if error_events:
+        output_error += 4 * ' ' + '</tbody>\n </table>'
+        output += output_error
     with open(fnam_out, 'w') as f:
         f.write(output)
 
+
+def check_picks(ievent, event):
+    missing_picks = []
+    wrong_pairs = ''
+    mandatory_minimum = ['start', 'end', 'noise_start', 'noise_end']
+
+    for pick in mandatory_minimum:
+        if pick not in event.picks or event.picks[pick] == '':
+            missing_picks.append(pick)
+
+    mandatory_ABC = ['P_spectral_start', 'P_spectral_end']
+    if event.quality in ['A', 'B', 'C']:
+        for pick in mandatory_ABC:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
+    pairs = [['P_spectral_start', 'P_spectral_end'],
+             ['noise_start', 'noise_end'],
+             ['start', 'end']]
+    for pair in pairs:
+        if not (event.picks[pair[0]] == '' or event.picks[pair[1]] == ''):
+            if utct(event.picks[pair[0]]) > utct(event.picks[pair[0]]):
+                print('Wrong order of picks' + pair)
+                wrong_pairs += pair[0] + ', '
+
+    if len(missing_picks) > 0:
+        output = '<td>%d</td>\n <td>%s</td>\n' % (ievent, event.name)
+        output += '<td>%s</td>\n <td>%s</td>\n' % (event.mars_event_type_short, event.quality)
+        output += '<td> '
+        for pick in missing_picks:
+            output += pick + ', '
+        output += '</td>\n <td>'
+        if len(wrong_pairs) > 0:
+            output += + wrong_pairs
+        output += '</td>\n'
+        return output
+    else:
+        False
 
 def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                      ievent,
@@ -344,11 +410,11 @@ def create_html_header():
     return output
 
 
-def create_table_head(column_names):
+def create_table_head(column_names, table_head='Event table'):
     output = ''
     output += '<article>\n'
     output += '  <header>\n'
-    output += '    <h1>Event table</h1>\n'
+    output += '    <h1>' + table_head + '</h1>\n'
     output += '  </header>\n'
     table_head = '  <table class="sortable" id="events">\n' + \
                  '  <thead>\n' + \
