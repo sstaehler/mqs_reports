@@ -1115,7 +1115,7 @@ class Event:
                     if pick in self.picks:
                         x = utct(self.picks[pick]) - tref
                         a.axvline(x, c='darkred', ls='dashed')
-                        a.annotate(xy=(x, -0.5), s=' ' + pick,
+                        a.annotate(xy=(x, -0.5), text=' ' + pick,
                                    c='darkred',
                                    horizontalalignment='left')
                 except TypeError:
