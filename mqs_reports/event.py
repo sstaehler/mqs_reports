@@ -1556,6 +1556,8 @@ class Event:
         gs01 = gs0[-1].subgridspec(nrows, 1, wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[1])
         axes1 = gs01.subplots()
         
+    
+        
 
         
         if impact:
@@ -1598,21 +1600,32 @@ class Event:
             binned_data_signal_S = np.zeros_like(binned_data_signal_P)
             binned_data_noise = np.zeros_like(binned_data_signal_P)
             
-            #For histogram curve
-            kde_list = [[[] for j in range(3)] for i in range(nrows)]
-            kde_dataframe = [[] for i in range(nrows)]
-            kde_noiseframe = [[] for i in range(nrows)]
+            #for second plot with polar plots
+            fBAZ_P = np.zeros((nfft // (2 * dsfacf) + 1, nbins))
+            fBAZ_S = np.zeros_like(fBAZ_P)
+            fBAZ_noise = np.zeros_like(fBAZ_P)
+            
+            # #For histogram curve
+            # kde_list = [[[] for j in range(3)] for i in range(nrows)]
+            # kde_dataframe = [[] for i in range(nrows)]
+            # kde_noiseframe = [[] for i in range(nrows)]
             
         else:
             binned_data_signal_P = np.zeros((nrows, nf // dsfacf, nbins))
             binned_data_signal_S = np.zeros_like(binned_data_signal_P)
             binned_data_noise = np.zeros_like(binned_data_signal_P)
             
+            #for second plot with polar plots
+            fBAZ_P = np.zeros((nf // dsfacf, nbins))
+            fBAZ_S = np.zeros_like(fBAZ_P)
+            fBAZ_noise = np.zeros_like(fBAZ_P)
             
-            #For histogram curve
-            kde_list = [[[] for j in range(3)] for i in range(nrows)]
-            kde_dataframe = [[] for i in range(nrows)]
-            kde_noiseframe = [[] for i in range(nrows)]
+        #For histogram curve
+        kde_list = [[[] for j in range(3)] for i in range(nrows)]
+        kde_dataframe_P = [[] for i in range(nrows)]
+        kde_dataframe_S = [[] for i in range(nrows)]
+        kde_noiseframe = [[] for i in range(nrows)]
+        kde_weights = [[[] for j in range(3)] for i in range(nrows)]
 
     
         for tr_Z, tr_N, tr_E in zip(st_Z, st_N, st_E):
@@ -1731,6 +1744,9 @@ class Event:
                 kde_list[irow][0] = data[twodmask_P]
                 kde_list[irow][1] = data[twodmask_S]
                 kde_list[irow][2] = data[twodmask_noise]
+                kde_weights[irow][0] = alpha[twodmask_P]
+                kde_weights[irow][1] = alpha[twodmask_S]
+                kde_weights[irow][2] = alpha[twodmask_noise]
                 for i in range(len(f)):
                     binned_data_signal_P[irow, i, :] += np.histogram(data[i,bol_signal_P_mask], bins=nbins,
                                                             range=(rmin, rmax),
@@ -1805,9 +1821,13 @@ class Event:
             
             
         for i in range(nrows):
-            kde_dataframe[i] = {'P': kde_list[i][0],
-                                'S': kde_list[i][1]}
-            kde_noiseframe[i] = {'Noise': kde_list[i][2]}
+            kde_dataframe_P[i] = {'P': kde_list[i][0],
+                                'weights': kde_weights[i][0]}
+            kde_dataframe_S[i] = {'S': kde_list[i][1],
+                                'weights': kde_weights[i][1]}
+            kde_noiseframe[i] = {'Noise': kde_list[i][2],
+                                 'weights': kde_weights[i][2]}
+            
             
         axes0[0, signal_P_row].set_title(f'{name_timewindows[0]} \n {t_pick_P[1]-t_pick_P[0]}s')
         axes0[0, signal_S_row].set_title(f'{name_timewindows[1]} \n {t_pick_S[1]-t_pick_S[0]}s')
@@ -1815,7 +1835,9 @@ class Event:
         axes1[0].set_title(f'Density \n {f_band_density[0]}-{f_band_density[1]} Hz')
         axes0[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, f'{name_timewindows[0]}', c=color_windows[0], fontsize=12)
         axes0[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, f'{name_timewindows[1]}', c=color_windows[1], fontsize=12)
-        axes0[0, 0].text(utct(tstart_noise).datetime, fmax+1, f'{name_timewindows[2]}', c=color_windows[2], fontsize=12)
+        if not zoom or (zoom and (utct(tstart_noise).datetime >= utct(utct(self.picks[phase_P]) - 120).datetime or \
+                                  utct(tstart_noise).datetime < utct(utct(self.picks[phase_S]) + 120).datetime)):
+            axes0[0, 0].text(utct(tstart_noise).datetime, fmax+1, f'{name_timewindows[2]}', c=color_windows[2], fontsize=12)
         axes0[0, 0].text(utct(self.picks[phase_P]).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
         axes0[0, 0].text(utct(self.picks[phase_S]).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
         
@@ -1892,13 +1914,16 @@ class Event:
            #density curves over some frequency band
             ax = axes1[irow]
 
-            sns.kdeplot(data=kde_dataframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[0], color_windows[1]], legend=False, bw_adjust=.6)  
-            sns.kdeplot(data=kde_noiseframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[2]], fill=True, legend=False, bw_adjust=.6)
+            # sns.kdeplot(data=kde_dataframe[irow], ax=ax, common_norm=False, clip = (rmin, rmax), palette=[color_windows[0], color_windows[1]], legend=False, weights = kde_data_weights[irow], bw_adjust=.6)  
+            sns.kdeplot(data=kde_dataframe_P[irow], x='P', common_norm=False, ax=ax, clip = (rmin, rmax), color=color_windows[0], legend=False, weights = 'weights', bw_adjust=.6)  
+            sns.kdeplot(data=kde_dataframe_S[irow], x='S', common_norm=False, ax=ax, clip = (rmin, rmax), color=color_windows[1], legend=False, weights = 'weights', bw_adjust=.6)  
+            sns.kdeplot(data=kde_noiseframe[irow], x='Noise', common_norm=False, ax=ax, clip = (rmin, rmax), color=color_windows[2], fill=True, legend=False, weights = 'weights', bw_adjust=.6)
 
             
             ax.set_xticks(xticks)
             ax.set_xlim(rmin,rmax)
             ax.set_ylabel('')
+            ax.set_xlabel('')
             for spine in ax.spines.values():
                 spine.set_edgecolor(color_windows[3])
                 spine.set_linewidth(2)
@@ -1960,6 +1985,73 @@ class Event:
             rose_axes.text(np.radians(self.baz), 1.3, 'BAZ', c='crimson', fontsize=8)
     
         fig.suptitle(title, fontsize=15)
+        
+        
+        ## ----------------new figure for polar plots----------------
+        # #new figure with polar projections
+        # fig2, axes2 = plt.subplots(ncols=3, nrows=2, subplot_kw={'projection': 'polar'}, figsize=(12,8))
+        # fig2.subplots_adjust(hspace=0.25, wspace=0.3, top=0.9, bottom=0.1)
+        
+        # [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] = iterables[1] #azimuth
+        # inc_data = np.rad2deg(abs(inc1)) #data inclination
+        
+        # for i in range(len(f)):
+        #     fBAZ_P[i,:] += np.histogram(data[i,bol_signal_P_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_P_mask], density=True)[0]
+        #     fBAZ_S[i,:] += np.histogram(data[i,bol_signal_S_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_S_mask], density=True)[0]
+        #     fBAZ_noise[i,:] += np.histogram(data[i,bol_noise_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_noise_mask], density=True)[0]
+            
+        # BAZ_Inc_P = np.histogram2d(data[twodmask_P], inc_data[twodmask_P], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_P], density=True)[0]
+        # BAZ_Inc_S = np.histogram2d(data[twodmask_S], inc_data[twodmask_S], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_S], density=True)[0]
+        # BAZ_Inc_noise = np.histogram2d(data[twodmask_noise], inc_data[twodmask_noise], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_noise], density=True)[0]
+
+        # axes2[0,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+        #                             f[bol_density_f_mask], fBAZ_P[bol_density_f_mask,:]*(rmax-rmin),
+        #                             cmap='hot_r', #pqlx,
+        #                             vmin=0., vmax=10,
+        #                             shading='auto')
+        # axes2[0,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+        #                             f[bol_density_f_mask], fBAZ_S[bol_density_f_mask,:]*(rmax-rmin),
+        #                             cmap='hot_r', #pqlx,
+        #                             vmin=0., vmax=10,
+        #                             shading='auto')
+        # axes2[0,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+        #                             f[bol_density_f_mask], fBAZ_noise[bol_density_f_mask,:]*(rmax-rmin),
+        #                             cmap='hot_r', #pqlx,
+        #                             vmin=0., vmax=10,
+        #                             shading='auto')
+        
+        # axes2[1,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+        #                             np.linspace(0, 90, nbins), BAZ_Inc_P*(rmax-rmin),
+        #                             cmap='hot_r',
+        #                             shading='auto')
+        # axes2[1,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+        #                             np.linspace(0, 90, nbins), BAZ_Inc_S*(rmax-rmin),
+        #                             cmap='hot_r',
+        #                             shading='auto')
+        # axes2[1,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+        #                             np.linspace(0, 90, nbins), BAZ_Inc_noise*(rmax-rmin),
+        #                             cmap='hot_r',
+        #                             shading='auto')
+        
+
+        # axes2[0,0].text(x=-0.4, y=0.5, transform=axes2[0,0].transAxes, s='BAZ vs f \n', #x=-0.18 #x=-019 gze
+        #             ma='center', va='center', bbox=props, rotation=90, size=15) 
+        # axes2[1,0].text(x=-0.4, y=0.5, transform=axes2[1,0].transAxes, s='BAZ vs \n inclination', #x=-0.18 #x=-019 gze
+        #             ma='center', va='center', bbox=props, rotation=90, size=15) 
+            
+        # for ax in axes2.flatten():
+        #     ax.set_theta_zero_location("N")
+        #     ax.set_theta_direction('clockwise')
+        #     if self.baz:
+        #         ax.axvline(x=np.radians(self.baz), color='blue')
+        #         ax.text(np.radians(self.baz), 1.1, 'BAZ', c='blue', fontsize=13)
+                
+        # for i,ax in enumerate(axes2[0,:]):
+        #     ax.set_title(f'{name_timewindows[i+2]} \n {f_band_density[0]}-{f_band_density[1]} Hz', fontsize=15)
+                
+
+
+    ## ----------------save figures----------------
     
         if fname is None:
             plt.show()
@@ -1975,8 +2067,9 @@ class Event:
             if impact:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
-                path = 'Plots'
+                path = 'Plots/Test'
             # fig.savefig(f'{path}/{savename}.png', dpi=200)
             fig.savefig(f'polarisation_{savename}.png', dpi=200)
+            # fig2.savefig(f'{path}/fig2.png', dpi=200)
         
         plt.close()
