@@ -185,7 +185,10 @@ class Event:
                             self.distance_sigma = 20.
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
-                        self.distance_sigma = self.distance * 0.2
+                        if 'sigma_dist' in row:
+                            self.distance_sigma = np.float(row['sigma_dist'])
+                        else:
+                            self.distance_sigma = self.distance * 0.25
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
@@ -203,7 +206,7 @@ class Event:
         """
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
-            deltat_sigma = np.sqrt(np.float(self.picks_sigma['Sg'])**2. + \
+            deltat_sigma = np.sqrt(np.float(self.picks_sigma['Sg'])**2. +
                                    np.float(self.picks_sigma['Pg'])**2.)
             distance_km = deltat / (1. / vs - 1. / vp)
             distance_sigma_km = deltat_sigma / (1. / vs - 1. / vp)
@@ -767,7 +770,9 @@ class Event:
                 mag_type = 'MFB_HF'
             amplitude_dB = self.amplitudes['A0'] / 2. \
                 if 'A0' in self.amplitudes and self.amplitudes['A0'] is not None else None
-            amplitude_dB_sigma = self.amplitudes['A0_err'] / 2. \
+            # For sigma(A0) take twice the value from the spectral fit to account
+            # for generally poor fitting
+            amplitude_dB_sigma = self.amplitudes['A0_err'] / 2. * 2. \
                 if 'A0_err' in self.amplitudes and self.amplitudes['A0_err'] is not None else None
         elif mag_type == 'm2.4':
             amplitude_dB = self.amplitudes['A_24'] / 2. \

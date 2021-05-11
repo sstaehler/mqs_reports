@@ -26,13 +26,15 @@ def calc_magnitude(amplitude_dB: float,
                    mag_type: str, version: str,
                    distance_sigma_degree: float,
                    amplitude_sigma_dB: float,
-                   verbose = False):
+                   verbose=False):
     """
 
-    :param amplitude_dB: Relevant amplitude in dB. Please note that this should be an amplitude, not a power.
+    :param amplitude_dB: Relevant amplitude in dB. Please note that this should
+                         be an amplitude, not a power.
                          If it is a power, divide it by 2.
     :param distance_degree: Distance of event
-    :param mag_type: allowed values: 'MwspecHF', 'MwspecLF', 'mb_P', 'mb_S', 'm24pick', 'm24spec'
+    :param mag_type: allowed values: 'MwspecHF', 'MwspecLF', 'mb_P',
+                                     'mb_S', 'm24pick', 'm24spec'
     :param version: 'Giardini2020' or 'Boese2021'
     :param distance_sigma_degree: uncertainty of distance
     :param amplitude_sigma_dB: uncertainty of amplitude in dB
@@ -56,12 +58,15 @@ def calc_magnitude(amplitude_dB: float,
         if distance_sigma_degree is None:
             distance_sigma_log = np.log10(1.2)
         else:
-            distance_sigma_log = (np.log10(distance_degree + distance_sigma_degree) -
-                                  np.log10(distance_degree - distance_sigma_degree))
-        sigma = mag_variables['fac'] * 2. / 3. *\
-                np.sqrt(
+            distance_sigma_log = (np.log10(distance_degree +
+                                           0.5 * distance_sigma_degree) -
+                                  np.log10(distance_degree -
+                                           0.5 * distance_sigma_degree))
+        sigma = mag_variables['fac'] * 2. / 3. * \
+            np.sqrt(
                     amplitude_sigma_log ** 2. +
-                    np.log10(distance_degree) ** 2. * mag_variables['ai_sigma'] ** 2. +
+                    (np.log10(distance_degree) *
+                        mag_variables['ai_sigma']) ** 2. +
                     mag_variables['ai'] ** 2. * distance_sigma_log ** 2. +
                     mag_variables['ci_sigma'] ** 2.
                 )
