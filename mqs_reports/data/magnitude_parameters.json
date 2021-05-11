@@ -104,7 +104,7 @@
       "ai_sigma": null,
       "ci": 10.76,
       "ci_sigma": null,
-      "sigma": 0.5
+      "sigma": 0.2
     },
     "m2.4": {
       "fac": 1.0,
@@ -112,7 +112,7 @@
       "ai_sigma": null,
       "ci": 11.04,
       "ci_sigma": null,
-      "sigma": 0.5
+      "sigma": 0.2
     }
   }
 }
