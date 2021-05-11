@@ -483,7 +483,6 @@ def define_arguments():
     return parser.parse_args()
 
 
-
 if __name__ == '__main__':
     from mqs_reports.catalog import Catalog
     from mqs_reports.annotations import Annotations
@@ -514,14 +513,9 @@ if __name__ == '__main__':
 
     print('Plot filter banks')
     catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
-    
-    print('Plot polarisation analysis')
-    catalog.plot_polarisation_analysis()
 
     print('Make magnitude reports')
     catalog.make_report(dir_out='reports', annotations=ann)
 
     print('Create table')
-    
     catalog.write_table(fnam_out=fnam_out, magnitude_version=args.mag_version)
-
