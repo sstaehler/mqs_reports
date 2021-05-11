@@ -9,7 +9,7 @@
 """
 
 import numpy as np
-
+from mqs_reports import constants
 from mqs_reports.utils import linregression
 
 
@@ -21,63 +21,66 @@ def get_M0(Mw):
     return 10 ** (1.5 * Mw + 9.1)
 
 
-def mb_P(amplitude_dB, distance_degree):
-    dist_term = 0.8
-    amp_term = 0.6403
-    offset = 8.1130
-    amplitude = 10 ** (amplitude_dB / 20.)
-    mag = amp_term * np.log10(amplitude) + \
-          dist_term * np.log10(distance_degree) + offset
-    return mag
+def calc_magnitude(amplitude_dB: float,
+                   distance_degree: float,
+                   mag_type: str, version: str,
+                   distance_sigma_degree: float,
+                   amplitude_sigma_dB: float,
+                   verbose=False):
+    """
 
-
-def mb_S(amplitude_dB, distance_degree):
-    dist_term = 0.9333
-    amp_term = 0.6055
-    offset = 7.3797
-    amplitude = 10 ** (amplitude_dB / 20.)
-    mag = amp_term * np.log10(amplitude) + \
-          dist_term * np.log10(distance_degree) + offset
-
-    return mag
-
-
-def M2_4(amplitude_dB, distance_degree):
-    if amplitude_dB is None:
-        return None
+    :param amplitude_dB: Relevant amplitude in dB. Please note that this should
+                         be an amplitude, not a power.
+                         If it is a power, divide it by 2.
+    :param distance_degree: Distance of event
+    :param mag_type: allowed values: 'MwspecHF', 'MwspecLF', 'mb_P',
+                                     'mb_S', 'm24pick', 'm24spec'
+    :param version: 'Giardini2020' or 'Boese2021'
+    :param distance_sigma_degree: uncertainty of distance
+    :param amplitude_sigma_dB: uncertainty of amplitude in dB
+    :return: mag, sigma
+    """
+    mag_variables = constants.magnitude[version][mag_type]
+    amplitude_log = amplitude_dB / 10.
+    if amplitude_sigma_dB is None:
+        amplitude_sigma_log = 1.
     else:
-        dist_term = 0.6
-        amp_term = 0.512
-        offset = 6.3648
-        amplitude = 10 ** (amplitude_dB / 20.)
-        mag = amp_term * np.log10(amplitude) + \
-              dist_term * np.log10(distance_degree) + offset
-        return mag
+        amplitude_sigma_log = amplitude_sigma_dB / 10.
 
-def MFB(amplitude_dB, distance_degree):
-    dist_term = 1.1
-    offset = 21.475
-    if amplitude_dB is None:
-        return None
+    mag = mag_variables['fac'] * (
+            amplitude_log +
+            mag_variables['ai'] * np.log10(distance_degree) +
+            mag_variables['ci']
+          )
+    if mag_variables['sigma'] is not None:
+        sigma = mag_variables['sigma']
     else:
-        logM0 = amplitude_dB / 20. + \
-                dist_term * np.log10(distance_degree) + \
-                offset
-        mag = 2. / 3. * (logM0 - 9.1)
-        return mag
+        if distance_sigma_degree is None:
+            distance_sigma_log = np.log10(1.2)
+        else:
+            distance_sigma_log = (np.log10(distance_degree +
+                                           0.5 * distance_sigma_degree) -
+                                  np.log10(distance_degree -
+                                           0.5 * distance_sigma_degree))
+        sigma = mag_variables['fac'] * 2. / 3. * \
+            np.sqrt(
+                    amplitude_sigma_log ** 2. +
+                    (np.log10(distance_degree) *
+                        mag_variables['ai_sigma']) ** 2. +
+                    mag_variables['ai'] ** 2. * distance_sigma_log ** 2. +
+                    mag_variables['ci_sigma'] ** 2.
+                )
+        if verbose:
+            print('Sigma: term1: %6.4f, term2: %6.4f, term3: %6.4f, term4: %6.4f, sum: %6.4f' %
+                  (4. / 9. * amplitude_sigma_log ** 2.,
+                   4. / 9. * np.log10(distance_degree) ** 2. * mag_variables['ai_sigma'] ** 2.,
+                   4. / 9. * mag_variables['ai'] ** 2. * distance_sigma_log ** 2.,
+                   4. / 9. * mag_variables['ci_sigma'] ** 2.,
+                   sigma
+                  )
+            )
 
-
-def MFB_HF(amplitude_dB, distance_degree):
-    dist_term = 0.9
-    offset = 21.475
-    if amplitude_dB is None:
-        return None
-    else:
-        logM0 = amplitude_dB / 20. + \
-                dist_term * np.log10(distance_degree) + \
-                offset
-        mag = 2. / 3. * (logM0 - 9.1)
-        return mag
+    return mag, sigma
 
 
 def lorentz(x, A, x0, xw):
@@ -209,17 +212,15 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     noise_threshold = 2.0
     if event_type == 'LF':
         fmax = 0.9
-        #noise_threshold = 1.2
+        # noise_threshold = 1.2
     elif event_type == 'BB':
         fmax = 2.0
-        #noise_threshold = 1.2
+        # noise_threshold = 1.2
     elif event_type == 'HF':
         fmin = 1.0
     elif event_type == 'SF':
         fmin = 4.0
         fmax = 9.0
-
-
 
     bol_1Hz_mask = np.array(
         (np.array((f > fmin, f < fmax)).all(axis=0),
@@ -227,7 +228,7 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                    f > df_mute)).any(axis=0),
          np.array(p_sig > p_noise * noise_threshold)
          )
-        ).all(axis=0)
+    ).all(axis=0)
     _remove_singles(bol_1Hz_mask)
 
     mute_24 = [1.9, 3.4]
@@ -261,6 +262,7 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                         f[bol_1Hz_mask],
                         p_sig[bol_1Hz_mask],
                         A0_max, tstar_min)
+                    A0_err = 5.
                 except RuntimeError:
                     pass
 

@@ -16,14 +16,13 @@ from typing import Union
 
 import numpy as np
 import obspy
-from obspy import UTCDateTime as utct
-from obspy.taup import TauPyModel
-from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
-
 from mqs_reports.annotations import Annotations
-from mqs_reports.magnitudes import fit_spectra
+from mqs_reports.magnitudes import fit_spectra, calc_magnitude
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
     calc_cwf, solify
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+from obspy.taup import TauPyModel
 
 RADIUS_MARS = 3389.5
 CRUST_VP = 4.
@@ -32,8 +31,8 @@ LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
 EVENT_TYPES_SHORT = {
-        'SUPER_HIGH_FREQUENCY': 'SF',
-        'VERY_HIGH_FREQUENCY':  'VF',
+    'SUPER_HIGH_FREQUENCY': 'SF',
+    'VERY_HIGH_FREQUENCY': 'VF',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
     'HIGH_FREQUENCY': 'HF',
@@ -61,6 +60,7 @@ class Event:
                  latitude: float,
                  longitude: float,
                  sso_distance: float,
+                 sso_distance_pdf: float,
                  sso_origin_time: str,
                  mars_event_type: str,
                  origin_time: str):
@@ -99,11 +99,14 @@ class Event:
                                                 lat2=LANDER_LAT,
                                                 lon2=LANDER_LON,
                                                 a=RADIUS_MARS)
-            self.distance = kilometers2degrees(dist_km,
-                                               radius=RADIUS_MARS)
+            # self.distance = kilometers2degrees(dist_km,
+            #                                    radius=RADIUS_MARS)
+            self.distance = sso_distance
+            self.distance_pdf = sso_distance_pdf
             self.baz = baz
             self.az = az
             self.origin_time = utct(origin_time)
+            self.calc_distance_sigma_from_pdf()
             self.distance_type = 'GUI'
 
         # Case that distance exists, but not BAZ. Then, distance and origin
@@ -111,18 +114,22 @@ class Event:
         elif sso_distance is not None:
             self.origin_time = utct(sso_origin_time)
             self.distance = sso_distance
+            self.distance_pdf = sso_distance_pdf
+            self.calc_distance_sigma_from_pdf()
             self.distance_type = 'GUI'
             self.baz = None
 
         # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
-            distance_tmp, otime_tmp = self.calc_distance()
+            distance_tmp, otime_tmp, distance_sigma_tmp = self.calc_distance()
             if distance_tmp is not None:
                 self.distance = distance_tmp
                 self.origin_time = utct(otime_tmp)
                 self.distance_type = 'PgSg'
+                self.distance_sigma = distance_sigma_tmp
             else:
                 self.distance = None
+                self.distance_sigma = None
                 self.origin_time = utct(origin_time)
 
             self.baz = None
@@ -130,6 +137,7 @@ class Event:
         else:
             self.origin_time = utct(origin_time)
             self.distance = None
+            self.distance_sigma = None
             self.baz = None
 
         self._waveforms_read = False
@@ -173,14 +181,19 @@ class Event:
                 if overwrite or (self.distance is None):
                     if self.name == row['name']:
                         self.distance = float(row['distance'])
+                        if self.distance_sigma is None:
+                            self.distance_sigma = 20.
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
-                        # print('Found aligned distance %f for event %s' %
-                        #       (self.distance, self.name))
+                        if 'sigma_dist' in row:
+                            self.distance_sigma = np.float(row['sigma_dist'])
+                        else:
+                            self.distance_sigma = self.distance * 0.25
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
                       vs: float = CRUST_VS) -> (Union[float, None],
+                                                Union[float, None],
                                                 Union[float, None]):
         """
         Calculate distance of event based on Pg and Sg picks, if available,
@@ -188,16 +201,23 @@ class Event:
         :param vp: P-velocity
         :param vs: S-velocity
         :return: distance in degree or None if no picks available
+                 origin time as UTCDateTime object
+                 sigma of distance in degree (only based on pick uncertainty)
         """
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
+            deltat_sigma = np.sqrt(np.float(self.picks_sigma['Sg'])**2. +
+                                   np.float(self.picks_sigma['Pg'])**2.)
             distance_km = deltat / (1. / vs - 1. / vp)
+            distance_sigma_km = deltat_sigma / (1. / vs - 1. / vp)
             distance_degree = kilometers2degrees(distance_km,
                                                  radius=RADIUS_MARS)
+            distance_sigma_degree = kilometers2degrees(distance_sigma_km,
+                                                       radius=RADIUS_MARS)
             origin_time = utct(self.picks['Sg']) - distance_km / vs
-            return distance_degree, origin_time
+            return distance_degree, origin_time, distance_sigma_degree
         else:
-            return None, None
+            return None, None, None
 
     def calc_distance_taup(self,
                            model: TauPyModel,
@@ -232,6 +252,15 @@ class Event:
             return distance, distance_sigma
         else:
             return None, None
+
+    def calc_distance_sigma_from_pdf(self):
+        from mqs_reports.utils import uncertainty_from_pdf
+
+        sigma_low, sigma_up = uncertainty_from_pdf(
+            variable=self.distance_pdf[0],
+            p=self.distance_pdf[1])
+        self.distance_sigma = (sigma_up - sigma_low) / 2.
+        pass
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
@@ -508,7 +537,6 @@ class Event:
                   (self.picks['P_spectral_end'])),
                  ((self.picks['S_spectral_start']),
                   (self.picks['S_spectral_end'])))
-        print(twins)
         self.spectra = dict()
         self.spectra_SP = dict()
         variables = ('all',
@@ -685,15 +713,21 @@ class Event:
     def magnitude(self,
                   mag_type: str,
                   distance: float = None,
+                  distance_sigma: float = None,
+                  version: str = 'Giardini2020',
+                  verbose = False,
                   instrument: str = 'VBB') -> Union[float, None]:
         """
         Calculate magnitude of an event
         :param mag_type: 'mb_P', 'mb_S' 'm2.4' or 'MFB':
         :param distance: float or None, in which case event.distance is used
+        :param version: 'Giardini2020' or 'Boese2021'
         :param instrument: 'VBB' or 'SP'
         :return:
         """
         import mqs_reports.magnitudes as mag
+        if verbose:
+            print('*** {0} {1}'.format(self.name, mag_type))
         pick_name = {'mb_P': 'Peak_MbP',
                      'mb_S': 'Peak_MbS',
                      'm2.4': None,
@@ -709,46 +743,77 @@ class Event:
                      'm2.4': None,
                      'MFB': None
                      }
-        funcs = {'mb_P': mag.mb_P,
-                 'mb_S': mag.mb_S,
-                 'm2.4': mag.M2_4,
-                 'MFB': mag.MFB,
-                 'MFB_HF': mag.MFB_HF
-                 }
         if self.distance is None and distance is None:
-            return None
+            return None, None
         elif self.distance is not None and distance is None:
             distance = self.distance
+            distance_sigma = self.distance_sigma
         else:
             distance = distance
+            distance_sigma = 10.
+
         if mag_type in ('mb_P', 'mb_S'):
-            amplitude = self.pick_amplitude(pick=pick_name[mag_type],
-                                            comp=component[mag_type],
-                                            fmin=freqs[mag_type][0],
-                                            fmax=freqs[mag_type][1],
-                                            instrument=instrument
-                                            )
-            if amplitude is not None:
-                amplitude = 20 * np.log10(amplitude)
+            amplitude_abs = self.pick_amplitude(pick=pick_name[mag_type],
+                                                comp=component[mag_type],
+                                                fmin=freqs[mag_type][0],
+                                                fmax=freqs[mag_type][1],
+                                                instrument=instrument
+                                                )
+            if amplitude_abs is not None:
+                amplitude_dB = 10 * np.log10(amplitude_abs)
+            else:
+                amplitude_dB = None
+            amplitude_dB_sigma = 5.
 
         elif mag_type == 'MFB':
-
             if self.mars_event_type_short in ['24', 'HF', 'VF']:
                 mag_type = 'MFB_HF'
-            amplitude = self.amplitudes['A0'] \
-                if 'A0' in self.amplitudes else None
+            amplitude_dB = self.amplitudes['A0'] / 2. \
+                if 'A0' in self.amplitudes and self.amplitudes['A0'] is not None else None
+            # For sigma(A0) take twice the value from the spectral fit to account
+            # for generally poor fitting
+            amplitude_dB_sigma = self.amplitudes['A0_err'] / 2. * 2. \
+                if 'A0_err' in self.amplitudes and self.amplitudes['A0_err'] is not None else None
         elif mag_type == 'm2.4':
-            amplitude = self.amplitudes['A_24'] \
-                if 'A_24' in self.amplitudes else None
+            amplitude_dB = self.amplitudes['A_24'] / 2. \
+                if 'A_24' in self.amplitudes and self.amplitudes['A_24'] is not None else None
+            amplitude_dB_sigma = 5.
 
         else:
             raise ValueError('unknown magnitude type %s' % mag_type)
 
-        if amplitude is None:
-            return None
+        # if power_dB is not None:
+        # mag_old, sigma_old = funcs[mag_type](amplitude_dB=power_dB,
+        #                        distance_degree=distance,
+        #                        distance_sigma_degree=distance_sigma,
+        #                        amplitude_sigma_dB=power_dB_sigma)
+
+        # mag_new, sigma_new = calc_magnitude(mag_type=mag_type,
+        #                                     version='Giardini2020',
+        #                                     amplitude_dB=power_dB / 2.,
+        #                                     distance_degree=distance,
+        #                                     distance_sigma_degree=distance_sigma,
+        #                                     amplitude_sigma_dB=power_dB_sigma / 2.)
+
+        # mag_new2, sigma_new2 = calc_magnitude(mag_type=mag_type,
+        #                          version='Boese2021',
+        #                          amplitude_dB=power_dB / 2.,
+        #                          distance_degree=distance,
+        #                          distance_sigma_degree=distance_sigma,
+        #                          amplitude_sigma_dB=power_dB_sigma / 2.)
+
+        # print('%s, Mags: %4.2f+-%4.2f (old), %4.2f+-%4.2f (new), %4.2f+-%4.2f (Boese)' %
+        #       (self.name, mag_old, sigma_old, mag_new, sigma_new, mag_new2, sigma_new2))
+        if amplitude_dB is None:
+            return None, None
         else:
-            return funcs[mag_type](amplitude_dB=amplitude,
-                                   distance_degree=distance)
+            return calc_magnitude(mag_type=mag_type,
+                                  version=version,
+                                  amplitude_dB=amplitude_dB,
+                                  distance_degree=distance,
+                                  distance_sigma_degree=distance_sigma,
+                                  amplitude_sigma_dB=amplitude_dB_sigma,
+                                  verbose=verbose)
 
     def plot_envelope(self, comp='Z',
                       figsize=(4, 3),
@@ -1055,7 +1120,7 @@ class Event:
                     if pick in self.picks:
                         x = utct(self.picks[pick]) - tref
                         a.axvline(x, c='darkred', ls='dashed')
-                        a.annotate(xy=(x, -0.5), s=' ' + pick,
+                        a.annotate(xy=(x, -0.5), text=' ' + pick,
                                    c='darkred',
                                    horizontalalignment='left')
                 except TypeError:

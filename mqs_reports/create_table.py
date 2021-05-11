@@ -12,11 +12,10 @@ from argparse import ArgumentParser
 from os.path import exists as pexists, join as pjoin
 
 import obspy
-from obspy import UTCDateTime as utct
-from tqdm import tqdm
-
 from mqs_reports.snr import calc_SNR, calc_stalta
 from mqs_reports.utils import solify
+from obspy import UTCDateTime as utct
+from tqdm import tqdm
 
 
 def create_row_header(list):
@@ -42,7 +41,7 @@ def create_row(list, fmts=None, extras=None):
                 row += ind_string + '<td>' + fmt % (li) + '</td>\n'
     else:
         for li, fmt, extra in zip(list, fmts, extras):
-            if li is None:
+            if li is None or (type(li) is tuple and not all(li)):
                 row += ind_string + '<td>-</td>\n'
             else:
                 if extra is None:
@@ -60,10 +59,14 @@ def create_row(list, fmts=None, extras=None):
     row += 4 * ' ' + '</tr>\n'
     return row
 
+def add_information():
+    string = '<H2>Distance types: &dagger;: alignment, *: Pg/Sg based; GUI-based otherwise</H2><br>\n\n'
+    return string
 
-def write_html(catalog, fnam_out):
+def write_html(catalog, fnam_out, magnitude_version):
     output = create_html_header()
     output += catalog.get_event_count_table()
+    output += add_information()
     output += create_table_head(
         column_names=(' ',
                       'name',
@@ -79,7 +82,7 @@ def write_html(catalog, fnam_out):
                       'S-amp<br>[m]',
                       '2.4 Hz<br>pick [m]',
                       '2.4 Hz<br>fit [m]',
-                      'A0<br>[m]',
+                      'A0<sup>2</sup><br>[dB]',
                       'MbP',
                       'MbS',
                       'M2.4',
@@ -89,18 +92,29 @@ def write_html(catalog, fnam_out):
                       'VBB<br>rate',
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
+    output_error = create_table_head(
+        table_head='Events with errors',
+        column_names=(' ',
+                      'name',
+                      'type',
+                      'LQ',
+                      'missing picks',
+                      'picks in wrong order'))
     formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-               '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
-               '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%3.1f', '%5.3f',
+               '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
+               '%4d&plusmn;%d',
+               '%3.1f', '%3.1f',
+               '%3.1f', '%3.1f&plusmn;%3.1f',
+               '%3.1f', '%5.3f',
                '%s', '%s', '%s')
     time_string = {'GUI': '%s<sup>[O]</sup>',
                    'aligned': '%s<sup>[A]</sup>',
                    'PgSg': '%s',
                    'unknown': '%s'}
-    dist_string = {'GUI': '%.3g',
-                   'aligned': '<i>%.3g</i>&dagger;',
-                   'PgSg': '<i>%.3g</i>*',
-                   'unknown': '<i>%s</i>'}
+    dist_string = {'GUI': '{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}',
+                   'aligned': '<i>{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}</i>&dagger;',
+                   'PgSg': '<i>{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}</i>*',
+                   'unknown': '<i>-</i>'}
     event_type_idx = {'LF': 1,
                       'BB': 2,
                       'HF': 3,
@@ -109,24 +123,104 @@ def write_html(catalog, fnam_out):
                       'SF': 6}
     ievent = len(catalog)
     print('Filling HTML table with event entries')
+    error_events = False
     for event in tqdm(catalog):
-        row = create_event_row(dist_string,
-                               time_string,
-                               event,
-                               event_type_idx,
-                               formats,
-                               ievent)
+        picks_check = check_picks(ievent, event)
+        if picks_check is not None:
+            row = '<tr> ' + picks_check + '</tr>\n'
+            output_error += row
+            error_events = True
 
-        output += row
+        else:
+            try:
+                row = create_event_row(dist_string,
+                                       time_string,
+                                       event,
+                                       event_type_idx,
+                                       formats,
+                                       ievent,
+                                       magnitude_version=magnitude_version)
+            except KeyError as e:
+                print('Problem with event %s (%s-%s):' %
+                      (event.name, event.mars_event_type_short, event.quality))
+
+                print(e)
+                print(event.picks)
+                print(event.amplitudes)
+                raise e
+            else:
+                output += row
         ievent -= 1
     footer = create_footer()
     output += footer
+    if error_events:
+        output_error += 4 * ' ' + '</tbody>\n </table>'
+        output += output_error
     with open(fnam_out, 'w') as f:
         f.write(output)
 
 
+def check_picks(ievent, event):
+    missing_picks = []
+    wrong_pairs = ''
+    mandatory_minimum = ['start', 'end', 'noise_start', 'noise_end']
+
+    for pick in mandatory_minimum:
+        if pick not in event.picks or event.picks[pick] == '':
+            missing_picks.append(pick)
+
+    mandatory_ABC = ['P_spectral_start', 'P_spectral_end']
+    if event.quality in ['A', 'B', 'C']:
+        for pick in mandatory_ABC:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
+    mandatory_LF_ABC = ['Peak_MbP', 'Peak_MbS']
+    if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['LF', 'BB']:
+        for pick in mandatory_LF_ABC:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
+    mandatory_LF_AB = ['P', 'S', 'S_spectral_start', 'S_spectral_end']
+    if event.quality in ['A', 'B'] and event.mars_event_type_short in ['LF', 'BB']:
+        for pick in mandatory_LF_AB:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
+    mandatory_HF_ABC = ['Pg', 'Sg', 'S_spectral_start', 'S_spectral_end', 'Peak_M2.4']
+    if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['HF', 'VF', '24']:
+        for pick in mandatory_HF_ABC:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
+    pairs = [['P_spectral_start', 'P_spectral_end'],
+             ['P', 'S'],
+             ['Pg', 'Sg'],
+             ['noise_start', 'noise_end'],
+             ['start', 'end']]
+    for pair in pairs:
+        if not (event.picks[pair[0]] == '' or event.picks[pair[1]] == ''):
+            if utct(event.picks[pair[0]]) > utct(event.picks[pair[0]]):
+                print('Wrong order of picks' + pair)
+                wrong_pairs += pair[0] + ', '
+
+    if len(missing_picks) > 0:
+        output = '<td>%d</td>\n <td>%s</td>\n' % (ievent, event.name)
+        output += '<td>%s</td>\n <td>%s</td>\n' % (event.mars_event_type_short, event.quality)
+        output += '<td> '
+        for pick in missing_picks:
+            output += pick + ', '
+        output += '</td>\n <td>'
+        if len(wrong_pairs) > 0:
+            output += + wrong_pairs
+        output += '</td>\n'
+        return output
+    else:
+        False
+
 def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                      ievent,
+                     magnitude_version='Giardini2020',
                      path_images_local='/usr/share/nginx/html/InSight_plots',
                      path_images='http://mars.ethz.ch/InSight_plots'):
 
@@ -176,7 +270,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
             snr = calc_stalta(event, fmin=2.2, fmax=2.8)
             snr_string = '%.1f (2.4Hz)' % snr
         elif event.mars_event_type_short == ('SF'):
-            snr, snr_win = calc_SNR(event, fmin=8.0, fmax=12., 
+            snr, snr_win = calc_SNR(event, fmin=8.0, fmax=12.,
                                     SP=True, hor=True)
             snr_string = '%.1f (%s, 8-12Hz)' % (snr, snr_win)
         else:
@@ -191,7 +285,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                    float(utct(event.starttime)),
                    float(solify(event.starttime)) % 86400,
                    None,
-                   None,
+                   event.distance,
                    snr,
                    event.pick_amplitude('Peak_MbP',
                                         comp='vertical',
@@ -252,7 +346,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
              utc_time,
              link_lmst,
              link_duration,
-             dist_string[event.distance_type] % event.distance,
+             dist_string[event.distance_type].format(event),
              snr_string,
              event.pick_amplitude('Peak_MbP',
                                   comp='vertical',
@@ -267,12 +361,14 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                                   fmin=2.2, fmax=2.6),
              10 ** (event.amplitudes['A_24'] / 20.)
              if event.amplitudes['A_24'] is not None else None,
-             10 ** (event.amplitudes['A0'] / 20.)
-             if event.amplitudes['A0'] is not None else None,
-             event.magnitude(mag_type='mb_P'),
-             event.magnitude(mag_type='mb_S'),
-             event.magnitude(mag_type='m2.4'),
-             event.magnitude(mag_type='MFB'),
+             (event.amplitudes['A0']
+              if event.amplitudes['A0'] is not None else None,
+              event.amplitudes['A0_err']
+              if event.amplitudes['A0_err'] is not None else None),
+             event.magnitude(mag_type='mb_P', version=magnitude_version)[0],
+             event.magnitude(mag_type='mb_S', version=magnitude_version)[0],
+             event.magnitude(mag_type='m2.4', version=magnitude_version)[0],
+             event.magnitude(mag_type='MFB', version=magnitude_version),
              event.amplitudes['f_c'],
              event.amplitudes['tstar'],
              event.available_sampling_rates()['VBB_Z'],
@@ -282,7 +378,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
             extras=sortkey,
             fmts=formats)
 
-    except ValueError: # KeyError: #, AttributeError) as e:
+    except KeyError:  #ValueError: # KeyError: #, AttributeError) as e:
         link_lmst = '<a href="%s" target="_blank">%s</a>' % (
             path_dailyspec, lmst_time)
         sortkey = (ievent,
@@ -334,11 +430,11 @@ def create_html_header():
     return output
 
 
-def create_table_head(column_names):
+def create_table_head(column_names, table_head='Event table'):
     output = ''
     output += '<article>\n'
     output += '  <header>\n'
-    output += '    <h1>Event table</h1>\n'
+    output += '    <h1>' + table_head + '</h1>\n'
     output += '  </header>\n'
     table_head = '  <table class="sortable" id="events">\n' + \
                  '  <thead>\n' + \
@@ -375,6 +471,10 @@ def define_arguments():
     helptext = 'Distances to use: "all" (default), "aligned", "GUI"'
     parser.add_argument('-d', '--distances', help=helptext,
                         default='all')
+
+    helptext = 'Magnitude version to use: "Giardini2020" (default), "Boese2021"'
+    parser.add_argument('-m', '--mag_version', help=helptext,
+                        default='Giardini2020')
 
     helptext = 'Event types'
     parser.add_argument('-t', '--types', help=helptext,
@@ -418,4 +518,4 @@ if __name__ == '__main__':
     catalog.make_report(dir_out='reports', annotations=ann)
 
     print('Create table')
-    catalog.write_table(fnam_out=fnam_out)
+    catalog.write_table(fnam_out=fnam_out, magnitude_version=args.mag_version)

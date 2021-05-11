@@ -4,6 +4,8 @@
 Some scripts to read in the Mars BED extended QuakeML produced by the MQS
 author: Fabian Euchner, Simon Stähler
 '''
+import numpy as np
+
 from mqs_reports.event import Event
 
 
@@ -148,6 +150,10 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             sso_distance = sso['distance']
         else:
             sso_distance = None
+        if 'distance_pdf' in sso:
+            sso_distance_pdf = sso['distance_pdf']
+        else:
+            sso_distance_pdf = None
 
         # Mars event type (from BED extension)
         mars_event_type_str = ''
@@ -194,6 +200,7 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             latitude=float(latitude),
             longitude=float(longitude),
             sso_distance=sso_distance,
+            sso_distance_pdf=sso_distance_pdf,
             sso_origin_time=sso_origin_time,
             mars_event_type=mars_event_type_str,
             origin_time=origin_time))
@@ -269,6 +276,38 @@ def qml_get_sso_info_for_event_element(xml_root, ev):
 
         if distance is not None:
             sso_info['distance'] = float(distance)
+
+
+        distance_pdf_variable = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}/{}".format(
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    pref_distance_id,
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("pdf",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("variable",
+                                               XMLNS_SINGLESTATION)
+                ))).split(' ')
+        distance_pdf_prob = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}/{}".format(
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    pref_distance_id,
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("pdf",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("probability",
+                                               XMLNS_SINGLESTATION)
+                ))).split(' ')
+
+        if distance_pdf_variable is not None:
+            sso_info['distance_pdf'] = np.asarray((distance_pdf_variable, distance_pdf_prob),
+                                                  dtype=float)
 
     if pref_ori_time_id is not None:
         origin_time = lxml_text_or_none(

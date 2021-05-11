@@ -11,12 +11,11 @@ import numpy as np
 import obspy
 import plotly.graph_objects as go
 import plotly.io as pio
-from obspy import UTCDateTime as utct
-from plotly.subplots import make_subplots
-
 from mqs_reports.magnitudes import lorentz, lorentz_att
 from mqs_reports.utils import envelope_smooth, detick, calc_cwf, \
     create_timevector
+from obspy import UTCDateTime as utct
+from plotly.subplots import make_subplots
 
 
 def make_report(event, chan, fnam_out, annotations):
@@ -50,8 +49,8 @@ def make_report(event, chan, fnam_out, annotations):
                    full_html=True,
                    include_plotlyjs='directory')
 
-    fig.write_image(file=fnam_out + '.pdf', 
-                    width=1200, height=int(900 * 0.75))
+    # fig.write_image(file=fnam_out + '.pdf',
+    #                 width=1200, height=int(900 * 0.75))
     event.fnam_report[chan] = fnam_out
 
 
