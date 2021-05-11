@@ -175,7 +175,27 @@ def check_picks(ievent, event):
             if pick not in event.picks or event.picks[pick] == '':
                 missing_picks.append(pick)
 
+    mandatory_LF_ABC = ['Peak_MbP', 'Peak_MbS']
+    if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['LF', 'BB']:
+        for pick in mandatory_LF_ABC:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
+    mandatory_LF_AB = ['P', 'S', 'S_spectral_start', 'S_spectral_end']
+    if event.quality in ['A', 'B'] and event.mars_event_type_short in ['LF', 'BB']:
+        for pick in mandatory_LF_AB:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
+    mandatory_HF_ABC = ['Pg', 'Sg', 'S_spectral_start', 'S_spectral_end', 'Peak_M2.4']
+    if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['HF', 'VF', '24']:
+        for pick in mandatory_HF_ABC:
+            if pick not in event.picks or event.picks[pick] == '':
+                missing_picks.append(pick)
+
     pairs = [['P_spectral_start', 'P_spectral_end'],
+             ['P', 'S'],
+             ['Pg', 'Sg'],
              ['noise_start', 'noise_end'],
              ['start', 'end']]
     for pair in pairs:
@@ -358,7 +378,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
             extras=sortkey,
             fmts=formats)
 
-    except ValueError: # KeyError: #, AttributeError) as e:
+    except KeyError:  #ValueError: # KeyError: #, AttributeError) as e:
         link_lmst = '<a href="%s" target="_blank">%s</a>' % (
             path_dailyspec, lmst_time)
         sortkey = (ievent,
