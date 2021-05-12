@@ -16,18 +16,17 @@ import matplotlib.ticker
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
+from mqs_reports.annotations import Annotations
+from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
+    EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
+from mqs_reports.magnitudes import lorentz_att
+from mqs_reports.scatter_annot import scatter_annot
+from mqs_reports.snr import calc_stalta
+from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec, solify
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import degrees2kilometers
 from scipy import stats
 from tqdm import tqdm
-
-from mqs_reports.annotations import Annotations
-from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
-    EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
-from mqs_reports.magnitudes import M2_4, lorentz_att
-from mqs_reports.scatter_annot import scatter_annot
-from mqs_reports.snr import calc_stalta
-from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec, solify
 
 
 class Catalog:
@@ -84,6 +83,7 @@ class Catalog:
                                                             'Peak_M2.4',
                                                             'Peak_MbP',
                                                             'Peak_MbS',
+                                                            'x1', 'x2', 'x3',
                                                             'noise_start',
                                                             'noise_end',
                                                             'P_spectral_start',
@@ -238,14 +238,14 @@ class Catalog:
             event.calc_spectra(winlen_sec=winlen_sec,
                                detick_nfsamp=detick_nfsamp)
 
-    def save_magnitudes(self, fnam):
+    def save_magnitudes(self, fnam, version='Giardini2020', verbose=False):
         mags = []
         for event in self:
             mags.append([event.name,
-                         event.magnitude(mag_type='mb_P'),
-                         event.magnitude(mag_type='mb_S'),
-                         event.magnitude(mag_type='m2.4'),
-                         event.magnitude(mag_type='MFB')
+                         event.magnitude(mag_type='mb_P', version=version, verbose=verbose),
+                         event.magnitude(mag_type='mb_S', version=version, verbose=verbose),
+                         event.magnitude(mag_type='m2.4', version=version, verbose=verbose),
+                         event.magnitude(mag_type='MFB', version=version, verbose=verbose)
                          ])
         np.savetxt(fnam, mags, fmt=('%s'))
 
@@ -847,68 +847,69 @@ class Catalog:
             return fig
 
 
-    def plot_magnitude_distance(
-         self, mag_type='m2.4',
-         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
-                 'VERY_HIGH_FREQUENCY': 'C0'},
-         markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
-                  'VERY_HIGH_FREQUENCY': '^'},
-         xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP/CRUST_VS:3.1f}]',
-         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
-         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
-         fig=None, show=True):
+    # def plot_magnitude_distance(
+    #         self, mag_type='m2.4',
+    #         version='Giardini2020',
+    #         colors={'2.4_HZ': 'C1', 'HIGH_FREQUENCY': 'C2',
+    #                 'VERY_HIGH_FREQUENCY': 'C0'},
+    #         markers={'2.4_HZ': 'o', 'HIGH_FREQUENCY': 'o',
+    #                  'VERY_HIGH_FREQUENCY': '^'},
+    #         xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP / CRUST_VS:3.1f}]',
+    #         markersize={'A': 100, 'B': 50, 'C': 25, 'D': 5},
+    #         markerfill={'A': True, 'B': True, 'C': False, 'D': False},
+    #         fig=None, show=True):
 
-        if fig is None:
-            fig = plt.figure()
+    #     if fig is None:
+    #         fig = plt.figure()
 
-        legend_elements = []
+    #     legend_elements = []
 
-        for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
-            for quality in 'ABCD':
-                cat = self.select(quality=quality, event_type=event_type)
+    #     for event_type in ['2.4_HZ', 'HIGH_FREQUENCY', 'VERY_HIGH_FREQUENCY']:
+    #         for quality in 'ABCD':
+    #             cat = self.select(quality=quality, event_type=event_type)
 
-                if len(cat) == 0:
-                    continue
+    #             if len(cat) == 0:
+    #                 continue
 
-                # collect properties for plotting
-                M, dist = np.array([
-                    (event.magnitude(mag_type=mag_type, distance=event.distance),
-                     event.distance) for event in cat]).T.astype(float)
+    #             # collect properties for plotting
+    #             M, Msigma, dist = np.array([
+    #                 (*event.magnitude(mag_type=mag_type, distance=event.distance, version=version),
+    #                  event.distance) for event in cat]).T.astype(float)
 
-                S = np.array([markersize[event.quality] for event in cat])
-                names = np.array([f'{event.name} {event.duration_s:.0f}' for event in cat])
+    #             S = np.array([markersize[event.quality] for event in cat])
+    #             names = np.array([f'{event.name} {event.duration_s:.0f}' for event in cat])
 
-                mask = np.logical_not(np.isnan(M))
-                M = M[mask]
-                dist = dist[mask]
-                S = S[mask]
-                names = names[mask]
+    #             mask = np.logical_not(np.isnan(M))
+    #             M = M[mask]
+    #             dist = dist[mask]
+    #             S = S[mask]
+    #             names = names[mask]
 
-                if markerfill[quality]:
-                    colorargs = {'c': colors[event_type]}
-                else:
-                    colorargs = {'edgecolors': colors[event_type],
-                                 'facecolor': 'none'}
+    #             if markerfill[quality]:
+    #                 colorargs = {'c': colors[event_type]}
+    #             else:
+    #                 colorargs = {'edgecolors': colors[event_type],
+    #                              'facecolor': 'none'}
 
-                scatter_annot(dist, M, s=S, fig=fig, names=names,
-                              marker=markers[event_type],
-                              label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
-                              **colorargs)
+    #             scatter_annot(dist, M, s=S, fig=fig, names=names,
+    #                           marker=markers[event_type],
+    #                           label=f'{EVENT_TYPES_PRINT[event_type]} Q{quality}',
+    #                           **colorargs)
 
-        dist = np.linspace(3, 50)
-        magc_24 = M2_4(-219, dist)
-        magc_HF = M2_4(-212.5, dist)
-        plt.plot(dist, magc_24, label='M2.4(-219.0 dB)', color='C3')
-        plt.plot(dist, magc_HF, label='M2.4(-212.5 dB)', color='C3', ls='--')
+    #     dist = np.linspace(3, 50)
+    #     magc_24 = M2_4(-219, dist)
+    #     magc_HF = M2_4(-212.5, dist)
+    #     plt.plot(dist, magc_24, label='M2.4(-219.0 dB)', color='C3')
+    #     plt.plot(dist, magc_HF, label='M2.4(-212.5 dB)', color='C3', ls='--')
 
-        plt.xlabel(xlabel)
-        plt.ylabel('M2.4')
-        plt.legend()
+    #     plt.xlabel(xlabel)
+    #     plt.ylabel('M2.4')
+    #     plt.legend()
 
-        if show:
-            plt.show()
-        else:
-            return fig
+    #     if show:
+    #         plt.show()
+    #     else:
+    #         return fig
 
     def plot_distance_hist(self, show=True):
 
@@ -1022,7 +1023,7 @@ class Catalog:
                 fnam_report = pjoin(dir_out,
                                     'mag_report_%s_%s' %
                                     (event.name, chan))
-                if not pexists(fnam_report + '.pdf'):
+                if not pexists(fnam_report + '.html'):
                     event.make_report(fnam_out=fnam_report,
                                       chan=chan,
                                       annotations=annotations)
@@ -1054,7 +1055,7 @@ class Catalog:
                 fmin = fmin_LF
                 fmax = fmax_LF
                 df = df_LF
-            elif event.mars_event_type_short in ['HF', 'VF', '24']:
+            elif event.mars_event_type_short in ['HF', '24']:
                 if instrument is None:
                     instrument = 'SP'
                 if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
@@ -1066,6 +1067,32 @@ class Catalog:
                 fmin = fmin_HF
                 fmax = fmax_HF
                 df = df_HF
+
+            elif event.mars_event_type_short == 'VF':
+                if event.available_sampling_rates()['SP_Z'] == 100.:
+                    if instrument is None:
+                        instrument = 'both'
+                    if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                        t_S = utct(event.picks['Sg'])
+                        t_P = utct(event.picks['Pg'])
+                    else:
+                        t_P = utct(event.starttime)
+                        t_S = None
+                    fmin = 1./8.
+                    fmax = 32.0 * np.sqrt(2.)
+                    df = df_HF
+                else:
+                    if instrument is None:
+                        instrument = 'SP'
+                    if len(event.picks['Sg']) * len(event.picks['Pg']) > 0:
+                        t_S = utct(event.picks['Sg'])
+                        t_P = utct(event.picks['Pg'])
+                    else:
+                        t_P = utct(event.starttime)
+                        t_S = None
+                    fmin = 1./8.
+                    fmax = 10.
+                    df = df_HF
 
             else: # Super High Frequency
                 if instrument is None:
@@ -1086,10 +1113,12 @@ class Catalog:
                                           endtime=event.endtime + 300.,
                                           instrument=instrument,
                                           fnam=fnam, fmin=fmin, fmax=fmax, df=df)
-                except IndexError:
+                except IndexError as err:
                     print('No data for %s' % event.name)
-                except AttributeError:
+                    print(err)
+                except AttributeError as err:
                     print('No data for %s' % event.name)
+                    print(err)
                 else:
                     nodata = False
 
@@ -1330,7 +1359,7 @@ class Catalog:
                     else:
                         distance = event.distance * 55.e3
                     f = np.geomspace(0.01, 20., 100)
-                    Mw = event.magnitude(mag_type='MFB')
+                    Mw = event.magnitude(mag_type='MFB')[0]
                     if Mw is None:
                         Mw = 3.
                     A0 = fits[event.name]['A0'] if 'A0' in fits[event.name] \
@@ -1376,14 +1405,15 @@ class Catalog:
                 ievent += 1
 
     def write_table(self,
-                    fnam_out: str = 'overview.html') -> None:
+                    fnam_out: str = 'overview.html',
+                    magnitude_version='Giardini2020') -> None:
         """
         Create HTML overview table for catalog
         :param fnam_out: filename to write to
         """
         from mqs_reports.create_table import write_html
 
-        write_html(self, fnam_out=fnam_out)
+        write_html(self, fnam_out=fnam_out, magnitude_version=magnitude_version)
 
     def get_event_count_table(self, style='html') -> str:
         """
@@ -1408,7 +1438,7 @@ class Catalog:
                   value=[f'{EVENT_TYPES_PRINT[e]}' for e in EVENT_TYPES])
 
         if style == 'html':
-            return ('<H1>MQS events until %s</H1><br>' %
+            return ('<H1>MQS events until %s</H1>\n<br>\n' %
                     utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
                     df.to_html(index=False, table_id='events_all',
                                col_space=40)
@@ -1417,29 +1447,3 @@ class Catalog:
             return df.to_latex(index=False)
         else:
             raise ValueError()
-            
-            
-    def plot_polarisation_analysis(self):
-        """
-        Create polarisation analysis plot
-
-        """
-        #Seconds before and after phase picks for signal window
-        t_pick_P = [-5, 10]
-        t_pick_S = [-5, 10]
-        
-        for event in tqdm(self):
-            if event.quality in ['A', 'B', 'C'] and not pexists(f'polarisation_{event.name}_diff.png'):
-                for zoom in [False, True]:
-                    event.plot_polarization_event_noise(t_pick_P, t_pick_S,
-                                                        rotation = 'ZNE', BAZ=event.baz,
-                                                        kind='cwt', fmin=0.2, fmax=10.,
-                                                        winlen_sec=20., overlap=0.5,
-                                                        tstart=None, tend=None, vmin=-220,
-                                                        vmax=-150, log=True, fname=f'{event.name}',
-                                                        dop_winlen=20, dop_specwidth=1.3, #10
-                                                        nf=100, w0=20,
-                                                        use_alpha=True, use_alpha2=False, 
-                                                        alpha_inc = False, alpha_elli = 2.0, alpha_azi = False,
-                                                        plot_6C=False, plot_spec_azi_only = False, zoom=zoom,
-                                                        differentiate=True, detick_1Hz=True)

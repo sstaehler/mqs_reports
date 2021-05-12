@@ -25,7 +25,7 @@ def calc_SNR(event: Event, fmin: float, fmax: float,
         comp = 'p_H'
     else:
         comp = 'p_Z'
-    
+
     if 'noise' in spectra and  comp in spectra['noise']:
         p_noise = spectra['noise'][comp]
         df_noise = spectra['noise']['f'][1]
@@ -57,7 +57,7 @@ def calc_stalta(event: Event,
     if event.waveforms_VBB is None:
         return 0.0
     else:
-        tr_stalta = event.waveforms_VBB.select(channel='BHZ')[0].copy()
+        tr_stalta = event.waveforms_VBB.select(channel='B?Z')[0].copy()
         tr_stalta.differentiate()
         tr_stalta.filter('bandpass', freqmin=fmin, freqmax=fmax, corners=6,
                          zerophase=True)

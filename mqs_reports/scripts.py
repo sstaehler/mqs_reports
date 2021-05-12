@@ -124,12 +124,16 @@ def fig_probs():
         if event.distance is not None:
             # magnitude = event.magnitude(mag_type='MFB',
             # distance=event.distance)
-            magnitude = event.magnitude(mag_type='mb_S',
-                                        distance=event.distance)
+            magnitude, sigma_magnitude = \
+                event.magnitude(mag_type='mb_S', distance=event.distance, version='Giardini2020')
 
             ax[0].scatter(event.distance,
                           magnitude,
                           color='k')
+            ax[0].errorbar(x=event.distance,
+                           y=magnitude,
+                           yerr=sigma_magnitude,
+                           color='k')
             ax[0].text(event.distance,
                        magnitude,
                        s=event.name, rotation=45,
@@ -144,8 +148,7 @@ def fig_probs():
         if event.distance is not None:
             distance = event.distance
 
-        magnitude = event.magnitude(mag_type='mb_S',
-                                    distance=distance)
+        magnitude = event.magnitude(mag_type='mb_S', distance=distance)
         print(event.name, magnitude, distance)
         ax[0].scatter(distance,
                       magnitude,
@@ -161,8 +164,7 @@ def fig_probs():
 
     for event in cat.select(event_type=['HF', '24']):
         if event.distance is not None:
-            mag = event.magnitude(mag_type='m2.4',
-                                  distance=event.distance)
+            mag = event.magnitude(mag_type='m2.4', distance=event.distance)
             ax[1].scatter(event.distance, mag,
                           color='k')
             mags_HF.append(mag)

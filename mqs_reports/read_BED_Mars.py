@@ -4,6 +4,11 @@
 Some scripts to read in the Mars BED extended QuakeML produced by the MQS
 author: Fabian Euchner, Simon Stähler
 '''
+import numpy as np
+
+from mqs_reports.event import Event
+
+
 XMLNS_QUAKEML_BED = "http://quakeml.org/xmlns/bed/1.2"
 XMLNS_QUAKEML_BED_MARS = "http://quakeml.org/xmlns/bed/1.2/mars"
 XMLNS_QUAKEML_SST = "http://quakeml.org/xmlns/singlestation/1.0"
@@ -13,8 +18,6 @@ QML_MARSQUAKE_PARAMETERS_ELEMENT_NAME = "marsquakeParameters"
 
 XMLNS_SINGLESTATION_ABBREV = "sst"
 XMLNS_SINGLESTATION = "http://quakeml.org/xmlns/singlestation/1.0"
-
-from mqs_reports.event import Event
 
 
 def lxml_prefix_with_namespace(elementname, namespace):
@@ -50,6 +53,7 @@ def qml_get_pick_time_for_phase(event_element, pref_ori_publicid, phase_name):
             lxml_prefix_with_namespace("phase", XMLNS_QUAKEML_BED)))
 
     pick_time_str = ''
+    pick_unc_str = ''
 
     for ph in ph_el:
         if str(ph.text).strip() == phase_name:
@@ -64,10 +68,21 @@ def qml_get_pick_time_for_phase(event_element, pref_ori_publicid, phase_name):
                     lxml_prefix_with_namespace("time", XMLNS_QUAKEML_BED),
                     lxml_prefix_with_namespace("value", XMLNS_QUAKEML_BED)))
 
+            ev_pick_unc = event_element.find(
+                "./{}[@publicID='{}']/{}/{}".format(
+                    lxml_prefix_with_namespace("pick", XMLNS_QUAKEML_BED),
+                    pickid.text,
+                    lxml_prefix_with_namespace("time", XMLNS_QUAKEML_BED),
+                    lxml_prefix_with_namespace("lowerUncertainty", XMLNS_QUAKEML_BED)))
+
             pick_time_str = str(ev_pick_time.text).strip()
+            if ev_pick_unc is not None:
+                pick_unc_str = str(ev_pick_unc.text).strip()
+            else:
+                pick_unc_str = ''
             break
 
-    return pick_time_str
+    return pick_time_str, pick_unc_str
 
 
 def qml_get_event_info_for_event_waveform_files(xml_root,
@@ -104,7 +119,7 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             lxml_prefix_with_namespace("type", XMLNS_QUAKEML_BED_MARS)))
         mars_event_type_str = str(mars_event_type.text).split(sep='#')[-1]
 
-        if not mars_event_type_str in event_type:
+        if mars_event_type_str not in event_type:
             continue
 
         # event name
@@ -135,6 +150,10 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             sso_distance = sso['distance']
         else:
             sso_distance = None
+        if 'distance_pdf' in sso:
+            sso_distance_pdf = sso['distance_pdf']
+        else:
+            sso_distance_pdf = None
 
         # Mars event type (from BED extension)
         mars_event_type_str = ''
@@ -145,9 +164,9 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             mars_event_type_str = str(mars_event_type.text).strip()
 
         picks = dict()
+        picks_sigma = dict()
         for phase in phase_list:
-            picks[phase] = qml_get_pick_time_for_phase(ev, pref_ori.text,
-                                                       phase)
+            picks[phase], picks_sigma[phase] = qml_get_pick_time_for_phase(ev, pref_ori.text, phase)
 
         latitude = ev.find("./{}[@publicID='{}']/{}/{}".format(
             lxml_prefix_with_namespace("origin", XMLNS_QUAKEML_BED),
@@ -176,10 +195,12 @@ def qml_get_event_info_for_event_waveform_files(xml_root,
             publicid=ev_publicid,
             origin_publicid=str(pref_ori.text).strip(),
             picks=picks,
+            picks_sigma=picks_sigma,
             quality=str(lq.text).strip(),
             latitude=float(latitude),
             longitude=float(longitude),
             sso_distance=sso_distance,
+            sso_distance_pdf=sso_distance_pdf,
             sso_origin_time=sso_origin_time,
             mars_event_type=mars_event_type_str,
             origin_time=origin_time))
@@ -208,7 +229,8 @@ def qml_get_sso_info_for_event_element(xml_root, ev):
 
     for bed_ori_ref in xml_root.iterfind('./{}/{}/{}'.format(
             lxml_prefix_with_namespace(
-                QML_SINGLESTATION_PARAMETERS_ELEMENT_NAME, XMLNS_SINGLESTATION),
+                QML_SINGLESTATION_PARAMETERS_ELEMENT_NAME,
+                XMLNS_SINGLESTATION),
             lxml_prefix_with_namespace("singleStationOrigin",
                                        XMLNS_SINGLESTATION),
             lxml_prefix_with_namespace("bedOriginReference",
@@ -232,22 +254,60 @@ def qml_get_sso_info_for_event_element(xml_root, ev):
             "preferredOriginTimeID", XMLNS_SINGLESTATION))))
 
     pref_depth_id = lxml_text_or_none(sso.find("./{}".format(
-        lxml_prefix_with_namespace("preferredDepthID", XMLNS_SINGLESTATION))))
+        lxml_prefix_with_namespace("preferredDepthID",
+                                   XMLNS_SINGLESTATION))))
 
     pref_azimuth_id = lxml_text_or_none(sso.find("./{}".format(
-        lxml_prefix_with_namespace("preferredAzimuthID", XMLNS_SINGLESTATION))))
+        lxml_prefix_with_namespace("preferredAzimuthID",
+                                   XMLNS_SINGLESTATION))))
 
     if pref_distance_id is not None:
         distance = lxml_text_or_none(
             sso.find(
                 "./{}[@publicID='{}']/{}/{}".format(
-                    lxml_prefix_with_namespace("distance", XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
                     pref_distance_id,
-                    lxml_prefix_with_namespace("distance", XMLNS_SINGLESTATION),
-                    lxml_prefix_with_namespace("value", XMLNS_SINGLESTATION))))
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("value",
+                                               XMLNS_SINGLESTATION)
+                    )))
 
         if distance is not None:
             sso_info['distance'] = float(distance)
+
+
+        distance_pdf_variable = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}/{}".format(
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    pref_distance_id,
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("pdf",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("variable",
+                                               XMLNS_SINGLESTATION)
+                ))).split(' ')
+        distance_pdf_prob = lxml_text_or_none(
+            sso.find(
+                "./{}[@publicID='{}']/{}/{}/{}".format(
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    pref_distance_id,
+                    lxml_prefix_with_namespace("distance",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("pdf",
+                                               XMLNS_SINGLESTATION),
+                    lxml_prefix_with_namespace("probability",
+                                               XMLNS_SINGLESTATION)
+                ))).split(' ')
+
+        if distance_pdf_variable is not None:
+            sso_info['distance_pdf'] = np.asarray((distance_pdf_variable, distance_pdf_prob),
+                                                  dtype=float)
 
     if pref_ori_time_id is not None:
         origin_time = lxml_text_or_none(
@@ -296,8 +356,8 @@ def read_QuakeML_BED(fnam, event_type, phase_list,
         xml_root = tree.getroot()
         events = qml_get_event_info_for_event_waveform_files(
             xml_root, location_quality=quality,
-                event_type=event_type,
-                phase_list=phase_list)
+            event_type=event_type,
+            phase_list=phase_list)
 
     return events
 
@@ -306,5 +366,6 @@ if __name__ == '__main__':
     test = read_QuakeML_BED('./mqs_reports/data/catalog_20191002.xml',
                             event_type='BROADBAND',
                             phase_list=['P', 'S', 'noise_start', 'start',
+                                        'Pg', 'Sg', 'x1', 'x2', 'x3',
                                         'end'])
     print(test)

@@ -16,13 +16,13 @@ from typing import Union
 
 import numpy as np
 import obspy
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
-
 from mqs_reports.annotations import Annotations
-from mqs_reports.magnitudes import fit_spectra
+from mqs_reports.magnitudes import fit_spectra, calc_magnitude
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
     calc_cwf, solify
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+from obspy.taup import TauPyModel
 
 RADIUS_MARS = 3389.5
 CRUST_VP = 4.
@@ -31,8 +31,8 @@ LANDER_LAT = 4.5024
 LANDER_LON = 135.6234
 
 EVENT_TYPES_SHORT = {
-        'SUPER_HIGH_FREQUENCY': 'SF',
-        'VERY_HIGH_FREQUENCY':  'VF',
+    'SUPER_HIGH_FREQUENCY': 'SF',
+    'VERY_HIGH_FREQUENCY': 'VF',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
     'HIGH_FREQUENCY': 'HF',
@@ -55,10 +55,12 @@ class Event:
                  publicid: str,
                  origin_publicid: str,
                  picks: dict,
+                 picks_sigma: dict,
                  quality: str,
                  latitude: float,
                  longitude: float,
                  sso_distance: float,
+                 sso_distance_pdf: float,
                  sso_origin_time: str,
                  mars_event_type: str,
                  origin_time: str):
@@ -66,6 +68,7 @@ class Event:
         self.publicid = publicid
         self.origin_publicid = origin_publicid
         self.picks = picks
+        self.picks_sigma = picks_sigma
         self.quality = quality[-1]
         self.mars_event_type = mars_event_type.split('#')[-1]
 
@@ -96,11 +99,14 @@ class Event:
                                                 lat2=LANDER_LAT,
                                                 lon2=LANDER_LON,
                                                 a=RADIUS_MARS)
-            self.distance = kilometers2degrees(dist_km,
-                                               radius=RADIUS_MARS)
+            # self.distance = kilometers2degrees(dist_km,
+            #                                    radius=RADIUS_MARS)
+            self.distance = sso_distance
+            self.distance_pdf = sso_distance_pdf
             self.baz = baz
             self.az = az
             self.origin_time = utct(origin_time)
+            self.calc_distance_sigma_from_pdf()
             self.distance_type = 'GUI'
 
         # Case that distance exists, but not BAZ. Then, distance and origin
@@ -108,20 +114,30 @@ class Event:
         elif sso_distance is not None:
             self.origin_time = utct(sso_origin_time)
             self.distance = sso_distance
+            self.distance_pdf = sso_distance_pdf
+            self.calc_distance_sigma_from_pdf()
             self.distance_type = 'GUI'
             self.baz = None
 
         # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
-            self.distance = self.calc_distance()
-            if self.distance is not None:
+            distance_tmp, otime_tmp, distance_sigma_tmp = self.calc_distance()
+            if distance_tmp is not None:
+                self.distance = distance_tmp
+                self.origin_time = utct(otime_tmp)
                 self.distance_type = 'PgSg'
-            self.origin_time = utct(origin_time)
+                self.distance_sigma = distance_sigma_tmp
+            else:
+                self.distance = None
+                self.distance_sigma = None
+                self.origin_time = utct(origin_time)
+
             self.baz = None
 
         else:
             self.origin_time = utct(origin_time)
             self.distance = None
+            self.distance_sigma = None
             self.baz = None
 
         self._waveforms_read = False
@@ -165,27 +181,86 @@ class Event:
                 if overwrite or (self.distance is None):
                     if self.name == row['name']:
                         self.distance = float(row['distance'])
+                        if self.distance_sigma is None:
+                            self.distance_sigma = 20.
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
-                        # print('Found aligned distance %f for event %s' %
-                        #       (self.distance, self.name))
+                        if 'sigma_dist' in row:
+                            self.distance_sigma = np.float(row['sigma_dist'])
+                        else:
+                            self.distance_sigma = self.distance * 0.25
 
     def calc_distance(self,
                       vp: float = CRUST_VP,
-                      vs: float = CRUST_VS) -> Union[float, None]:
+                      vs: float = CRUST_VS) -> (Union[float, None],
+                                                Union[float, None],
+                                                Union[float, None]):
         """
         Calculate distance of event based on Pg and Sg picks, if available,
         otherwise return None
         :param vp: P-velocity
         :param vs: S-velocity
         :return: distance in degree or None if no picks available
+                 origin time as UTCDateTime object
+                 sigma of distance in degree (only based on pick uncertainty)
         """
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
+            deltat_sigma = np.sqrt(np.float(self.picks_sigma['Sg'])**2. +
+                                   np.float(self.picks_sigma['Pg'])**2.)
             distance_km = deltat / (1. / vs - 1. / vp)
-            return kilometers2degrees(distance_km, radius=RADIUS_MARS)
+            distance_sigma_km = deltat_sigma / (1. / vs - 1. / vp)
+            distance_degree = kilometers2degrees(distance_km,
+                                                 radius=RADIUS_MARS)
+            distance_sigma_degree = kilometers2degrees(distance_sigma_km,
+                                                       radius=RADIUS_MARS)
+            origin_time = utct(self.picks['Sg']) - distance_km / vs
+            return distance_degree, origin_time, distance_sigma_degree
         else:
-            return None
+            return None, None, None
+
+    def calc_distance_taup(self,
+                           model: TauPyModel,
+                           depth_in_km = 50.) -> Union[float, None]:
+        """
+        Calculate distance of event in a taup model, based on P and S picks, if available,
+        otherwise return None
+        :param model: TauPy model object
+        :param depth_in_km: Fixed depth of event
+        :return: distance in degree or None if no picks available
+        """
+        from taup_distance.taup_distance import get_dist, _get_SSmP
+
+        if len(self.picks['S']) > 0 and len(self.picks['P']) > 0:
+            deltat = float(utct(self.picks['S']) - utct(self.picks['P']))
+            distance = get_dist(model, tSmP=deltat, depth=depth_in_km)
+
+            deltat_sigma = np.sqrt(float(self.picks_sigma['P'])**2 +
+                                   float(self.picks_sigma['S'])**2)
+            if distance is None:
+                distance_sigma = None
+            else:
+                distance_sigma = deltat_sigma / _get_SSmP(distance=distance,
+                                                          model=model,
+                                                          tmeas=0.,
+                                                          phase_list=['P', 'S'],
+                                                          plot=False,
+                                                          depth=depth_in_km)
+
+            # distance_lower = get_dist(model, tSmP=deltat - deltat_sigma, depth=depth_in_km)
+            # distance_upper = get_dist(model, tSmP=deltat + deltat_sigma, depth=depth_in_km)
+            return distance, distance_sigma
+        else:
+            return None, None
+
+    def calc_distance_sigma_from_pdf(self):
+        from mqs_reports.utils import uncertainty_from_pdf
+
+        sigma_low, sigma_up = uncertainty_from_pdf(
+            variable=self.distance_pdf[0],
+            p=self.distance_pdf[1])
+        self.distance_sigma = (sigma_up - sigma_low) / 2.
+        pass
 
     def read_waveforms(self,
                        inv: obspy.Inventory,
@@ -320,7 +395,18 @@ class Event:
                                                 twin_end + tpre_SP],
                                           fmin=fmin_SP)
         else:
-            self.waveforms_SP = None
+            filenam_SP_HG = 'XB.ELYSE.00.HH?.D.%04d.%03d'
+            fnam_SP = create_fnam_event(
+                filenam_inst=filenam_SP_HG,
+                sc3dir=sc3dir, time=self.picks['start'])
+            if len(glob(fnam_SP)) > 0:
+                self.waveforms_SP = read_data(fnam_SP, inv=inv, kind=kind,
+                                              twin=[twin_start - tpre_SP,
+                                                    twin_end + tpre_SP],
+                                              fmin=fmin_SP)
+            else:
+                filenam_SP_HG = 'XB.ELYSE.65.EH?.D.%04d.%03d'
+                self.waveforms_SP = None
 
         # Try for 02.BH? (20sps VBB)
         success_VBB = False
@@ -364,9 +450,9 @@ class Event:
                                                  twin_end + tpre_VBB])
             if len(self.waveforms_VBB) == 3:
                 success_VBB = True
-                
+
         if not success_VBB:
-            # Try for 07.BL? (20sps VBB at low gain)
+            # Try for 07.BL? (20sps VBB low gain)
             filenam_VBB_HG = 'XB.ELYSE.07.BL?.D.%04d.%03d'
             fnam_VBB = create_fnam_event(
                 filenam_inst=filenam_VBB_HG,
@@ -411,6 +497,22 @@ class Event:
                     available[chan] = st[0].stats.sampling_rate
                 else:
                     available[chan] = None
+
+        if available['SP_Z'] is None:
+            channels = {'SP_Z': 'HHZ',
+                        'SP_N': 'HHN',
+                        'SP_E': 'HHE'}
+
+            for chan, seed in channels.items():
+                if self.waveforms_SP is None:
+                    available[chan] = None
+                else:
+                    st = self.waveforms_SP.select(channel=seed)
+                    if len(st) > 0:
+                        available[chan] = st[0].stats.sampling_rate
+                    else:
+                        available[chan] = None
+
         return available
 
     def calc_spectra(self, winlen_sec, detick_nfsamp=0):
@@ -611,15 +713,21 @@ class Event:
     def magnitude(self,
                   mag_type: str,
                   distance: float = None,
+                  distance_sigma: float = None,
+                  version: str = 'Giardini2020',
+                  verbose = False,
                   instrument: str = 'VBB') -> Union[float, None]:
         """
         Calculate magnitude of an event
         :param mag_type: 'mb_P', 'mb_S' 'm2.4' or 'MFB':
         :param distance: float or None, in which case event.distance is used
+        :param version: 'Giardini2020' or 'Boese2021'
         :param instrument: 'VBB' or 'SP'
         :return:
         """
         import mqs_reports.magnitudes as mag
+        if verbose:
+            print('*** {0} {1}'.format(self.name, mag_type))
         pick_name = {'mb_P': 'Peak_MbP',
                      'mb_S': 'Peak_MbS',
                      'm2.4': None,
@@ -635,45 +743,77 @@ class Event:
                      'm2.4': None,
                      'MFB': None
                      }
-        funcs = {'mb_P': mag.mb_P,
-                 'mb_S': mag.mb_S,
-                 'm2.4': mag.M2_4,
-                 'MFB': mag.MFB,
-                 'MFB_HF': mag.MFB_HF
-                 }
         if self.distance is None and distance is None:
-            return None
+            return None, None
         elif self.distance is not None and distance is None:
             distance = self.distance
+            distance_sigma = self.distance_sigma
         else:
             distance = distance
+            distance_sigma = 10.
+
         if mag_type in ('mb_P', 'mb_S'):
-            amplitude = self.pick_amplitude(pick=pick_name[mag_type],
-                                            comp=component[mag_type],
-                                            fmin=freqs[mag_type][0],
-                                            fmax=freqs[mag_type][1],
-                                            instrument=instrument
-                                            )
-            if amplitude is not None:
-                amplitude = 20 * np.log10(amplitude)
+            amplitude_abs = self.pick_amplitude(pick=pick_name[mag_type],
+                                                comp=component[mag_type],
+                                                fmin=freqs[mag_type][0],
+                                                fmax=freqs[mag_type][1],
+                                                instrument=instrument
+                                                )
+            if amplitude_abs is not None:
+                amplitude_dB = 10 * np.log10(amplitude_abs)
+            else:
+                amplitude_dB = None
+            amplitude_dB_sigma = 5.
 
         elif mag_type == 'MFB':
             if self.mars_event_type_short in ['24', 'HF', 'VF']:
                 mag_type = 'MFB_HF'
-            amplitude = self.amplitudes['A0'] \
-                if 'A0' in self.amplitudes else None
+            amplitude_dB = self.amplitudes['A0'] / 2. \
+                if 'A0' in self.amplitudes and self.amplitudes['A0'] is not None else None
+            # For sigma(A0) take twice the value from the spectral fit to account
+            # for generally poor fitting
+            amplitude_dB_sigma = self.amplitudes['A0_err'] / 2. * 2. \
+                if 'A0_err' in self.amplitudes and self.amplitudes['A0_err'] is not None else None
         elif mag_type == 'm2.4':
-            amplitude = self.amplitudes['A_24'] \
-                if 'A_24' in self.amplitudes else None
+            amplitude_dB = self.amplitudes['A_24'] / 2. \
+                if 'A_24' in self.amplitudes and self.amplitudes['A_24'] is not None else None
+            amplitude_dB_sigma = 5.
 
         else:
             raise ValueError('unknown magnitude type %s' % mag_type)
 
-        if amplitude is None:
-            return None
+        # if power_dB is not None:
+        # mag_old, sigma_old = funcs[mag_type](amplitude_dB=power_dB,
+        #                        distance_degree=distance,
+        #                        distance_sigma_degree=distance_sigma,
+        #                        amplitude_sigma_dB=power_dB_sigma)
+
+        # mag_new, sigma_new = calc_magnitude(mag_type=mag_type,
+        #                                     version='Giardini2020',
+        #                                     amplitude_dB=power_dB / 2.,
+        #                                     distance_degree=distance,
+        #                                     distance_sigma_degree=distance_sigma,
+        #                                     amplitude_sigma_dB=power_dB_sigma / 2.)
+
+        # mag_new2, sigma_new2 = calc_magnitude(mag_type=mag_type,
+        #                          version='Boese2021',
+        #                          amplitude_dB=power_dB / 2.,
+        #                          distance_degree=distance,
+        #                          distance_sigma_degree=distance_sigma,
+        #                          amplitude_sigma_dB=power_dB_sigma / 2.)
+
+        # print('%s, Mags: %4.2f+-%4.2f (old), %4.2f+-%4.2f (new), %4.2f+-%4.2f (Boese)' %
+        #       (self.name, mag_old, sigma_old, mag_new, sigma_new, mag_new2, sigma_new2))
+        if amplitude_dB is None:
+            return None, None
         else:
-            return funcs[mag_type](amplitude_dB=amplitude,
-                                   distance_degree=distance)
+            return calc_magnitude(mag_type=mag_type,
+                                  version=version,
+                                  amplitude_dB=amplitude_dB,
+                                  distance_degree=distance,
+                                  distance_sigma_degree=distance_sigma,
+                                  amplitude_sigma_dB=amplitude_dB_sigma,
+                                  verbose=verbose)
 
     def plot_envelope(self, comp='Z',
                       figsize=(4, 3),
@@ -975,10 +1115,14 @@ class Event:
 
     def mark_phases(self, ax, tref):
         for a in ax:
-            for pick in ['P', 'S', 'Pg', 'Sg']:
+            for pick in ['P', 'S', 'Pg', 'Sg', 'x1', 'x2', 'x3']:
                 try:
-                    a.axvline(utct(self.picks[pick]) - tref,
-                              c='darkred', ls='dashed')
+                    if pick in self.picks:
+                        x = utct(self.picks[pick]) - tref
+                        a.axvline(x, c='darkred', ls='dashed')
+                        a.annotate(xy=(x, -0.5), text=' ' + pick,
+                                   c='darkred',
+                                   horizontalalignment='left')
                 except TypeError:
                     pass
             for pick in ['start', 'end']:
@@ -999,6 +1143,7 @@ class Event:
                         starttime: obspy.UTCDateTime = None,
                         endtime: obspy.UTCDateTime = None,
                         instrument: str = 'VBB',
+                        f_VBB_SP_transition = 7.5,
                         fnam: str = None):
         import matplotlib.pyplot as plt
         import warnings
@@ -1031,17 +1176,26 @@ class Event:
             t_ref_type = 'start time'
 
         if instrument == 'VBB':
-            st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+            st_LF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+            st_HF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
         elif instrument == 'SP':
             try:
-                st_work = self.waveforms_SP.select(channel='??[ENZ]').copy()
+                st_LF = self.waveforms_SP.select(channel='??[ENZ]').copy()
+                st_HF = self.waveforms_SP.select(channel='??[ENZ]').copy()
             except AttributeError:
-                st_work = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+                st_LF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+                st_HF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+        elif instrument == 'both':
+            st_LF = self.waveforms_VBB.select(channel='??[ENZ]').copy()
+            st_HF = self.waveforms_SP.select(channel='??[ENZ]').copy()
+
+
         else:
             raise ValueError(f'Invalid value for instrument: {instrument}')
 
         try:
-            st_work.rotate('NE->RT', back_azimuth=self.baz)
+            st_HF.rotate('NE->RT', back_azimuth=self.baz)
+            st_LF.rotate('NE->RT', back_azimuth=self.baz)
         except:
             rotated = False
         else:
@@ -1069,13 +1223,19 @@ class Event:
         if tmax_plot is None:
             tmax_plot = endtime - t_ref
 
-        st_work.trim(starttime=utct(starttime) - 1. / fmin,
-                     endtime=utct(endtime) + 1. / fmin)
+        for st in (st_HF, st_LF):
+            st.trim(starttime=utct(starttime) - 1. / fmin,
+                    endtime=utct(endtime) + 1. / fmin)
 
         for ifreq, fcenter in enumerate(freqs):
             f0 = fcenter / df
             f1 = fcenter * df
-            st_filt = st_work.copy()
+
+            if fcenter < f_VBB_SP_transition:
+                st_filt = st_LF.copy()
+            else:
+                st_filt = st_HF.copy()
+
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore')
@@ -1112,7 +1272,7 @@ class Event:
                         tr_norm = tr.slice(starttime=tstart_norm,
                                            endtime=tend_norm,
                                            nearest_sample=True)
-                        try: 
+                        try:
                             maxfac = np.quantile(tr_norm.data, q=0.9)
                             offset = np.quantile(tr_norm.data, q=0.1)
                         except:
@@ -1185,9 +1345,9 @@ class Event:
         ticklabels = []
         for freq in freqs:
             if freq > 1:
-                ticklabels.append(f'{freq:.1f}Hz')
+                ticklabels.append(f'{freq:.1f}')
             else:
-                ticklabels.append(f'1/{1. / freq:.1f}Hz')
+                ticklabels.append(f'1/{1. / freq:.1f}')
         ax[0].set_yticklabels(ticklabels)
         for a in ax:
             # a.set_xticks(np.arange(-300, 1000, 100), minor=False)
@@ -1202,7 +1362,7 @@ class Event:
                       ls='dashed', lw=1.0, c='k')
         ax[0].set_xlim(tmin_plot, tmax_plot)
         ax[0].set_ylim(-1.5, nfreqs + 1.5)
-        ax[0].set_ylabel('frequency')
+        ax[0].set_ylabel('frequency / Hz')
         ax[0].set_title('Vertical')
         if rotated:
             ax[1].set_title('Radial')
@@ -2082,3 +2242,4 @@ class Event:
             fig2.savefig(f'{path}/{savename}_fig2.png', dpi=200)
         
         plt.close()
+

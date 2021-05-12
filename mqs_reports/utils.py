@@ -5,15 +5,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from matplotlib import mlab as mlab
+from mqs_reports.constants import SEC_PER_DAY_EARTH, SEC_PER_DAY_MARS
 from obspy import UTCDateTime as utct, UTCDateTime
 from obspy.signal.filter import envelope
 from obspy.signal.rotate import rotate2zne
 from obspy.signal.util import next_pow_2
 from scipy.fftpack import fft, ifft
 from scipy.signal import hilbert
-
-SEC_PER_DAY_EARTH = 86400
-SEC_PER_DAY_MARS = 88775.2440
 
 
 def solify(UTC_time, sol0=UTCDateTime(2018, 11, 26, 5, 10, 50.33508)):
@@ -556,7 +554,7 @@ def autocorrelation(st, starttime, endtime, fmin=1.2, fmax=3.5, max_lag_sec=40):
                      endtime=endtime)
         st_work.taper(max_percentage=0.05)
         acsum = np.zeros((max_lag, 4))
-        for tr in st_work:  # .select(channel='BHZ'):
+        for tr in st_work:
             data = whiten(tr.data)
             data = filt(data, Fs=tr.stats.sampling_rate,
                         freqs=(freq[0], freq[1]))
@@ -598,6 +596,117 @@ def autocorrelation(st, starttime, endtime, fmin=1.2, fmax=3.5, max_lag_sec=40):
     ax[0].set_title('Phase autocorrelation')
     # ax[1].set_title('CC autocorrelation')
     return fig, ax
+
+
+def source_spec(f: np.array,
+                f_c: np.array,
+                n=2.,
+                gamma=2.
+                ):
+    """
+    Compute source spectrum of general Boatwright form
+    :param f: frequency in Hz
+    :param f_c: corner frequency in Hz
+    :param n: Parameter 1, ==2 for Brune and Boatwright source
+    :param gamma: 1 for Brune, 2 for Boatwright
+    :return:
+    """
+    omega = f * 2. * np.pi
+    omega_c = f_c * 2. * np.pi
+    # equation 7 in Bostock et al. 2017
+    denom = (1. + 1. / (n - 1.) * (omega / omega_c) ** (n * gamma)) ** (
+                1. / gamma)
+
+    return 1. / denom
+
+
+def att_spec(f: np.array,
+             tstar: float):
+    omega = f * 2. * np.pi
+    # equation 9 in Bostock et al. 2017
+    return np.exp(-omega * tstar / 2.)
+
+
+def att_spec_fdef(f: np.array,
+                  tstar0: float,
+                  alpha=0.25):
+    omega = f * 2. * np.pi
+    # equation 9 in Bostock et al. 2017
+    return np.exp(-omega * tstar0 * f ** (-alpha) / 2.)
+
+
+def complete_spec(f, A0, tstar, f_c):
+    spec = att_spec(f, tstar) * source_spec(f, f_c) * A0 * 2. * np.pi * f * 1e-9
+    return spec
+
+
+def complete_spec_fdef(f, A0, tstar0, f_c):
+    spec = att_spec_fdef(f, tstar0) * \
+           source_spec(f, f_c) * A0 * 2. * np.pi * f * 1e-9
+    return spec
+
+
+def spectral_fit(f: np.array,
+                 p_signal: np.array,
+                 sigma_signal: np.array,
+                 p_noise: np.array,
+                 fnam: str,
+                 fmin: float,
+                 fmax: float):
+    from scipy.optimize import curve_fit
+    fit_bol = np.array((f > float(fmin),
+                        f < float(fmax))).all(axis=0)
+
+    #sigma_signal = np.ones_like(p_signal) * 1e-10
+    signal_red = p_signal ** 2 - p_noise ** 2
+    signal_red[signal_red < 0.] = 0.
+    signal_red = np.sqrt(signal_red)
+    popt, pcov = curve_fit(complete_spec,
+                           f[fit_bol],
+                           signal_red[fit_bol],
+                           sigma=sigma_signal[fit_bol],
+                           # p_signal - p_noise,
+                           bounds=((0., 0.2, 0.1), (20, 3., 3.)),
+                           p0=(1., 1., 1.2))
+    # , A0, tstar, f_c)
+
+    # plt.figure()
+    # plt.plot(f, complete_spec(f, popt[0], popt[1], popt[2]),
+    #          label='fit, $t^*$=%3.1fs, $f_c$=%3.1fHz' % (popt[1], popt[2]))
+    # plt.errorbar(f, p_signal, yerr=sigma_signal, label='data', c='C5')
+    # # plt.plot(f, p_signal, label='data', c='C5')
+    # plt.plot(f, p_signal - p_noise, label='data - noise', c='C5', ls='dashed')
+    # plt.plot(f, signal_red,
+    #          label='data - noise, squared', c='C5', ls='dotted')
+    # plt.plot(f, p_noise, label='noise')
+    # plt.xscale('log')
+    # plt.yscale('log')
+    # plt.ylim(1e-11, 2e-8)
+    # plt.legend()
+    # print(popt)
+    # print(pcov)
+    # plt.savefig(fnam)
+    return popt[0], popt[1], popt[2], pcov[1, 1]
+
+
+def calc_mt_spec(tr, t_ref, tmin_amp, tmax_amp):
+    from mqs_reports.utils import detick
+    import mtspec
+
+    tr_detick = detick(tr, detick_nfsamp=5)
+
+    tr_amp = tr_detick.slice(starttime=t_ref + tmin_amp,
+                             endtime=t_ref + tmax_amp)
+    res = mtspec.mtspec(data=tr_amp.data,
+                        delta=tr_amp.stats.delta,
+                        time_bandwidth=2.5,
+                        statistics=True
+                        )
+    f = res[1]
+    p = np.sqrt(res[0])
+    p_low = np.sqrt(res[2][:, 0])
+    p_up = np.sqrt(res[2][:, 1])
+    return f, p, p_low, p_up
 
 
 def linregression(x: np.array, y: np.array, q: float = 0.95) -> tuple:
@@ -643,8 +752,24 @@ def calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
     return scalogram ** 2, f, t
 
 
-def create_timevector(tr, utct=False):
+def create_timevector(tr):
     timevec = [utct(t +
                     float(tr.stats.starttime)).datetime
                for t in tr.times()]
     return timevec
+
+
+def uncertainty_from_pdf(variable: np.array, p: np.array):
+    """
+    Fit a Gaussian through the pdf expressed by variable, p
+    From Savas Ceylan
+    """
+    from scipy.interpolate import UnivariateSpline
+    spline = UnivariateSpline(variable, p - np.nanmax(p) / 4, s=0)
+    _roots = spline.roots()
+    # print(_roots, variable[p == np.nanmax(p)], np.diff(_roots) / 2.)
+
+    r1 = _roots[0]
+    r2 = _roots[1]
+
+    return r1, r2
