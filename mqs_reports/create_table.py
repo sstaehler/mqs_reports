@@ -513,6 +513,9 @@ if __name__ == '__main__':
 
     print('Plot filter banks')
     catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
+    
+    print('Plot polarisation analysis')
+    catalog.plot_polarisation_analysis()
 
     print('Make magnitude reports')
     catalog.make_report(dir_out='reports', annotations=ann)

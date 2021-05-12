@@ -1447,3 +1447,17 @@ class Catalog:
             return df.to_latex(index=False)
         else:
             raise ValueError()
+
+
+    def plot_polarisation_analysis(self):
+        """
+        Create polarisation analysis plot
+        """
+        #Seconds before and after phase picks for signal window
+        t_pick_P = [-5, 10]
+        t_pick_S = [-5, 10]
+        
+        for event in tqdm(self):
+            if event.quality in ['A', 'B', 'C'] and not pexists(f'polarisation_{event.name}_diff.png'):
+                for zoom in [False, True]:
+                    event.plot_polarisation(t_pick_P, t_pick_S, rotation_coords='ZNE', baz=event.baz, impact=False, zoom=False)
