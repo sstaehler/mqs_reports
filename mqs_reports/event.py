@@ -1988,66 +1988,75 @@ class Event:
         
         
         ## ----------------new figure for polar plots----------------
-        # #new figure with polar projections
-        # fig2, axes2 = plt.subplots(ncols=3, nrows=2, subplot_kw={'projection': 'polar'}, figsize=(12,8))
-        # fig2.subplots_adjust(hspace=0.25, wspace=0.3, top=0.9, bottom=0.1)
+        #new figure with polar projections
+        fig2, axes2 = plt.subplots(ncols=3, nrows=2, subplot_kw={'projection': 'polar'}, figsize=(12,8))
+        fig2.subplots_adjust(hspace=0.25, wspace=0.3, top=0.9, bottom=0.1)
         
-        # [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] = iterables[1] #azimuth
-        # inc_data = np.rad2deg(abs(inc1)) #data inclination
+        [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] = iterables[1] #azimuth
+        inc_data = np.rad2deg(abs(inc1)) #data inclination
         
-        # for i in range(len(f)):
-        #     fBAZ_P[i,:] += np.histogram(data[i,bol_signal_P_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_P_mask], density=True)[0]
-        #     fBAZ_S[i,:] += np.histogram(data[i,bol_signal_S_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_S_mask], density=True)[0]
-        #     fBAZ_noise[i,:] += np.histogram(data[i,bol_noise_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_noise_mask], density=True)[0]
+        for i in range(len(f)):
+            fBAZ_P[i,:] += np.histogram(data[i,bol_signal_P_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_P_mask], density=True)[0]
+            fBAZ_S[i,:] += np.histogram(data[i,bol_signal_S_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_S_mask], density=True)[0]
+            fBAZ_noise[i,:] += np.histogram(data[i,bol_noise_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_noise_mask], density=True)[0]
             
-        # BAZ_Inc_P = np.histogram2d(data[twodmask_P], inc_data[twodmask_P], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_P], density=True)[0]
-        # BAZ_Inc_S = np.histogram2d(data[twodmask_S], inc_data[twodmask_S], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_S], density=True)[0]
-        # BAZ_Inc_noise = np.histogram2d(data[twodmask_noise], inc_data[twodmask_noise], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_noise], density=True)[0]
-
-        # axes2[0,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-        #                             f[bol_density_f_mask], fBAZ_P[bol_density_f_mask,:]*(rmax-rmin),
-        #                             cmap='hot_r', #pqlx,
-        #                             vmin=0., vmax=10,
-        #                             shading='auto')
-        # axes2[0,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-        #                             f[bol_density_f_mask], fBAZ_S[bol_density_f_mask,:]*(rmax-rmin),
-        #                             cmap='hot_r', #pqlx,
-        #                             vmin=0., vmax=10,
-        #                             shading='auto')
-        # axes2[0,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-        #                             f[bol_density_f_mask], fBAZ_noise[bol_density_f_mask,:]*(rmax-rmin),
-        #                             cmap='hot_r', #pqlx,
-        #                             vmin=0., vmax=10,
-        #                             shading='auto')
+        BAZ_Inc_P = np.histogram2d(data[twodmask_P], inc_data[twodmask_P], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_P], density=True)[0]
+        BAZ_Inc_S = np.histogram2d(data[twodmask_S], inc_data[twodmask_S], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_S], density=True)[0]
+        BAZ_Inc_noise = np.histogram2d(data[twodmask_noise], inc_data[twodmask_noise], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_noise], density=True)[0]
         
-        # axes2[1,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-        #                             np.linspace(0, 90, nbins), BAZ_Inc_P*(rmax-rmin),
-        #                             cmap='hot_r',
-        #                             shading='auto')
-        # axes2[1,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-        #                             np.linspace(0, 90, nbins), BAZ_Inc_S*(rmax-rmin),
-        #                             cmap='hot_r',
-        #                             shading='auto')
-        # axes2[1,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-        #                             np.linspace(0, 90, nbins), BAZ_Inc_noise*(rmax-rmin),
-        #                             cmap='hot_r',
-        #                             shading='auto')
+        # inclination_axis = np.rad2deg(np.tan(np.deg2rad(np.linspace(0, 90, nbins))/2))
+
+        axes2[0,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+                                    f[bol_density_f_mask], fBAZ_P[bol_density_f_mask,:]*(rmax-rmin),
+                                    cmap='hot_r', #pqlx,
+                                    vmin=0., vmax=10,
+                                    shading='auto')
+        axes2[0,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+                                    f[bol_density_f_mask], fBAZ_S[bol_density_f_mask,:]*(rmax-rmin),
+                                    cmap='hot_r', #pqlx,
+                                    vmin=0., vmax=10,
+                                    shading='auto')
+        axes2[0,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+                                    f[bol_density_f_mask], fBAZ_noise[bol_density_f_mask,:]*(rmax-rmin),
+                                    cmap='hot_r', #pqlx,
+                                    vmin=0., vmax=10,
+                                    shading='auto')
+        
+        axes2[1,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+                                    np.linspace(0, 90, nbins), BAZ_Inc_P.T,
+                                    cmap='hot_r',
+                                    shading='auto')
+        axes2[1,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+                                    np.linspace(0, 90, nbins), BAZ_Inc_S.T,
+                                    cmap='hot_r',
+                                    shading='auto')
+        axes2[1,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
+                                    np.linspace(0, 90, nbins), BAZ_Inc_noise.T,
+                                    cmap='hot_r',
+                                    shading='auto')
         
 
-        # axes2[0,0].text(x=-0.4, y=0.5, transform=axes2[0,0].transAxes, s='BAZ vs f \n', #x=-0.18 #x=-019 gze
-        #             ma='center', va='center', bbox=props, rotation=90, size=15) 
-        # axes2[1,0].text(x=-0.4, y=0.5, transform=axes2[1,0].transAxes, s='BAZ vs \n inclination', #x=-0.18 #x=-019 gze
-        #             ma='center', va='center', bbox=props, rotation=90, size=15) 
+        axes2[0,0].text(x=-0.4, y=0.5, transform=axes2[0,0].transAxes, s='BAZ vs f \n', #x=-0.18 #x=-019 gze
+                    ma='center', va='center', bbox=props, rotation=90, size=15) 
+        axes2[1,0].text(x=-0.4, y=0.5, transform=axes2[1,0].transAxes, s='BAZ vs \n (90-inclination)', #x=-0.18 #x=-019 gze
+                    ma='center', va='center', bbox=props, rotation=90, size=15) 
             
-        # for ax in axes2.flatten():
-        #     ax.set_theta_zero_location("N")
-        #     ax.set_theta_direction('clockwise')
-        #     if self.baz:
-        #         ax.axvline(x=np.radians(self.baz), color='blue')
-        #         ax.text(np.radians(self.baz), 1.1, 'BAZ', c='blue', fontsize=13)
+        for ax in axes2.flatten():
+            ax.set_theta_zero_location("N")
+            ax.set_theta_direction('clockwise')
+            if self.baz:
+                ax.axvline(x=np.radians(self.baz), color='blue')
+                ax.text(np.radians(self.baz), 1.1, 'BAZ', c='blue', fontsize=13)
                 
-        # for i,ax in enumerate(axes2[0,:]):
-        #     ax.set_title(f'{name_timewindows[i+2]} \n {f_band_density[0]}-{f_band_density[1]} Hz', fontsize=15)
+        for i,ax in enumerate(axes2[0,:]):
+            ax.set_rlim(0)
+            ax.set_rscale('symlog')
+            ax.set_rlim(f_band_density[0])
+            ax.set_title(f'{name_timewindows[i+2]} \n {f_band_density[0]}-{f_band_density[1]} Hz', fontsize=15)
+            
+        for ax in axes2[1,:].flatten():
+            ax.set_title(f'{f_band_density[0]}-{f_band_density[1]} Hz', fontsize=15)
+            ax.invert_yaxis()
                 
 
 
@@ -2068,8 +2077,8 @@ class Event:
                 path = f'Plots/Impact_search/Impact_{impact}'
             else:
                 path = 'Plots/Test'
-            # fig.savefig(f'{path}/{savename}.png', dpi=200)
-            fig.savefig(f'polarisation_{savename}.png', dpi=200)
-            # fig2.savefig(f'{path}/fig2.png', dpi=200)
+            fig.savefig(f'{path}/{savename}.png', dpi=200)
+            # fig.savefig(f'polarisation_{savename}.png', dpi=200)
+            fig2.savefig(f'{path}/{savename}_fig2.png', dpi=200)
         
         plt.close()
