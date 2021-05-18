@@ -1558,7 +1558,7 @@ class Event:
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
         
         if self.mars_event_type_short in ['HF', 'VF', '24']:
-            f_band_density=[1., 2.]
+            f_band_density=[0.5, 2.]
         elif self.mars_event_type_short in ['LF', 'BB']:
             f_band_density=[0.3, 1.]
         else:
@@ -1576,7 +1576,7 @@ class Event:
                                                           dop_winlen=20, dop_specwidth=1.3,
                                                           nf=100, w0=20,
                                                           use_alpha=True, use_alpha2=False, 
-                                                          alpha_inc = False, alpha_elli = 2.0, alpha_azi = False,
+                                                          alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
                                                           f_band_density=f_band_density,
                                                           plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
                                                           differentiate = True, detick_1Hz = True,
