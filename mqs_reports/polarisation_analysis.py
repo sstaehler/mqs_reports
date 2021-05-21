@@ -22,6 +22,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
 from obspy import UTCDateTime as utct
 from palettable.scientific.sequential import Bilbao_20
+from scipy import stats
 
     
 
@@ -87,7 +88,7 @@ def plot_polarization_event_noise(waveforms_VBB,
         st_Copy.trim(starttime=utct(timing_noise[0]) - trim_time[0], #og: -50, +850
                      endtime=utct(timing_S) + trim_time[1])
     except ValueError: #if noise window is picked after the event
-        st_Copy.trim(starttime=utct(timing_P) - trim_time[0], #og: -50, +850
+        st_Copy.trim(starttime=utct(timing_P) - trim_time[0]-120, #og: -50, +850
                      endtime=utct(timing_noise[-1]) + trim_time[0])
         
                                                            
@@ -279,24 +280,15 @@ def plot_polarization_event_noise(waveforms_VBB,
         twodmask_S = [[] for i in range(3)]
         twodmask_noise = [[] for i in range(3)]
         
-        #2D mask for 'whole' f-t window (as defined by f_band_density and t_pick_P/S)
-        bol_density_f_mask = np.array((f > f_band_density[0], f < f_band_density[1])).all(axis=0)
-        twodmask_P[0] = bol_density_f_mask[:, None] & bol_signal_P_mask[None, :]
-        twodmask_S[0] = bol_density_f_mask[:, None] & bol_signal_S_mask[None, :]
-        twodmask_noise[0] = bol_density_f_mask[:, None] & bol_noise_mask[None, :]
-        
-        #2D mask for 'lower' f-t window (as defined by f_band_density and t_pick_P/S)
         f_middle = f_band_density[0] + (f_band_density[1]-f_band_density[0])/2
-        bol_density_f_mask_low = np.array((f > f_band_density[0], f < f_middle)).all(axis=0)
-        twodmask_P[1] = bol_density_f_mask_low[:, None] & bol_signal_P_mask[None, :]
-        twodmask_S[1] = bol_density_f_mask_low[:, None] & bol_signal_S_mask[None, :]
-        twodmask_noise[1] = bol_density_f_mask_low[:, None] & bol_noise_mask[None, :]
         
-        #2D mask for 'higher' f-t window (as defined by f_band_density and t_pick_P/S)
-        bol_density_f_mask_high = np.array((f >= f_middle, f < f_band_density[1])).all(axis=0)
-        twodmask_P[2] = bol_density_f_mask_high[:, None] & bol_signal_P_mask[None, :]
-        twodmask_S[2] = bol_density_f_mask_high[:, None] & bol_signal_S_mask[None, :]
-        twodmask_noise[2] = bol_density_f_mask_high[:, None] & bol_noise_mask[None, :]
+        for i, (f_low, f_high) in enumerate(zip((f_band_density[0], f_band_density[0], f_middle), 
+                                                (f_band_density[1], f_middle, f_band_density[1]))):
+            # Whole f-band, lower f-band, higher f-band
+            bol_density_f_mask = np.array((f >= f_low, f < f_high)).all(axis=0)
+            twodmask_P[i] = bol_density_f_mask[:, None] & bol_signal_P_mask[None, :]
+            twodmask_S[i] = bol_density_f_mask[:, None] & bol_signal_S_mask[None, :]
+            twodmask_noise[i] = bol_density_f_mask[:, None] & bol_noise_mask[None, :]
 
 
         #Scalogram and alpha/masking of signals
@@ -378,12 +370,9 @@ def plot_polarization_event_noise(waveforms_VBB,
                 plt.colorbar(cm, cax=cax, ticks=xticks, **kw)
 
             
-            kde_list[irow][0] = data[twodmask_P[0]]
-            kde_list[irow][1] = data[twodmask_S[0]]
-            kde_list[irow][2] = data[twodmask_noise[0]]
-            kde_weights[irow][0] = alpha[twodmask_P[0]]
-            kde_weights[irow][1] = alpha[twodmask_S[0]]
-            kde_weights[irow][2] = alpha[twodmask_noise[0]]
+            for i, mask in enumerate((twodmask_P[0], twodmask_S[0], twodmask_noise[0])):
+                kde_list[irow][i] = data[mask]
+                kde_weights[irow][i] = alpha[mask]
             for i in range(len(f)):
                 binned_data_signal_P[irow, i, :] += np.histogram(data[i,bol_signal_P_mask], bins=nbins,
                                                         range=(rmin, rmax),
@@ -473,7 +462,7 @@ def plot_polarization_event_noise(waveforms_VBB,
     axes1[0].set_title(f'Density \n {f_band_density[0]}-{f_band_density[1]} Hz')
     axes0[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, f'{name_timewindows[0]}', c=color_windows[0], fontsize=12)
     axes0[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, f'{name_timewindows[1]}', c=color_windows[1], fontsize=12)
-    if not zoom or (zoom and (utct(tstart_noise).datetime >= utct(utct(timing_P) - 120).datetime or \
+    if not zoom or (zoom and (utct(tstart_noise).datetime >= utct(utct(timing_P) - 120).datetime and \
                               utct(tstart_noise).datetime < utct(utct(timing_S) + 120).datetime)):
         axes0[0, 0].text(utct(tstart_noise).datetime, fmax+1, f'{name_timewindows[2]}', c=color_windows[2], fontsize=12)
     axes0[0, 0].text(utct(timing_P).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
@@ -567,6 +556,22 @@ def plot_polarization_event_noise(waveforms_VBB,
             spine.set_linewidth(2)
     
     
+    #Get BAZ from max density of P curve, mark in density column
+    max_x = [[],[]]
+    for j, (i, xlim) in enumerate(zip((1,3), (360,90))):
+        kernel = stats.gaussian_kde(kde_dataframe_P[i]['P'], weights = kde_dataframe_P[i]['weights'])
+        kernel.covariance_factor = lambda : .20
+        kernel._compute_covariance()
+        xs = np.linspace(0,xlim,1000)
+        ys = kernel(xs)
+        index = np.argmax(ys)
+        max_x[j] = xs[index]
+    BAZ_P = np.deg2rad(max_x[0])
+    inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
+    title += f' - P BAZ: {max_x[0]:.0f}°'
+    ax = axes1[1]
+    ax.axvline(x=max_x[0],c='r')
+    
     #Set grid lines, mark BAZ
     if BAZ and ('ZNE' in rotation): #plot BAZ if it exists and if traces have NOT been rotated
         for ax in axes0[1, 1:]:
@@ -624,11 +629,11 @@ def plot_polarization_event_noise(waveforms_VBB,
     fig.suptitle(title, fontsize=15)
     
     
+    
     ## ----------------new figure for polar plots----------------
     #new figure with polar projections
-    fig2, axes2 = plt.subplots(ncols=3, nrows=3, subplot_kw={'projection': 'polar'}, figsize=(12,11))
-    # fig2, axes2 = plt.subplots(ncols=3, nrows=3, figsize=(12,8))
-    fig2.subplots_adjust(hspace=0.4, wspace=0.3, top=0.9, bottom=0.05)
+    fig2, axes2 = plt.subplots(ncols=3, nrows=3, subplot_kw={'projection': 'polar'}, figsize=(10,11))
+    fig2.subplots_adjust(hspace=0.4, wspace=0.3, top=0.87, bottom=0.05, left=0.13, right=0.93)
     
     colormap = 'gist_heat_r'
     
@@ -642,23 +647,65 @@ def plot_polarization_event_noise(waveforms_VBB,
     [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] = iterables[1] #azimuth
     inc_data = np.rad2deg(abs(inc1)) #data inclination
     
+    #Top row in plot: frequency vs BAZ
     for i in range(len(f)):
         fBAZ_P[i,:] += np.histogram(data[i,bol_signal_P_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_P_mask])[0]
         fBAZ_S[i,:] += np.histogram(data[i,bol_signal_S_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_S_mask])[0]
         fBAZ_noise[i,:] += np.histogram(data[i,bol_noise_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_noise_mask])[0]
         
+    #Following rows in plot: inclination vs BAZ
     for i in range(2):
         BAZ_Inc_P[i] = np.histogram2d(data[twodmask_P[i+1]], inc_data[twodmask_P[i+1]], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_P[i+1]])[0]
         BAZ_Inc_S[i] = np.histogram2d(data[twodmask_S[i+1]], inc_data[twodmask_S[i+1]], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_S[i+1]])[0]
         BAZ_Inc_noise[i] = np.histogram2d(data[twodmask_noise[i+1]], inc_data[twodmask_noise[i+1]], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_noise[i+1]])[0]
     
     
-    #Test
-    # idx_density = np.where((f > 0.4) & (f < 0.6))
-    # fBAZ_P[:,:] = 0
-    # fBAZ_P[:,7] = 1
-    # fBAZ_P[idx_density,7] = 0
-    # fBAZ_P[idx_density,1] = 1
+    #Vector fun
+    #get P coordinates from kde curve maxima?
+    BAZ_S = []
+    inc_S = []
+    # max_x = [[],[]]
+    # # BAZ_P = np.deg2rad(74)
+    # # inc_P = np.deg2rad(75) #careful: this inclination is NOT the spherical coordinate inclination
+    
+    # for j, (i, xlim) in enumerate(zip((1,3), (360,90))):
+    #     kernel = stats.gaussian_kde(kde_dataframe_P[i]['P'], weights = kde_dataframe_P[i]['weights'])
+    #     kernel.covariance_factor = lambda : .25
+    #     kernel._compute_covariance()
+    #     xs = np.linspace(0,xlim,1000)
+    #     ys = kernel(xs)
+    #     index = np.argmax(ys)
+    #     max_x[j] = xs[index]
+    # BAZ_P = np.deg2rad(max_x[0])
+    # inc_P = np.deg2rad(max_x[1])    
+    
+    #Define uP vector in cartesian coordinates from BAZ and inclination (inclination from polarisation is NOT the spherical coordinate inclination)
+    gamma = np.linspace(0,2*np.pi, num=300)
+    y = np.sin(np.pi/2-inc_P)*np.sin(BAZ_P)
+    x = np.sin(np.pi/2-inc_P)*np.cos(BAZ_P)
+    z = np.cos(np.pi/2-inc_P) #arbitrarily set r = 1
+    uP = np.array([x, y, z])
+    
+    #get two orthogonal vectors uS1, uS2
+    uS1 = np.random.randn(3)  # take a random vector
+    uS1 -= uS1.dot(uP) * uP / np.linalg.norm(uP)**2       # make it orthogonal to uP
+    uS1 /= np.linalg.norm(uS1)  # normalize it
+    uS2 = np.cross(uP, uS1)      # cross product with uP to get second vector
+    
+    for i in gamma: #loop from 0 to 2pi
+        uS = np.sin(i)*uS1 + np.cos(i)*uS2 #general vector uS from linear combination of uS1 and uS2
+        r = np.sqrt(uS[0]**2+uS[1]**2+uS[2]**2)
+        BAZ_S.append(np.arctan2(uS[1],uS[0]))
+        inclination = np.pi/2-np.arccos(uS[2]/r) #inclination again defined as for polarisation analysis: 90° is vertical
+        if inclination < 0: #'upper' part of sphere, ignore
+            inc_S.append(np.nan)
+        elif inclination <= np.pi/2:
+            inc_S.append(inclination)
+        else: #is landing on the other side, re-map to 0-90°
+            inc_S.append(np.pi-inclination)
+
+
+    #Plot all histograms
     P_hists = (fBAZ_P[bol_density_f_mask,:], BAZ_Inc_P[0].T, BAZ_Inc_P[1].T)
     S_hists = (fBAZ_S[bol_density_f_mask,:], BAZ_Inc_S[0].T, BAZ_Inc_S[1].T)
     Noise_hist = (fBAZ_noise[bol_density_f_mask,:], BAZ_Inc_noise[0].T, BAZ_Inc_noise[1].T)
@@ -676,78 +723,62 @@ def plot_polarization_event_noise(waveforms_VBB,
                                 ylim, N,
                                 cmap=colormap,
                                 shading='auto')
-        
-    # axes2[0,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             f[bol_density_f_mask], fBAZ_P[bol_density_f_mask,:],
-    #                             cmap=colormap, #pqlx,
-    #                             shading='auto')
-    # axes2[0,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             f[bol_density_f_mask], fBAZ_S[bol_density_f_mask,:],
-    #                             cmap=colormap, #pqlx,
-    #                             shading='auto')
-    # axes2[0,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             f[bol_density_f_mask], fBAZ_noise[bol_density_f_mask,:],
-    #                             cmap=colormap, #pqlx,
-    #                             shading='auto')
-    
-    # axes2[1,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             np.linspace(0, 90, nbins), BAZ_Inc_P[0].T,
-    #                             cmap=colormap,
-    #                             shading='auto')
-    # axes2[1,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             np.linspace(0, 90, nbins), BAZ_Inc_S[0].T,
-    #                             cmap=colormap,
-    #                             shading='auto')
-    # axes2[1,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             np.linspace(0, 90, nbins), BAZ_Inc_noise[0].T,
-    #                             cmap=colormap,
-    #                             shading='auto')
-    
-    # axes2[2,1].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             np.linspace(0, 90, nbins), BAZ_Inc_P[1].T,
-    #                             cmap=colormap,
-    #                             shading='auto')
-    # axes2[2,2].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             np.linspace(0, 90, nbins), BAZ_Inc_S[1].T,
-    #                             cmap=colormap,
-    #                             shading='auto')
-    # axes2[2,0].pcolormesh(np.radians(np.linspace(rmin, rmax, nbins)),
-    #                             np.linspace(0, 90, nbins), BAZ_Inc_noise[1].T,
-    #                             cmap=colormap,
-    #                             shading='auto')
     
 
-    axes2[0,0].text(x=-0.4, y=0.5, transform=axes2[0,0].transAxes, s='BAZ vs f \n', #x=-0.18 #x=-019 gze
+    axes2[0,0].text(x=-0.45, y=0.5, transform=axes2[0,0].transAxes, s='major azimuth \n vs frequency', #x=-0.18 #x=-019 gze
                 ma='center', va='center', bbox=props, rotation=90, size=15) 
-    axes2[1,0].text(x=-0.4, y=0.0, transform=axes2[1,0].transAxes, s='BAZ vs \n inclination', #x=-0.18 #x=-019 gze
+    axes2[1,0].text(x=-0.45, y=-0.2, transform=axes2[1,0].transAxes, s='major azimuth \n vs inclination', #x=-0.18 #x=-019 gze
                 ma='center', va='center', bbox=props, rotation=90, size=15) 
         
-    for ax in axes2.flatten():
+    for ax in axes2.flatten(): #all subplots
         ax.set_theta_zero_location("N")
         ax.set_theta_direction('clockwise')
         ax.grid(True)
-        if BAZ:
-            ax.axvline(x=np.radians(BAZ), color='blue')
-            ax.text(np.radians(BAZ), 1.1, 'BAZ', c='blue', fontsize=13)
             
-    for i,ax in enumerate(axes2[0,:]):
+    for i,ax in enumerate(axes2[0,:]): #top row
         ax.set_rlim(0)
         ax.set_rorigin(0.1)
         ax.yaxis.get_major_locator().base.set_params(nbins=4)
         ax.set_rscale('symlog')
         ax.set_rlim(f_band_density[0])
         # ax.set_rgrids((0.4, 0.5, 0.6, 0.7, 0.8, 0.9))
-        ax.set_rgrids((0.5, 1., 1.5, 2., 2.5))
-        ax.set_yticklabels('')
-        ax.set_title(f'{name_timewindows[i+2]} \n {f_band_density[0]}-{f_band_density_high} Hz', fontsize=15)
+        ax.set_rgrids((0.5, 1., 1.5, 2., 2.5), labels=('0.5', '1.0', '1.5', '2.0', '2.5'))
+        ax.set_title(f'{name_timewindows[i+2]} \n \n {f_band_density[0]}-{f_band_density_high} Hz', fontsize=15)
         
-    for ax in axes2[1,:].flatten():
-        ax.set_title(f'{f_band_density[0]}-{f_middle:.2f} Hz', fontsize=15)
-        ax.invert_yaxis()
-    for ax in axes2[2,:].flatten():
-        ax.set_title(f'{f_middle:.2f}-{f_band_density[1]} Hz', fontsize=15)
-        ax.invert_yaxis()
-    fig2.suptitle(title, fontsize=15)
+        if BAZ:
+            ax.axvline(x=np.radians(BAZ), color='C0')
+            ax.text(np.radians(BAZ), 3.5, 'BAZ', c='C0', fontsize=13)
+        
+    #lower rows
+    for flat_ax, sub_title, rlim in zip((axes2[1,:].flatten(), axes2[2,:].flatten()),
+                                  (f'{f_band_density[0]}-{f_middle:.2f} Hz', f'{f_middle:.2f}-{f_band_density[1]} Hz'),
+                                  (-5, -5)):
+        for ax in flat_ax:
+            ax.set_title(sub_title, fontsize=15)
+            ax.invert_yaxis()
+            if BAZ:
+                ax.axvline(x=np.radians(BAZ), color='C0')
+                ax.text(np.radians(BAZ), rlim, 'BAZ', c='C0', fontsize=13)
+    
+    #Plot the orthogonal plane to the P wave
+    for ax in axes2[1:,1:].flatten():
+        ax.scatter(BAZ_P,np.rad2deg(inc_P), color='C9', zorder=100) #P-vector: point
+        ax.plot(BAZ_S, np.rad2deg(inc_S), color= 'C9', zorder=101) #Orthogonal plane: line
+                
+        
+    #Boxes to separate f-BAZ and inclination-BAZ plots
+    rect = plt.Rectangle(
+    # (lower-left corner), width, height
+    (0.01, 0.63), 0.98, 0.29, fill=False, color="k", lw=2, 
+    zorder=1000, transform=fig2.transFigure, figure=fig2)
+    fig2.patches.extend([rect])
+    
+    rect2 = plt.Rectangle(
+    (0.01, 0.01), 0.98, 0.61, fill=False, color="k", lw=2, 
+    zorder=1000, transform=fig2.transFigure, figure=fig2)
+    fig2.patches.extend([rect2])
+
+    fig2.suptitle(title, fontsize=18)
 
 
 ## ----------------save figures----------------
