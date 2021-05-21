@@ -663,21 +663,7 @@ def plot_polarization_event_noise(waveforms_VBB,
     #Vector fun
     #get P coordinates from kde curve maxima?
     BAZ_S = []
-    inc_S = []
-    # max_x = [[],[]]
-    # # BAZ_P = np.deg2rad(74)
-    # # inc_P = np.deg2rad(75) #careful: this inclination is NOT the spherical coordinate inclination
-    
-    # for j, (i, xlim) in enumerate(zip((1,3), (360,90))):
-    #     kernel = stats.gaussian_kde(kde_dataframe_P[i]['P'], weights = kde_dataframe_P[i]['weights'])
-    #     kernel.covariance_factor = lambda : .25
-    #     kernel._compute_covariance()
-    #     xs = np.linspace(0,xlim,1000)
-    #     ys = kernel(xs)
-    #     index = np.argmax(ys)
-    #     max_x[j] = xs[index]
-    # BAZ_P = np.deg2rad(max_x[0])
-    # inc_P = np.deg2rad(max_x[1])    
+    inc_S = []  
     
     #Define uP vector in cartesian coordinates from BAZ and inclination (inclination from polarisation is NOT the spherical coordinate inclination)
     gamma = np.linspace(0,2*np.pi, num=300)
@@ -800,12 +786,10 @@ def plot_polarization_event_noise(waveforms_VBB,
             path = 'Plots/Synthetics'
         else:
             path = 'Plots/Test'
-        fig.savefig(f'{path}/{savename}.png', dpi=200)
-        fig2.savefig(f'{path}/{savename}_polarPlots.png', dpi=200)
         
-        # #save for automatic plots
-        # fig.savefig(f'polarisation_{savename}.png', dpi=200)
-        # if not zoom:
-        #     fig2.savefig(f'{path}/{savename}_polarPlots.png', dpi=200)
+        #save for automatic plots
+        fig.savefig(f'polarisation_{savename}.png', dpi=200)
+        if not zoom:
+            fig2.savefig(f'{path}/{savename}_polarPlots.png', dpi=200)
     
     plt.close()
