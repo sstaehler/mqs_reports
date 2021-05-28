@@ -16,13 +16,14 @@ from typing import Union
 
 import numpy as np
 import obspy
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
+from obspy.taup import TauPyModel
+
 from mqs_reports.annotations import Annotations
 from mqs_reports.magnitudes import fit_spectra, calc_magnitude
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
     calc_cwf, solify
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
-from obspy.taup import TauPyModel
 
 RADIUS_MARS = 3389.5
 CRUST_VP = 4.
@@ -719,13 +720,26 @@ class Event:
                   instrument: str = 'VBB') -> Union[float, None]:
         """
         Calculate magnitude of an event
-        :param mag_type: 'mb_P', 'mb_S' 'm2.4' or 'MFB':
+        :param mag_type: 'mb_P', 'mb_S' 'm2.4' 'MFB' or 'Mw'
+               If 'Mw', the preferred magnitude as defined in Böse et al (2021) is chosen.
         :param distance: float or None, in which case event.distance is used
         :param version: 'Giardini2020' or 'Boese2021'
         :param instrument: 'VBB' or 'SP'
         :return:
         """
-        import mqs_reports.magnitudes as mag
+        from mqs_reports.constants import mag_exceptions as mag_exc
+
+        if mag_type == 'Mw':
+            if self.mars_event_type_short == 'VF':
+                if self.name in mag_exc['events_A0']:
+                    mag_type = "MFB"
+                else:
+                    mag_type = "m2.4"
+            elif self.mars_event_type_short in ['LF', 'BB', 'HF']:
+                mag_type = "MFB"
+            else:
+                mag_type = "m2.4"
+
         if verbose:
             print('*** {0} {1}'.format(self.name, mag_type))
         pick_name = {'mb_P': 'Peak_MbP',

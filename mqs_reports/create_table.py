@@ -12,10 +12,11 @@ from argparse import ArgumentParser
 from os.path import exists as pexists, join as pjoin
 
 import obspy
-from mqs_reports.snr import calc_SNR, calc_stalta
-from mqs_reports.utils import solify
 from obspy import UTCDateTime as utct
 from tqdm import tqdm
+
+from mqs_reports.snr import calc_SNR, calc_stalta
+from mqs_reports.utils import solify
 
 
 def create_row_header(list):
@@ -82,13 +83,14 @@ def write_html(catalog, fnam_out, magnitude_version):
                       'S-amp<br>[m]',
                       '2.4 Hz<br>pick [m]',
                       '2.4 Hz<br>fit [m]',
-                      'A0<sup>2</sup><br>[dB]',
-                      'MbP',
-                      'MbS',
-                      'M2.4',
-                      'MFB',
-                      'f_c<br>[Hz]',
-                      'tstar<br>[s]',
+                      'A<sub>0</sub><sup>2</sup><br>[dB]',
+                      'm<sub>b,P</sub>',
+                      'm<sub>b,S</sub>',
+                      'm<sub>2.4</sub>',
+                      'M<sub>W,spec</sub>',
+                      'M<sub>W</sub>',
+                      'f<sub>c</sub><br>[Hz]',
+                      't*<br>[s]',
                       'VBB<br>rate',
                       '100sps<br> SP1',
                       '100sps<br> SPH'))
@@ -104,7 +106,9 @@ def write_html(catalog, fnam_out, magnitude_version):
                '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
                '%4d&plusmn;%d',
                '%3.1f', '%3.1f',
-               '%3.1f', '%3.1f&plusmn;%3.1f',
+               '%3.1f',
+               '%3.1f&plusmn;%3.1f',
+               '%3.1f&plusmn;%3.1f',
                '%3.1f', '%5.3f',
                '%s', '%s', '%s')
     time_string = {'GUI': '%s<sup>[O]</sup>',
@@ -311,6 +315,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                    None,
                    None,
                    None,
+                   None,
                    None
                    )
         if pexists(event.fnam_report['summary_local']):
@@ -369,6 +374,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
              event.magnitude(mag_type='mb_S', version=magnitude_version)[0],
              event.magnitude(mag_type='m2.4', version=magnitude_version)[0],
              event.magnitude(mag_type='MFB', version=magnitude_version),
+             event.magnitude(mag_type='Mw', version=magnitude_version),
              event.amplitudes['f_c'],
              event.amplitudes['tstar'],
              event.available_sampling_rates()['VBB_Z'],
