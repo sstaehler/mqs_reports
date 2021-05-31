@@ -21,6 +21,7 @@ from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 from obspy.taup import TauPyModel
 
 from mqs_reports.annotations import Annotations
+from mqs_reports.constants import mag_exceptions as mag_exc
 from mqs_reports.magnitudes import fit_spectra, calc_magnitude
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
     calc_cwf, solify
@@ -608,6 +609,12 @@ class Event:
                            'f_c': None,
                            'width_24': None}
 
+        if self.name in mag_exc['events_A0']:
+            mag_type = "MFB"
+            A0_fix = mag_exc['events_A0'][self.name]['value']
+        else:
+            A0_fix = None
+
         if 'noise' in self.spectra:
             f_noise = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
@@ -630,6 +637,7 @@ class Event:
                                              f_noise=f_noise,
                                              p_sig=p_sig,
                                              p_noise=p_noise,
+                                             A0_fix=A0_fix,
                                              event_type=self.mars_event_type_short)
                 if amplitudes is not None:
                     break
@@ -727,8 +735,6 @@ class Event:
         :param instrument: 'VBB' or 'SP'
         :return:
         """
-        from mqs_reports.constants import mag_exceptions as mag_exc
-
         if mag_type == 'Mw':
             if self.mars_event_type_short == 'VF':
                 if self.name in mag_exc['events_A0']:
@@ -785,7 +791,7 @@ class Event:
             amplitude_dB = self.amplitudes['A0'] / 2. \
                 if 'A0' in self.amplitudes and self.amplitudes['A0'] is not None else None
             # For sigma(A0) take twice the value from the spectral fit to account
-            # for generally poor fitting
+            # for generally poor fitting
             amplitude_dB_sigma = self.amplitudes['A0_err'] / 2. * 2. \
                 if 'A0_err' in self.amplitudes and self.amplitudes['A0_err'] is not None else None
         elif mag_type == 'm2.4':
