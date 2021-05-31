@@ -254,9 +254,9 @@ def plot_polarization_event_noise(waveforms_VBB,
             continue
         
         if detick_1Hz:
-            tr_Z_detick = detick(tr_Z, 3)
-            tr_N_detick = detick(tr_N, 3)
-            tr_E_detick = detick(tr_E, 3)
+            tr_Z_detick = detick(tr_Z, 5)
+            tr_N_detick = detick(tr_N, 5)
+            tr_E_detick = detick(tr_E, 5)
             f, t, u1, u2, u3 = polarization._compute_spec(tr_Z_detick, tr_N_detick, tr_E_detick, kind, fmin, fmax,
                                          winlen, nfft, overlap, nf=nf, w0=w0)
         else:
@@ -568,6 +568,7 @@ def plot_polarization_event_noise(waveforms_VBB,
         max_x[j] = xs[index]
     BAZ_P = np.deg2rad(max_x[0])
     inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
+    # inc_P = np.deg2rad(50)
     title += f' - P BAZ: {max_x[0]:.0f}°'
     ax = axes1[1]
     ax.axvline(x=max_x[0],c='r')
@@ -633,7 +634,7 @@ def plot_polarization_event_noise(waveforms_VBB,
     ## ----------------new figure for polar plots----------------
     #new figure with polar projections
     fig2, axes2 = plt.subplots(ncols=3, nrows=3, subplot_kw={'projection': 'polar'}, figsize=(10,11))
-    fig2.subplots_adjust(hspace=0.4, wspace=0.3, top=0.87, bottom=0.05, left=0.13, right=0.93)
+    fig2.subplots_adjust(hspace=0.4, wspace=0.35, top=0.85, bottom=0.05, left=0.13, right=0.93)
     
     colormap = 'gist_heat_r'
     
@@ -769,12 +770,12 @@ def plot_polarization_event_noise(waveforms_VBB,
     #Boxes to separate f-BAZ and inclination-BAZ plots
     rect = plt.Rectangle(
     # (lower-left corner), width, height
-    (0.01, 0.63), 0.98, 0.29, fill=False, color="k", lw=2, 
+    (0.01, 0.615), 0.98, 0.29, fill=False, color="k", lw=2, 
     zorder=1000, transform=fig2.transFigure, figure=fig2)
     fig2.patches.extend([rect])
     
     rect2 = plt.Rectangle(
-    (0.01, 0.01), 0.98, 0.61, fill=False, color="k", lw=2, 
+    (0.01, 0.01), 0.98, 0.595, fill=False, color="k", lw=2, 
     zorder=1000, transform=fig2.transFigure, figure=fig2)
     fig2.patches.extend([rect2])
 
