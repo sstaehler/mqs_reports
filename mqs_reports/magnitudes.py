@@ -9,6 +9,7 @@
 """
 
 import numpy as np
+
 from mqs_reports import constants
 from mqs_reports.utils import linregression
 
@@ -106,24 +107,24 @@ def lorentz_att(f: np.array,
                 f_c: float,
                 tstar: float,
                 fw: float,
-                ampfac: float):
+                ampfac: float) -> np.array:
     """
     Attenuation spectrum, combined with Lorentz peak and source spectrum
     :param f: Frequency array (in Hz)
     :param A0: Long-period amplitude in flat part of spectrum (in dB)
     :param f0: Center frequency of the Lorenz peak (aka 2.4 Hz)
     :param f_c: Corner frequency of the Source (Hz)
-    :param tstar: T* value from attenuation
-    :param fw: Width of Lorenz peak
-    :param ampfac: Amplification factor of Lorenz peak
-    :return:
+    :param tstar: t* value from attenuation
+    :param fw: Width of Lorentz peak
+    :param ampfac: Amplification factor of Lorentz peak
+    :return predicted spectrum
     """
     w = (f - f0) / (fw / 2.)
     stf_amp = 1 / (1 + (f / f_c) ** 2)
     return A0 + 10 * np.log10(
-        (1 + ampfac / (1 + w ** 2))
-        * stf_amp
-        * np.exp(- tstar * f * np.pi))
+        (1 + ampfac / (1 + w ** 2)) *
+        stf_amp *
+        np.exp(- tstar * f * np.pi))
 
 
 def _remove_singles(array):
@@ -132,7 +133,7 @@ def _remove_singles(array):
             array[ix] = False
 
 
-def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
+def fit_peak_att(f, p, A0_max=-200., tstar_min=0.05, A0_min=-240.):
     from scipy.optimize import curve_fit
     tstar_max = 10.0
 
@@ -149,7 +150,7 @@ def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
     fw_max = 0.4
     # noinspection PyTypeChecker
     popt, pcov = curve_fit(lorentz_att, f, 10. * np.log10(p),
-                           bounds=((-240,
+                           bounds=((A0_min,
                                     f0_min,
                                     0.8,
                                     tstar_min,
@@ -162,7 +163,12 @@ def fit_peak_att(f, p, A0_max=-200, tstar_min=0.05):
                                     fw_max,
                                     ampfac_max)),
                            sigma=f * 10.,
-                           p0=(A0_max - 5, 2.4, 3., 2., 0.25, ampfac_min))
+                           p0=((A0_max + A0_min) / 2.,
+                               2.4,
+                               3.,
+                               2.,
+                               0.25,
+                               ampfac_min))
     return popt
 
 
@@ -198,7 +204,8 @@ def fit_peak(f, p, A0_min=-240, A0_max=-180,
     return popt
 
 
-def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
+def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05,
+                A0_fix=None):
     len_spec = len(f_noise)
     if len(p_sig) != len_spec:
         f_dec = np.linspace(f_noise[0], f_noise[-1], len_spec)
@@ -222,14 +229,14 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
         fmin = 4.0
         fmax = 9.0
 
-    bol_1Hz_mask = np.array(
+    bol_fitting_mask = np.array(
         (np.array((f > fmin, f < fmax)).all(axis=0),
          np.array((f < 1. / df_mute,
                    f > df_mute)).any(axis=0),
          np.array(p_sig > p_noise * noise_threshold)
          )
     ).all(axis=0)
-    _remove_singles(bol_1Hz_mask)
+    _remove_singles(bol_fitting_mask)
 
     mute_24 = [1.9, 3.4]
     A0 = None
@@ -242,15 +249,20 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     f_c = None
     A_24 = None
     if event_type not in ['24', 'SF']:
-        if sum(bol_1Hz_mask) > 5:
+        if sum(bol_fitting_mask) > 5:
 
             # Fitting HF family events
             if event_type in ['HF', 'VF']:
-                # A0 should not be larger than peak between 1.1 and 1.8 Hz
-                A0_max = np.max(10 * np.log10(
-                    p_sig[np.array((f > 1.1, f < 1.8)).all(axis=0)])) + 6.
+                if A0_fix is not None:
+                    A0_min = A0_fix - 1.
+                    A0_max = A0_fix + 1.
+                else:
+                    # A0 should not be larger than peak between 1.1 and 1.8 Hz
+                    A0_max = np.max(10 * np.log10(
+                        p_sig[np.array((f > 1.1, f < 1.8)).all(axis=0)])) + 6.
+                    A0_min = -240.
                 # tstar must be so large than event is below noise
-                if max(f[bol_1Hz_mask]) < 4:
+                if max(f[bol_fitting_mask]) < 4:
                     ifreq = np.array((f > 6.0, f < 7.0)).all(axis=0)
                     tstar_min = (np.log(10 ** (A0_max / 10)) -
                                  np.log(np.mean(p_sig[ifreq]))) \
@@ -259,10 +271,17 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                     tstar_min = 0.05
                 try:
                     A0, f_24, f_c, tstar, width_24, ampfac = fit_peak_att(
-                        f[bol_1Hz_mask],
-                        p_sig[bol_1Hz_mask],
-                        A0_max, tstar_min)
-                    A0_err = 5.
+                        f=f[bol_fitting_mask],
+                        p=p_sig[bol_fitting_mask],
+                        A0_max=A0_max,
+                        tstar_min=tstar_min,
+                        A0_min=A0_min)
+                    if A0_fix is None:
+                        A0_err = 5.
+                    else:
+                        A0_err = 0.
+                        A0 = A0_fix
+
                 except RuntimeError:
                     pass
 
@@ -271,8 +290,8 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
                 # res = np.polyfit(f[bol_1Hz_mask],
                 #                  10 * np.log10(p_sig[bol_1Hz_mask]),
                 #                  deg=1)
-                res = linregression(x=f[bol_1Hz_mask],
-                                    y=10 * np.log10(p_sig[bol_1Hz_mask]),
+                res = linregression(x=f[bol_fitting_mask],
+                                    y=10 * np.log10(p_sig[bol_fitting_mask]),
                                     q=0.95)
                 # A0 = res[1]
                 # tstar = - res[0] / 10. * np.log(10) / np.pi  # Because dB
@@ -298,4 +317,5 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05):
     amps['f_c'] = f_c
     amps['width_24'] = width_24
     amps['ampfac'] = ampfac
+    amps['fitting_mask'] = bol_fitting_mask
     return amps

@@ -11,11 +11,12 @@ import numpy as np
 import obspy
 import plotly.graph_objects as go
 import plotly.io as pio
+from obspy import UTCDateTime as utct
+from plotly.subplots import make_subplots
+
 from mqs_reports.magnitudes import lorentz, lorentz_att
 from mqs_reports.utils import envelope_smooth, detick, calc_cwf, \
     create_timevector
-from obspy import UTCDateTime as utct
-from plotly.subplots import make_subplots
 
 
 def make_report(event, chan, fnam_out, annotations):
@@ -113,6 +114,8 @@ def plot_spec(event,
               df_mute=0.99, f_VBB_SP_transition=7.5, **kwargs):
     colors = ['black', 'navy', 'coral', 'orange']
 
+    amps = event.amplitudes
+
     fmins = [0.08, f_VBB_SP_transition]
     fmaxs = [f_VBB_SP_transition, 50]
     specs = [event.spectra, event.spectra_SP]
@@ -136,6 +139,23 @@ def plot_spec(event,
                                    line=go.scatter.Line(color=color),
                                    mode="lines", **kwargs),
                         row=row, col=col)
+    if 'S' in event.spectra:
+        kind = 'S'
+    else:
+        kind = 'P'
+    f = event.spectra[kind]['f']
+    p = event.spectra[kind]['p_' + chan]
+    fig.add_trace(
+        go.Scatter(x=f[amps['fitting_mask']],
+                   y=10 * np.log10(p[amps['fitting_mask']]),
+                   name='data used for fit',
+                   marker=dict(size=5,
+                               line=dict(width=1,
+                                         color='DarkSlateGrey')),
+                   # line=go.scatter.Line(color='red', width=5),
+                   mode="markers",
+                   **kwargs),
+        row=row, col=col)
 
     if event.waveforms_SP is not None:
         # Add marker for SP/VBB transition
@@ -167,7 +187,6 @@ def plot_spec(event,
                        mode="text", **kwargs),
             row=row, col=col)
 
-    amps = event.amplitudes
     f = np.geomspace(0.1, 50.0, num=400)
     if 'A0' in amps:
         A0 = amps['A0']
