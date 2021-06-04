@@ -153,6 +153,7 @@ class Event:
         self.spectra_SP = None
 
         self.fnam_report = dict()
+        self.fnam_polarisation = dict()
 
     @property
     def mars_event_type_short(self):
@@ -1565,3 +1566,46 @@ class Event:
         ax_fbs.set_ylabel('frequency')
 
         return freqs, envs_out
+
+
+    def plot_polarisation(self, t_pick_P, t_pick_S,
+                          rotation_coords='ZNE',
+                          baz=False,
+                          impact=False,
+                          zoom=False,
+                          path_out='pol_plots'):
+        import mqs_reports.polarisation_analysis as pa
+        
+        phase_P = 'P' if self.picks['P'] else 'Pg'
+        phase_S = 'S' if self.picks['S'] else 'Sg'
+    
+        timing_P = self.picks[phase_P]
+        timing_S = self.picks[phase_S]
+        timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
+        
+        if self.mars_event_type_short in ['HF', 'VF', '24']:
+            f_band_density=[0.5, 2.]
+        elif self.mars_event_type_short in ['LF', 'BB']:
+            f_band_density=[0.3, 1.]
+        else:
+            print(f'Unknown event type: {self.mars_event_type_short}')
+            f_band_density=[0.3, 1.]
+        
+        pa.plot_polarization_event_noise(self.waveforms_VBB, 
+                                         t_pick_P, t_pick_S,
+                                         timing_P, timing_S, timing_noise,#P and S picks as strings
+                                         rotation = rotation_coords, BAZ=baz,
+                                         kind='cwt', fmin=0.2, fmax=10.,
+                                         winlen_sec=20., overlap=0.5,
+                                         tstart=None, tend=None, vmin=-205,
+                                         vmax=-165, log=True,
+                                         fname=f'{self.name}', path=path_out,
+                                         dop_winlen=10, dop_specwidth=1.1,
+                                         nf=100, w0=8,
+                                         use_alpha=True, use_alpha2=False,
+                                         alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
+                                         f_band_density=f_band_density,
+                                         plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
+                                         differentiate = True, detick_1Hz = True,
+                                         impact = impact)
+
