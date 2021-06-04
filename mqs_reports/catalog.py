@@ -16,6 +16,11 @@ import matplotlib.ticker
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
+from obspy import UTCDateTime as utct
+from obspy.geodetics.base import degrees2kilometers
+from scipy import stats
+from tqdm import tqdm
+
 from mqs_reports.annotations import Annotations
 from mqs_reports.event import Event, EVENT_TYPES_PRINT, EVENT_TYPES_SHORT, \
     EVENT_TYPES, RADIUS_MARS, CRUST_VS, CRUST_VP
@@ -23,10 +28,6 @@ from mqs_reports.magnitudes import lorentz_att
 from mqs_reports.scatter_annot import scatter_annot
 from mqs_reports.snr import calc_stalta
 from mqs_reports.utils import plot_spectrum, envelope_smooth, pred_spec, solify
-from obspy import UTCDateTime as utct
-from obspy.geodetics.base import degrees2kilometers
-from scipy import stats
-from tqdm import tqdm
 
 
 class Catalog:
@@ -1030,6 +1031,33 @@ class Catalog:
                 else:
                     event.fnam_report[chan] = fnam_report
 
+    def make_report_parallel(self,
+                             dir_out: str = 'reports',
+                             annotations: Annotations = None):
+        """
+        Create Magnitude report figure
+        :param dir_out: Directory to write report to
+        :param annotations: Annotations object; used to mark glitches,
+                            if available
+        """
+        from multiprocessing import Pool
+        pool = Pool(processes=4)
+        func = make_report_check_exists
+        # func = print
+        jobs = [pool.apply_async(func=func,
+                                 args=(event,),
+                                 kwds=dict(dir_out=dir_out,
+                                           annotations=annotations))
+                for event in self
+                ]
+        pool.close()
+        result_list_tqdm = []
+        for job in tqdm(jobs):
+            result_list_tqdm.append(job.get())
+
+        for event_name, fnam in result_list_tqdm:
+            self.select(name=event_name).events[0].fnam_report = fnam
+
     def plot_filterbanks(self,
                          dir_out: str = 'filterbanks',
                          annotations: Annotations = None,
@@ -1442,8 +1470,44 @@ class Catalog:
                     utct().strftime('%Y-%m-%dT%H:%M (UTC)') +
                     df.to_html(index=False, table_id='events_all',
                                col_space=40)
-                   )
+                    )
         elif style == 'latex':
             return df.to_latex(index=False)
         else:
             raise ValueError()
+
+    def plot_polarisation_analysis(self):
+        """
+        Create polarisation analysis plot
+        """
+        #Seconds before and after phase picks for signal window
+        t_pick_P = [-5, 10]
+        t_pick_S = [-5, 10]
+        path_pol_plots = 'pol_plots'
+        for event in tqdm(self):
+            if event.quality in ['A', 'B', 'C'] and \
+                    not pexists(pjoin(path_pol_plots,
+                                      f'{event.name}_polarisation.png')):
+                baz=event.baz if event.baz else False
+                for zoom in [False, True]:
+                    try:
+                        event.plot_polarisation(t_pick_P, t_pick_S,
+                                                rotation_coords='ZNE', baz=baz,
+                                                impact=False, zoom=zoom)
+                    except ValueError as e:
+                        print('Problem with event %s' % event.name)
+                        print(e)
+                        raise e
+
+def make_report_check_exists(event, dir_out, annotations):
+    fnam_report = dict()
+    for chan in ['Z', 'N', 'E']:
+        fnam_report[chan] = pjoin(dir_out,
+                                  'mag_report_%s_%s' %
+                                  (event.name, chan))
+        if not pexists(fnam_report[chan] + '.html'):
+            event.make_report(fnam_out=fnam_report[chan],
+                              chan=chan,
+                              annotations=annotations)
+
+    return event.name, fnam_report

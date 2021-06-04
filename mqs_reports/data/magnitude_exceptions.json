@@ -1,0 +1,40 @@
+{
+  "events_A0": {
+    "S0128a": {
+      "kind": "GUI",
+      "value": -1
+    },
+    "S0264e": {
+      "kind": "GUI",
+      "value": -1
+    },
+    "S0334a": {
+      "kind": "manual",
+      "value": -213.0
+    },
+    "S0376a": {
+      "kind": "manual",
+      "value": -222.0
+    },
+    "S0387a": {
+      "kind": "manual",
+      "value": -218.0
+    },
+    "S0421a": {
+      "kind": "GUI",
+      "value": -1
+    },
+    "S0424c": {
+      "kind": "GUI",
+      "value": -1
+    },
+    "S0475a": {
+      "kind": "manual",
+      "value": -214.0
+    },
+    "S0756a": {
+      "kind": "manual",
+      "value": -192.0
+    }
+  }
+}

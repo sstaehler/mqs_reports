@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+mnt/
 
 # C extensions
 *.so
@@ -120,4 +121,5 @@ erp_template_TWINS.xml
 inventory_single_epoch.xml
 marslocgui.cfg
 paper_UM/
+/mnt/
 /mnt/
