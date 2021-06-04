@@ -5,26 +5,26 @@ Created on Wed May 12 2021
 
 @author: Géraldine Zenhäusern
 """
-import matplotlib
-import matplotlib.patches as patches
+from os import makedirs
+from os.path import join as pjoin, exists as pexists
+
 import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import numpy as np
 import polarization.polarization as polarization
-from mqs_reports.utils import detick
-from obspy import Stream
-from obspy.signal.util import next_pow_2
-import matplotlib.pyplot as plt
-from matplotlib.colorbar import make_axes
-from matplotlib.ticker import NullFormatter
 import seaborn as sns
+from matplotlib.colorbar import make_axes
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
+from matplotlib.ticker import NullFormatter
+from obspy import Stream
 from obspy import UTCDateTime as utct
-from palettable.scientific.sequential import Bilbao_20
+from obspy.signal.util import next_pow_2
 from scipy import stats
 
-    
+from mqs_reports.utils import detick
 
 
 def plot_polarization_event_noise(waveforms_VBB, 
@@ -35,11 +35,12 @@ def plot_polarization_event_noise(waveforms_VBB,
                               winlen_sec=20., overlap=0.5,
                               tstart=None, tend=None, vmin=None,
                               vmax=None, log=False, fname=None,
+                              path='.',
                               dop_winlen=60, dop_specwidth=0.2,
                               nf=100, w0=20,
                               use_alpha=True, use_alpha2=False, 
                               alpha_inc = 1.0, alpha_elli = 1.0, alpha_azi = 1.0,
-                              f_band_density=[0.3, 1.], #frequency band for KDE curve analysis
+                              f_band_density = (0.3, 1.), #frequency band for KDE curve analysis
                               plot_6C=True, plot_spec_azi_only = False, zoom = False,
                               differentiate=False, detick_1Hz=False,
                               impact = False, synthetics = False):
@@ -242,10 +243,10 @@ def plot_polarization_event_noise(waveforms_VBB,
         fBAZ_noise = np.zeros_like(fBAZ_P)
         
     #For histogram curve
-    kde_list = [[[] for j in range(3)] for i in range(nrows)]
-    kde_dataframe_P = [[] for i in range(nrows)]
-    kde_dataframe_S = [[] for i in range(nrows)]
-    kde_noiseframe = [[] for i in range(nrows)]
+    kde_list = [[[] for j in range(3)] for _ in range(nrows)]
+    kde_dataframe_P = [[] for _ in range(nrows)]
+    kde_dataframe_S = [[] for _ in range(nrows)]
+    kde_noiseframe = [[] for _ in range(nrows)]
     kde_weights = [[[] for j in range(3)] for i in range(nrows)]
 
 
@@ -313,8 +314,8 @@ def plot_polarization_event_noise(waveforms_VBB,
         scalogram= 10 * np.log10(r1_sum) 
         alpha, alpha2= polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2) 
         if mod_180: 
-            azi1= azi1% np.pi
-            azi2= azi2% np.pi
+            azi1= azi1 % np.pi
+            azi2= azi2 % np.pi
         
         
         if alpha_inc is not None: 
@@ -358,8 +359,14 @@ def plot_polarization_event_noise(waveforms_VBB,
 
             if log and kind == 'cwt':
                 # imshow can't do the log sampling in frequency
-                cm = polarization.pcolormesh_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
-                                      vmin=rmin, vmax=rmax, bounds=boundaries)
+                # print(t_datetime.shape)
+                # print(f.shape)
+                # print(data.shape)
+                # print(a.shape)
+                cm = polarization.pcolormesh_alpha(ax, t_datetime, f, data,
+                                                   alpha=a, cmap=cmap,
+                                                   vmin=rmin, vmax=rmax)
+                #, bounds=boundaries)
             else:
                 cm = polarization.imshow_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
                                   vmin=rmin, vmax=rmax)
@@ -772,7 +779,8 @@ def plot_polarization_event_noise(waveforms_VBB,
     if fname is None:
         plt.show()
     else:
-        savename = f'{fname}_diff' if differentiate else f'{fname}'
+        # savename = f'{fname}_diff' if differentiate else f'{fname}'
+        savename = fname
         if plot_spec_azi_only:
             savename += '_2Row'
         elif plot_6C:
@@ -781,15 +789,18 @@ def plot_polarization_event_noise(waveforms_VBB,
             savename += '_zoom'
 
         if impact:
-            path = f'Plots/Impact_search/Impact_{impact}'
+            path_full = pjoin(path, f'Impact_search/Impact_{impact}')
         elif synthetics:
-            path = 'Plots/Synthetics'
+            path_full = pjoin(path, 'Synthetics')
         else:
-            path = 'Plots/Test'
-        
+            path_full = pjoin(path)
+
+        if not pexists(path_full):
+            makedirs(path_full)
+
         #save for automatic plots
-        fig.savefig(f'polarisation_{savename}.png', dpi=200)
+        fig.savefig(pjoin(path_full, f'{savename}_polarization.png'), dpi=200)
         if not zoom:
-            fig2.savefig(f'{path}/{savename}_polarPlots.png', dpi=200)
+            fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
     
     plt.close()

@@ -153,6 +153,7 @@ class Event:
         self.spectra_SP = None
 
         self.fnam_report = dict()
+        self.fnam_polarisation = dict()
 
     @property
     def mars_event_type_short(self):
@@ -1567,7 +1568,12 @@ class Event:
         return freqs, envs_out
 
 
-    def plot_polarisation(self, t_pick_P, t_pick_S, rotation_coords='ZNE', baz=False, impact=False, zoom=False):
+    def plot_polarisation(self, t_pick_P, t_pick_S,
+                          rotation_coords='ZNE',
+                          baz=False,
+                          impact=False,
+                          zoom=False,
+                          path_out='pol_plots'):
         import mqs_reports.polarisation_analysis as pa
         
         phase_P = 'P' if self.picks['P'] else 'Pg'
@@ -1586,19 +1592,20 @@ class Event:
             f_band_density=[0.3, 1.]
         
         pa.plot_polarization_event_noise(self.waveforms_VBB, 
-                                                          t_pick_P, t_pick_S,
-                                                          timing_P, timing_S, timing_noise,#P and S picks as strings
-                                                          rotation = rotation_coords, BAZ=baz,
-                                                          kind='cwt', fmin=0.2, fmax=10.,
-                                                          winlen_sec=20., overlap=0.5,
-                                                          tstart=None, tend=None, vmin=-220,
-                                                          vmax=-150, log=True, fname=f'{self.name}',
-                                                          dop_winlen=20, dop_specwidth=1.3,
-                                                          nf=100, w0=20,
-                                                          use_alpha=True, use_alpha2=False, 
-                                                          alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
-                                                          f_band_density=f_band_density,
-                                                          plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
-                                                          differentiate = True, detick_1Hz = True,
-                                                          impact = impact)
+                                         t_pick_P, t_pick_S,
+                                         timing_P, timing_S, timing_noise,#P and S picks as strings
+                                         rotation = rotation_coords, BAZ=baz,
+                                         kind='cwt', fmin=0.2, fmax=10.,
+                                         winlen_sec=20., overlap=0.5,
+                                         tstart=None, tend=None, vmin=-205,
+                                         vmax=-165, log=True,
+                                         fname=f'{self.name}', path=path_out,
+                                         dop_winlen=10, dop_specwidth=1.1,
+                                         nf=100, w0=8,
+                                         use_alpha=True, use_alpha2=False,
+                                         alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
+                                         f_band_density=f_band_density,
+                                         plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
+                                         differentiate = True, detick_1Hz = True,
+                                         impact = impact)
 

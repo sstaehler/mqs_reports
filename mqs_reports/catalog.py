@@ -1483,12 +1483,20 @@ class Catalog:
         #Seconds before and after phase picks for signal window
         t_pick_P = [-5, 10]
         t_pick_S = [-5, 10]
-        
+        path_polplots = 'pol_plots'
         for event in tqdm(self):
-            if event.quality in ['A', 'B', 'C'] and not pexists(f'polarisation_{event.name}_diff.png'):
+            if event.quality in ['A', 'B', 'C'] and \
+                    not pexists(pjoin(path_polplots, f'polarisation_{event.name}.png')):
                 baz=event.baz if event.baz else False
                 for zoom in [False, True]:
-                    event.plot_polarisation(t_pick_P, t_pick_S, rotation_coords='ZNE', baz=baz, impact=False, zoom=zoom)
+                    try:
+                        event.plot_polarisation(t_pick_P, t_pick_S,
+                                                rotation_coords='ZNE', baz=baz,
+                                                impact=False, zoom=zoom)
+                    except ValueError as e:
+                        print('Problem with event %s' % event.name)
+                        print(e)
+                        raise e
 
 def make_report_check_exists(event, dir_out, annotations):
     fnam_report = dict()
