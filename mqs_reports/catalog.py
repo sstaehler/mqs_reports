@@ -1483,10 +1483,11 @@ class Catalog:
         #Seconds before and after phase picks for signal window
         t_pick_P = [-5, 10]
         t_pick_S = [-5, 10]
-        path_polplots = 'pol_plots'
+        path_pol_plots = 'pol_plots'
         for event in tqdm(self):
             if event.quality in ['A', 'B', 'C'] and \
-                    not pexists(pjoin(path_polplots, f'polarisation_{event.name}.png')):
+                    not pexists(pjoin(path_pol_plots,
+                                      f'{event.name}_polarisation.png')):
                 baz=event.baz if event.baz else False
                 for zoom in [False, True]:
                     try:

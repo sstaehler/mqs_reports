@@ -799,7 +799,7 @@ def plot_polarization_event_noise(waveforms_VBB,
             makedirs(path_full)
 
         #save for automatic plots
-        fig.savefig(pjoin(path_full, f'{savename}_polarization.png'), dpi=200)
+        fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
         if not zoom:
             fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
     
