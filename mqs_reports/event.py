@@ -17,6 +17,7 @@ from typing import Union
 import numpy as np
 import obspy
 from mqs_reports.annotations import Annotations
+from mqs_reports.constants import magnitude as mag_const
 from mqs_reports.magnitudes import fit_spectra, calc_magnitude
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
     calc_cwf, solify
@@ -526,6 +527,7 @@ class Event:
         set to None.
         :param winlen_sec: window length for Welch estimator
         """
+
         if not self._waveforms_read:
             raise RuntimeError('waveforms not read in Event object\n' +
                                'Call Event.read_waveforms() first.')
@@ -634,6 +636,9 @@ class Event:
                     break
             if amplitudes is not None:
                 self.amplitudes = amplitudes
+
+        if self.name in mag_const["A0_override"]:
+            amplitudes["A0"] = mag_const["A0_override"][self.name]
 
         self._spectra_available = True
 
