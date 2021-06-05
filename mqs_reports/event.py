@@ -1602,7 +1602,7 @@ class Event:
                                          rotation = rotation_coords, BAZ=baz,
                                          kind='cwt', fmin=0.2, fmax=10.,
                                          winlen_sec=20., overlap=0.5,
-                                         tstart=None, tend=None, vmin=-205,
+                                         tstart=None, tend=None, vmin=-210,
                                          vmax=-165, log=True,
                                          fname=f'{self.name}', path=path_out,
                                          dop_winlen=10, dop_specwidth=1.1,

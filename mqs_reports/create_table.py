@@ -259,32 +259,26 @@ def create_event_row(dist_string, time_string, baz_string,
                                          event.name)
     event.fnam_report['pol'] = pjoin(path_images,
                                      'pol_plots',
-                                     event.name,
-                                     '%s_polarization.png' %
+                                     '%s_polarisation.png' %
                                      event.name)
     event.fnam_report['pol_zoom'] = pjoin(path_images,
                                           'pol_plots',
-                                          event.name,
-                                          '%s_zoom_polarization.png' %
+                                          '%s_zoom_polarisation.png' %
                                           event.name)
     event.fnam_report['pol_polar'] = pjoin(path_images,
                                           'pol_plots',
-                                          event.name,
                                           '%s_polarPlots.png' %
                                           event.name)
     event.fnam_report['pol_local'] = pjoin(path_images_local,
                                            'pol_plots',
-                                           event.name,
-                                           '%s_polarization.png' %
+                                           '%s_polarisation.png' %
                                            event.name)
     event.fnam_report['pol_zoom_local'] = pjoin(path_images_local,
                                                 'pol_plots',
-                                                event.name,
-                                                '%s_zoom_polarization.png' %
+                                                '%s_zoom_polarisation.png' %
                                                 event.name)
     event.fnam_report['pol_polar_local'] = pjoin(path_images_local,
                                                 'pol_plots',
-                                                event.name,
                                                 '%s_polarPlots.png' %
                                                 event.name)
     event.fnam_report['fb_local'] = pjoin(path_images_local,
@@ -553,7 +547,7 @@ if __name__ == '__main__':
 
     print('Plot filter banks')
     catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
-    
+
     print('Plot polarisation analysis')
     catalog.plot_polarisation_analysis()
 

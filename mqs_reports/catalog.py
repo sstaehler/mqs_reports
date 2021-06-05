@@ -1485,7 +1485,7 @@ class Catalog:
         t_pick_S = [-5, 10]
         path_pol_plots = 'pol_plots'
         for event in tqdm(self):
-            if event.quality in ['A', 'B', 'C'] and \
+            if event.quality in ['A', 'B'] and \
                     not pexists(pjoin(path_pol_plots,
                                       f'{event.name}_polarisation.png')):
                 baz=event.baz if event.baz else False
