@@ -614,7 +614,10 @@ class Event:
 
         if self.name in mag_exc['events_A0']:
             mag_type = "MFB"
-            A0_fix = mag_exc['events_A0'][self.name]['value']
+            if mag_exc['events_A0'][self.name]['kind'] == 'manual':
+                A0_fix = mag_exc['events_A0'][self.name]['value']
+            else:
+                A0_fix = None
         else:
             A0_fix = None
 
