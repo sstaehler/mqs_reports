@@ -1485,14 +1485,17 @@ class Catalog:
         t_pick_S = [-5, 10]
         path_pol_plots = 'pol_plots'
         for event in tqdm(self):
-            if event.quality in ['A', 'B'] and \
-                    not pexists(pjoin(path_pol_plots,
-                                      f'{event.name}_polarisation.png')):
+            if (event.quality in ['A', 'B'] or \
+                (event.quality == 'C' and
+                event.mars_event_type_short in ['LF', 'BB'])) \
+               and not pexists(
+                       pjoin(path_pol_plots, f'{event.name}_polarisation.png')):
                 baz=event.baz if event.baz else False
                 for zoom in [False, True]:
                     try:
                         event.plot_polarisation(t_pick_P, t_pick_S,
                                                 rotation_coords='ZNE', baz=baz,
+                                                path_out=path_pol_plots,
                                                 impact=False, zoom=zoom)
                     except ValueError as e:
                         print('Problem with event %s' % event.name)

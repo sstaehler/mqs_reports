@@ -141,8 +141,10 @@ def plot_spec(event,
                         row=row, col=col)
     if 'S' in event.spectra:
         kind = 'S'
-    else:
+    elif 'P' in event.spectra:
         kind = 'P'
+    else:
+        kind = 'all'
     f = event.spectra[kind]['f']
     p = event.spectra[kind]['p_' + chan]
     fig.add_trace(
@@ -278,14 +280,14 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
              'full': (1. / 15., 3.5)
              }
 
-    if ((event.waveforms_SP is None or len(event.waveforms_SP) == 0) 
-       and 
+    if ((event.waveforms_SP is None or len(event.waveforms_SP) == 0)
+       and
        (event.waveforms_VBB is None or len(event.waveforms_VBB) == 0)):
-        print('SP:') 
-        print(event.waveforms_SP)        
+        print('SP:')
+        print(event.waveforms_SP)
 
-        print('VBB:') 
-        print(event.waveforms_VBB)        
+        print('VBB:')
+        print(event.waveforms_VBB)
         print('No data for event %s' % event.name)
     else:
         if event.waveforms_VBB is None:

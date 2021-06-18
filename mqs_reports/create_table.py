@@ -123,10 +123,10 @@ def write_html(catalog, fnam_out, magnitude_version):
     baz_links = ' <br> <a href="{pol:s}" target="_blank">F</a> ' + \
                 '<a href="{pol_zoom:s}" target="_blank">Z</a> ' + \
                 '<a href="{pol_polar:s}" target="_blank">P</a> '
-    baz_string = {'A': '{0.baz:5.1f}°' + baz_links,
+    baz_string = {'A': '{0.baz:5.1f}' + baz_links,
                   'B': '<i>-</i>' + baz_links,
                   'C': '<i>-</i>' + baz_links,
-                  'D': '<i>-</i>' + baz_links
+                  'D': '<i>-</i>'
                   }
 
     event_type_idx = {'LF': 1,
