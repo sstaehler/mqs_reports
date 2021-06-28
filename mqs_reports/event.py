@@ -16,13 +16,16 @@ from typing import Union
 
 import numpy as np
 import obspy
-from mqs_reports.annotations import Annotations
-from mqs_reports.magnitudes import fit_spectra, calc_magnitude
-from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
-    calc_cwf, solify
 from obspy import UTCDateTime as utct
 from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 from obspy.taup import TauPyModel
+
+from mqs_reports.annotations import Annotations
+from mqs_reports.constants import magnitude as mag_const
+from mqs_reports.constants import mag_exceptions as mag_exc
+from mqs_reports.magnitudes import fit_spectra, calc_magnitude
+from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
+    calc_cwf, solify
 
 RADIUS_MARS = 3389.5
 CRUST_VP = 4.
@@ -151,6 +154,7 @@ class Event:
         self.spectra_SP = None
 
         self.fnam_report = dict()
+        self.fnam_polarisation = dict()
 
     @property
     def mars_event_type_short(self):
@@ -526,6 +530,7 @@ class Event:
         set to None.
         :param winlen_sec: window length for Welch estimator
         """
+
         if not self._waveforms_read:
             raise RuntimeError('waveforms not read in Event object\n' +
                                'Call Event.read_waveforms() first.')
@@ -607,6 +612,15 @@ class Event:
                            'f_c': None,
                            'width_24': None}
 
+        if self.name in mag_exc['events_A0']:
+            mag_type = "MFB"
+            if mag_exc['events_A0'][self.name]['kind'] == 'manual':
+                A0_fix = mag_exc['events_A0'][self.name]['value']
+            else:
+                A0_fix = None
+        else:
+            A0_fix = None
+
         if 'noise' in self.spectra:
             f_noise = self.spectra['noise']['f']
             p_noise = self.spectra['noise']['p_Z']
@@ -629,11 +643,15 @@ class Event:
                                              f_noise=f_noise,
                                              p_sig=p_sig,
                                              p_noise=p_noise,
+                                             A0_fix=A0_fix,
                                              event_type=self.mars_event_type_short)
                 if amplitudes is not None:
                     break
             if amplitudes is not None:
                 self.amplitudes = amplitudes
+
+        if self.name in mag_const["A0_override"]:
+            amplitudes["A0"] = mag_const["A0_override"][self.name]
 
         self._spectra_available = True
 
@@ -719,13 +737,24 @@ class Event:
                   instrument: str = 'VBB') -> Union[float, None]:
         """
         Calculate magnitude of an event
-        :param mag_type: 'mb_P', 'mb_S' 'm2.4' or 'MFB':
+        :param mag_type: 'mb_P', 'mb_S' 'm2.4' 'MFB' or 'Mw'
+               If 'Mw', the preferred magnitude as defined in Böse et al (2021) is chosen.
         :param distance: float or None, in which case event.distance is used
         :param version: 'Giardini2020' or 'Boese2021'
         :param instrument: 'VBB' or 'SP'
         :return:
         """
-        import mqs_reports.magnitudes as mag
+        if mag_type == 'Mw':
+            if self.mars_event_type_short == 'VF':
+                if self.name in mag_exc['events_A0']:
+                    mag_type = "MFB"
+                else:
+                    mag_type = "m2.4"
+            elif self.mars_event_type_short in ['LF', 'BB', 'HF']:
+                mag_type = "MFB"
+            else:
+                mag_type = "m2.4"
+
         if verbose:
             print('*** {0} {1}'.format(self.name, mag_type))
         pick_name = {'mb_P': 'Peak_MbP',
@@ -1547,67 +1576,92 @@ class Event:
         return freqs, envs_out
 
 
-    def plot_polarisation(self, t_pick_P, t_pick_S, rotation_coords='ZNE', baz=False, impact=False, zoom=False):
+    def plot_polarisation(self, t_pick_P, t_pick_S,
+                          rotation_coords='ZNE',
+                          baz=False,
+                          impact=False,
+                          zoom=False,
+                          path_out='pol_plots'):
         import mqs_reports.polarisation_analysis as pa
 
-        
+
         if self.mars_event_type_short in ['HF', 'VF', '24']:
-            f_band_density=[0.5, 2.]
+            timing_P = self.picks['Pg']
+            timing_S = self.picks['Sg']
             phase_P = 'Pg'
             phase_S = 'Sg'
+            f_band_density=[0.5, 2.]
             
         elif self.mars_event_type_short in ['LF', 'BB']:
-            f_band_density=[0.3, 1.]
             if self.picks['P']:
                 phase_P = 'P'
-            elif self.picks['Pg']:
-                phase_P = 'Pg'    
             elif self.picks['x1']:
                 phase_P = 'x1'
-            elif self.picks['x2']:
-                phase_P = 'x2'
             else:
                 phase_P = 'start'
-                
-            if self.picks['S']:
-                phase_S = 'S'
-            elif self.picks['x1']:
-                phase_S = 'x1'    
-            elif self.picks['x2']:
-                phase_S = 'x2'
-            elif self.picks['x3']:
-                phase_S = 'x3'
+
+            timing_P = self.picks[phase_P]
+
+            phase_S = 'S' if self.picks['S'] else 'x2'
+            if 'S' in self.picks:
+                timing_S = self.picks['S']
+            elif 'x2' in self.picks:
+                timing_S = self.picks['x2']
             else:
-                phase_S = 'S' #empty string for timing_S in this case
+                timing_S = str(utct(timing_P) + 180.)
+                phase_S = 'P + 180sec'
+
+            f_band_density=[0.3, 1.]
             
         else:
             print(f'Unknown event type: {self.mars_event_type_short}')
             f_band_density=[0.3, 1.]
-            phase_P = 'P' if self.picks['P'] else 'Pg'
-            phase_S = 'S' if self.picks['S'] else 'Sg'
 
-    
-        timing_P = self.picks[phase_P]
-        timing_S = self.picks[phase_S]
+
+        if timing_S == '':
+            timing_S = str(utct(timing_P) + 180.)
+
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
         
         
         #old: winlen_sec=20., dop_winlen=20, dop_specwidth=1.3, w0=20
-        pa.plot_polarization_event_noise(self.waveforms_VBB, 
-                                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks
-                                                          timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
-                                                          phase_P, phase_S, #Which phases/picks are used for the P and S windows
-                                                          rotation = rotation_coords, BAZ=baz,
-                                                          kind='cwt', fmin=0.2, fmax=10.,
-                                                          winlen_sec=20., overlap=0.5,
-                                                          tstart=None, tend=None, vmin=-205,
-                                                          vmax=-165, log=True, fname=f'{self.name}',
-                                                          dop_winlen=15, dop_specwidth=1.1,
-                                                          nf=100, w0=10,
-                                                          use_alpha=True, use_alpha2=False, 
-                                                          alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
-                                                          f_band_density=f_band_density,
-                                                          plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
-                                                          differentiate = True, detick_1Hz = True,
-                                                          impact = impact)
+        # pa.plot_polarization_event_noise(self.waveforms_VBB, 
+        #                                 t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+        #                                 timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
+        #                                 phase_P, phase_S, #Which phases/picks are used for the P and S windows
+        #                                 rotation = rotation_coords, BAZ=baz,
+        #                                 kind='cwt', fmin=0.2, fmax=10.,
+        #                                 winlen_sec=20., overlap=0.5,
+        #                                 tstart=None, tend=None, vmin=-205,
+        #                                 vmax=-165, log=True, fname=f'{self.name}',
+        #                                 dop_winlen=15, dop_specwidth=1.1,
+        #                                 nf=100, w0=10,
+        #                                 use_alpha=True, use_alpha2=False, 
+        #                                 alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
+        #                                 f_band_density=f_band_density,
+        #                                 plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
+        #                                 differentiate = True, detick_1Hz = True,
+        #                                 impact = impact)
+
+
+        
+
+        pa.plot_polarization_event_noise(self.waveforms_VBB,
+                                         t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+                                         timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
+                                         phase_P, phase_S, #Which phases/picks are used for the P and S windows
+                                         rotation = rotation_coords, BAZ=baz,
+                                         kind='cwt', fmin=0.1, fmax=10.,
+                                         winlen_sec=20., overlap=0.5,
+                                         tstart=None, tend=None, vmin=-210,
+                                         vmax=-165, log=True,
+                                         fname=f'{self.name}', path=path_out,
+                                         dop_winlen=10, dop_specwidth=1.1,
+                                         nf=100, w0=8,
+                                         use_alpha=True, use_alpha2=False,
+                                         alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
+                                         f_band_density=f_band_density,
+                                         plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
+                                         differentiate = True, detick_1Hz = True,
+                                         impact = impact)
 
