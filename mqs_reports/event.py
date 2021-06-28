@@ -1549,32 +1549,61 @@ class Event:
 
     def plot_polarisation(self, t_pick_P, t_pick_S, rotation_coords='ZNE', baz=False, impact=False, zoom=False):
         import mqs_reports.polarisation_analysis as pa
+
         
-        phase_P = 'P' if self.picks['P'] else 'Pg'
-        phase_S = 'S' if self.picks['S'] else 'Sg'
+        if self.mars_event_type_short in ['HF', 'VF', '24']:
+            f_band_density=[0.5, 2.]
+            phase_P = 'Pg'
+            phase_S = 'Sg'
+            
+        elif self.mars_event_type_short in ['LF', 'BB']:
+            f_band_density=[0.3, 1.]
+            if self.picks['P']:
+                phase_P = 'P'
+            elif self.picks['Pg']:
+                phase_P = 'Pg'    
+            elif self.picks['x1']:
+                phase_P = 'x1'
+            elif self.picks['x2']:
+                phase_P = 'x2'
+            else:
+                phase_P = 'start'
+                
+            if self.picks['S']:
+                phase_S = 'S'
+            elif self.picks['x1']:
+                phase_S = 'x1'    
+            elif self.picks['x2']:
+                phase_S = 'x2'
+            elif self.picks['x3']:
+                phase_S = 'x3'
+            else:
+                phase_S = 'S' #empty string for timing_S in this case
+            
+        else:
+            print(f'Unknown event type: {self.mars_event_type_short}')
+            f_band_density=[0.3, 1.]
+            phase_P = 'P' if self.picks['P'] else 'Pg'
+            phase_S = 'S' if self.picks['S'] else 'Sg'
+
     
         timing_P = self.picks[phase_P]
         timing_S = self.picks[phase_S]
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
         
-        if self.mars_event_type_short in ['HF', 'VF', '24']:
-            f_band_density=[0.5, 2.]
-        elif self.mars_event_type_short in ['LF', 'BB']:
-            f_band_density=[0.3, 1.]
-        else:
-            print(f'Unknown event type: {self.mars_event_type_short}')
-            f_band_density=[0.3, 1.]
         
+        #old: winlen_sec=20., dop_winlen=20, dop_specwidth=1.3, w0=20
         pa.plot_polarization_event_noise(self.waveforms_VBB, 
-                                                          t_pick_P, t_pick_S,
-                                                          timing_P, timing_S, timing_noise,#P and S picks as strings
+                                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+                                                          timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
+                                                          phase_P, phase_S, #Which phases/picks are used for the P and S windows
                                                           rotation = rotation_coords, BAZ=baz,
                                                           kind='cwt', fmin=0.2, fmax=10.,
                                                           winlen_sec=20., overlap=0.5,
                                                           tstart=None, tend=None, vmin=-205,
-                                                          vmax=-175, log=True, fname=f'{self.name}',
-                                                          dop_winlen=20, dop_specwidth=1.3,
-                                                          nf=100, w0=20,
+                                                          vmax=-165, log=True, fname=f'{self.name}',
+                                                          dop_winlen=15, dop_specwidth=1.1,
+                                                          nf=100, w0=10,
                                                           use_alpha=True, use_alpha2=False, 
                                                           alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
                                                           f_band_density=f_band_density,

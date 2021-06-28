@@ -28,8 +28,9 @@ from scipy import stats
 
 
 def plot_polarization_event_noise(waveforms_VBB, 
-                              t_pick_P, t_pick_S, #UTC timing of P and S phase
-                              timing_P, timing_S, timing_noise,#P and S picks as strings
+                              t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+                              timing_P, timing_S, timing_noise,#UTC timings for the three window anchors (start)
+                              phase_P, phase_S, #Which phases/picks are used for the P and S windows
                               rotation = 'ZNE', BAZ=False,
                               kind='spec', fmin=1., fmax=10.,
                               winlen_sec=20., overlap=0.5,
@@ -56,10 +57,18 @@ def plot_polarization_event_noise(waveforms_VBB,
     trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
     
     st_Copy = waveforms_VBB.copy() 
-    phase_P = 'P'
-    phase_S = 'S'
+    # phase_P = 'P'
+    # phase_S = 'S'
     
-    name_timewindows = ['Signal P', 'Signal S', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
+    if len(timing_S) == 0: #in case that there is no S pick
+        if 'S0899d' in fname:
+            timing_S = '2021-06-07T20:12:35'
+        else:
+            timing_S = utct(timing_P) + 180 
+        phase_S = 'arbitrary' #label the dashed phase marker in spectrogram
+        
+    
+    name_timewindows = ['Signal P', 'Signal S', 'Noise', 'P', 'S'] #the last two are for the legend labeling
     
     #Rotate the waveforms into different coordinate system: ZRT or LQT
     if 'ZNE' not in rotation:
@@ -624,8 +633,8 @@ def plot_polarization_event_noise(waveforms_VBB,
     rose_axes.set_yticklabels('')
     rose_axes.tick_params(grid_color="palegoldenrod", pad=0.0)
     if BAZ:
-        rose_axes.axvline(x=np.radians(BAZ), color='crimson')
-        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='crimson', fontsize=8)
+        rose_axes.axvline(x=np.radians(BAZ), color='black')
+        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='black', fontsize=8)
 
     fig.suptitle(title, fontsize=15)
     
@@ -809,4 +818,4 @@ def plot_polarization_event_noise(waveforms_VBB,
         # if not zoom:
         #     fig2.savefig(f'{path}/{savename}_polarPlots.png', dpi=200)
     
-    plt.close()
+    plt.close('all')
