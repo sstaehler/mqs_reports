@@ -110,7 +110,6 @@ annotated_epochs_new.csv.gz
 annotated_epochs_old.csv
 catalog.xml
 catalog_2019.xml
-catalog_20191004.xml
 catalog_20191007.xml
 catalog_20191024.xml
 catalog_20191026.xml
@@ -121,5 +120,4 @@ erp_template_TWINS.xml
 inventory_single_epoch.xml
 marslocgui.cfg
 paper_UM/
-/mnt/
 /mnt/

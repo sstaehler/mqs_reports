@@ -31,6 +31,7 @@ def plot_polarization_event_noise(waveforms_VBB,
                               t_pick_P, t_pick_S, #UTC timing of P and S phase
                               timing_P, timing_S, timing_noise,#P and S picks as strings
                               rotation = 'ZNE', BAZ=False,
+                              BAZ_fixed=None, inc_fixed=None,
                               kind='spec', fmin=1., fmax=10.,
                               winlen_sec=20., overlap=0.5,
                               tstart=None, tend=None, vmin=None,
@@ -573,8 +574,14 @@ def plot_polarization_event_noise(waveforms_VBB,
         ys = kernel(xs)
         index = np.argmax(ys)
         max_x[j] = xs[index]
-    BAZ_P = np.deg2rad(max_x[0])
-    inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
+
+    if BAZ_fixed and inc_fixed:
+        BAZ_P = BAZ_fixed
+        inc_P = inc_fixed
+    else:
+        BAZ_P = np.deg2rad(max_x[0])
+        inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
+
     title += f' - P BAZ: {max_x[0]:.0f}°'
     ax = axes1[1]
     ax.axvline(x=max_x[0],c='r')
