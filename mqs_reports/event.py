@@ -1603,9 +1603,9 @@ class Event:
             timing_P = self.picks[phase_P]
 
             phase_S = 'S' if self.picks['S'] else 'x2'
-            if 'S' in self.picks:
+            if self.picks['S']:
                 timing_S = self.picks['S']
-            elif 'x2' in self.picks:
+            elif self.picks['x2']:
                 timing_S = self.picks['x2']
             else:
                 timing_S = str(utct(timing_P) + 180.)
@@ -1618,39 +1618,26 @@ class Event:
             f_band_density=[0.3, 1.]
 
 
-        if timing_S == '':
-            timing_S = str(utct(timing_P) + 180.)
+        # if timing_S == '':
+        #     timing_S = str(utct(timing_P) + 180.)
+        #     phase_S = 'P + 180sec'
+            
 
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
         
-        
-        #old: winlen_sec=20., dop_winlen=20, dop_specwidth=1.3, w0=20
-        # pa.plot_polarization_event_noise(self.waveforms_VBB, 
-        #                                 t_pick_P, t_pick_S, #Window in [sec, sec] around picks
-        #                                 timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
-        #                                 phase_P, phase_S, #Which phases/picks are used for the P and S windows
-        #                                 rotation = rotation_coords, BAZ=baz,
-        #                                 kind='cwt', fmin=0.2, fmax=10.,
-        #                                 winlen_sec=20., overlap=0.5,
-        #                                 tstart=None, tend=None, vmin=-205,
-        #                                 vmax=-165, log=True, fname=f'{self.name}',
-        #                                 dop_winlen=15, dop_specwidth=1.1,
-        #                                 nf=100, w0=10,
-        #                                 use_alpha=True, use_alpha2=False, 
-        #                                 alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
-        #                                 f_band_density=f_band_density,
-        #                                 plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
-        #                                 differentiate = True, detick_1Hz = True,
-        #                                 impact = impact)
 
 
-        
+        BAZ_fixed=None
+        inc_fixed=None
+        # BAZ_fixed=90
+        # inc_fixed=50
 
         pa.plot_polarization_event_noise(self.waveforms_VBB,
                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks
                                          timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
                                          phase_P, phase_S, #Which phases/picks are used for the P and S windows
                                          rotation = rotation_coords, BAZ=baz,
+                                         BAZ_fixed=BAZ_fixed, inc_fixed=inc_fixed,
                                          kind='cwt', fmin=0.1, fmax=10.,
                                          winlen_sec=20., overlap=0.5,
                                          tstart=None, tend=None, vmin=-210,

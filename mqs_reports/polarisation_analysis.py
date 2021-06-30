@@ -579,8 +579,8 @@ def plot_polarization_event_noise(waveforms_VBB,
         max_x[j] = xs[index]
 
     if BAZ_fixed and inc_fixed:
-        BAZ_P = BAZ_fixed
-        inc_P = inc_fixed
+        BAZ_P = np.deg2rad(BAZ_fixed)
+        inc_P = np.deg2rad(inc_fixed)
     else:
         BAZ_P = np.deg2rad(max_x[0])
         inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
@@ -802,20 +802,20 @@ def plot_polarization_event_noise(waveforms_VBB,
         elif synthetics:
             path_full = pjoin(path, 'Synthetics')
         else:
-            path_full = pjoin(path, 'Plots/Test')
-            # path_full = pjoin(path)
+            # path_full = pjoin(path, 'Plots')
+            path_full = pjoin(path)
             
         if not pexists(path_full):
             makedirs(path_full)    
             
-        fig.savefig(pjoin(path_full, f'{savename}.png'), dpi=200)
-        fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
+        # fig.savefig(pjoin(path_full, f'{savename}.png'), dpi=200)
+        # fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
         
 
-        # #save for automatic plots
-        # fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
-        # if not zoom:
-        #     fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
+        #save for automatic plots
+        fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
+        if not zoom:
+            fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
 
     plt.close('all')
 
