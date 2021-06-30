@@ -101,6 +101,23 @@ def lorentz(x, A, x0, xw):
     return 10. * np.log10(1. / (1. + w ** 2)) + A
 
 
+def lorentz_modes(x, A, x0, xw, ampfac):
+    """
+    Return a Lorentz peak function centered around x0, with width xw and
+    amplitude A in dB values
+    Parameters
+    ----------
+    :param x: x-values to evaluate function at
+    :param A: Peak amplitude - baseline actually I think: gze, 11.12.2020
+    :param x0: center value of peak
+    :param xw: width of peak
+    :return: Lorentz/Cauchy function in dB
+    """
+    w = (x - x0) / (xw / 2.)
+    return A + 10 * np.log10(1 + ampfac / (1 + w ** 2))
+    # return A * (1 + ampfac / (1 + w ** 2))
+    
+    
 def lorentz_att(f: np.array,
                 A0: float,
                 f0: float,
@@ -201,6 +218,41 @@ def fit_peak(f, p, A0_min=-240, A0_max=-180,
     except ValueError:
         popt = [-250, 2.4, 1.0]
 
+    return popt
+
+
+def fit_peak_modes(f, p, A0_min=-250, A0_max=-135,
+                   f0_min=2.25, f0_max=2.5, fw_min=0.05, fw_max=0.4, 
+                   ampfac_min = 100., ampfac_max = 400.): #10, 400
+    """
+    Fit a spectral peak to function PSD p at frequencies f
+    Parameters
+    ----------
+    :param f: frequency vector [in Hz]
+    :param p: power spectral density [in dB]
+    :param A0_max: Minimum allowed amplitude for peak
+    :param A0_min: Maximum allowed amplitude for peak
+    :param f0_min: Minimum allowed frequency for peak
+    :param f0_max: Maximum allowed frequency for peak
+    :param fw_min: Minimum allowed spectral width [in Hz]
+    :param fw_max: Maximum allowed spectral width [in Hz]
+    ampfac_min/max: Amplification factor of the mode (not in dB!)
+    
+    :return: list with Amplitude, central frequency, width of peak
+    """
+    from scipy.optimize import curve_fit
+        # noinspection PyTypeChecker
+    try:
+        popt, pcov = curve_fit(lorentz_modes, f, p,
+                               bounds=((A0_min, f0_min, fw_min, ampfac_min),
+                                       (A0_max, f0_max, fw_max, ampfac_max)),
+                               p0=((A0_max + A0_min) * 0.5,
+                                   (f0_max + f0_min) * 0.5,
+                                   (fw_max + fw_min) * 0.5,
+                                   (ampfac_max + ampfac_min) * 0.5))
+
+    except RuntimeError:
+        popt = [np.nan, np.nan, np.nan, np.nan]
     return popt
 
 
@@ -318,4 +370,83 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05,
     amps['width_24'] = width_24
     amps['ampfac'] = ampfac
     amps['fitting_mask'] = bol_fitting_mask
+    return amps
+
+
+
+def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak, ampFactor, kind=None):
+    import matplotlib.pyplot as plt
+
+    f = f_sig
+
+    mute_24 = mute_24
+
+    if np.isnan(p_sig[0]):
+        f_mode = np.nan
+        A_peak = np.nan
+        A_baseline = np.nan
+        width_mode = np.nan
+        ampfac_mode = np.nan
+
+    else:
+        width_mode = None
+        f_mode = None
+        A_baseline = None
+
+        bol_24_mask = np.array((f > mute_24[0],
+                                f < mute_24[1])).all(axis=0)
+
+
+
+        A_baseline, f_mode, width_mode, ampfac_mode = fit_peak_modes(f[bol_24_mask], p_sig[bol_24_mask],
+                                        f0_min = fminmax[0], f0_max = fminmax[-1],
+                                        fw_min = width_peak[0], fw_max = width_peak[-1],
+                                        ampfac_min = ampFactor[0], ampfac_max=ampFactor[-1]) #50,550 works
+
+        #test if curve fitting was successful or not
+        if ampfac_mode: 
+            # A_peak = A_baseline+10*np.log10(1+ampfac_mode) #wrong?
+            fitted_curve = lorentz_modes(x=f[bol_24_mask],A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode)
+            A_peak = max(fitted_curve)
+        elif not ampfac_mode:
+            A_peak = np.nan
+
+
+        #debug plot part1
+        plt.plot(f, p_sig)
+        plt.plot(f[bol_24_mask], p_sig[bol_24_mask])
+        # debug plot part2
+        plt.plot(f[bol_24_mask],lorentz_modes(x=f[bol_24_mask],A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
+        plt.plot(f,lorentz_modes(x=f,A=A_baseline, x0=f_mode, xw=width_mode, ampfac=ampfac_mode))
+        # plt.axhline(y=A_peak)
+        # plt.axhline(y=A_baseline)
+        # plt.axvline(x=f_mode)
+        # plt.axvline(x=fminmax[0])
+        # plt.axvline(x=fminmax[-1])
+        # plt.ylim(-250,-150)
+        plt.text(x=1, y=-220, s=f'baseline: {A_baseline:6.1f}dB f: {f_mode:6.3f}Hz \n width: {width_mode:6.4f}Hz ampfac: {ampfac_mode:6.1f} \n Peak:{A_peak}dB')
+        plt.show()
+
+        if kind == 'spectogram':
+            if ((ampfac_mode  > 380.0 and A_peak < -188) or ampfac_mode  < 1.0 or (ampfac_mode  > 580.0 and width_mode > 0.3)): 
+                f_mode = np.nan
+                A_peak = np.nan
+                A_baseline = np.nan
+                width_mode = np.nan
+                ampfac_mode = np.nan
+        elif kind == 'scalogram':
+            if ((ampfac_mode  > 500.0 and width_mode > 0.3) or (ampfac_mode  < 1.0)): 
+                f_mode = np.nan
+                A_peak = np.nan
+                A_baseline = np.nan
+                width_mode = np.nan
+                ampfac_mode = np.nan
+
+
+    amps = dict()
+    amps['A_baseline'] = A_baseline
+    amps['A_peak'] = A_peak
+    amps['f_mode'] = f_mode
+    amps['width_mode'] = width_mode
+    amps['ampfac'] = ampfac_mode
     return amps

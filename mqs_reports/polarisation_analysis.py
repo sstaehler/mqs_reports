@@ -27,9 +27,11 @@ from scipy import stats
 from mqs_reports.utils import detick
 
 
-def plot_polarization_event_noise(waveforms_VBB,
-                              t_pick_P, t_pick_S, #UTC timing of P and S phase
-                              timing_P, timing_S, timing_noise,#P and S picks as strings
+
+def plot_polarization_event_noise(waveforms_VBB, 
+                              t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+                              timing_P, timing_S, timing_noise,#UTC timings for the three window anchors (start)
+                              phase_P, phase_S, #Which phases/picks are used for the P and S windows
                               rotation = 'ZNE', BAZ=False,
                               BAZ_fixed=None, inc_fixed=None,
                               kind='spec', fmin=1., fmax=10.,
@@ -42,7 +44,7 @@ def plot_polarization_event_noise(waveforms_VBB,
                               use_alpha=True, use_alpha2=False,
                               alpha_inc = 1.0, alpha_elli = 1.0, alpha_azi = 1.0,
                               f_band_density = (0.3, 1.), #frequency band for KDE curve analysis
-                              plot_6C=True, plot_spec_azi_only = False, zoom = False,
+                              plot_6C=False, plot_spec_azi_only = False, zoom = False,
                               differentiate=False, detick_1Hz=False,
                               impact = False, synthetics = False):
 
@@ -56,12 +58,13 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     mod_180 = False #set to True if only mapping 0-180° azimuth, False maps 0-360°
     trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
-
-    st_Copy = waveforms_VBB.copy()
-    phase_P = 'P'
-    phase_S = 'S'
+    
+    st_Copy = waveforms_VBB.copy() 
+    # phase_P = 'P'
+    # phase_S = 'S'  
 
     name_timewindows = ['Signal P', 'Signal S', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
+
 
     #Rotate the waveforms into different coordinate system: ZRT or LQT
     if 'ZNE' not in rotation:
@@ -256,9 +259,9 @@ def plot_polarization_event_noise(waveforms_VBB,
             continue
 
         if detick_1Hz:
-            tr_Z_detick = detick(tr_Z, 3)
-            tr_N_detick = detick(tr_N, 3)
-            tr_E_detick = detick(tr_E, 3)
+            tr_Z_detick = detick(tr_Z, 5)
+            tr_N_detick = detick(tr_N, 5)
+            tr_E_detick = detick(tr_E, 5)
             f, t, u1, u2, u3 = polarization._compute_spec(tr_Z_detick, tr_N_detick, tr_E_detick, kind, fmin, fmax,
                                          winlen, nfft, overlap, nf=nf, w0=w0)
         else:
@@ -576,8 +579,8 @@ def plot_polarization_event_noise(waveforms_VBB,
         max_x[j] = xs[index]
 
     if BAZ_fixed and inc_fixed:
-        BAZ_P = BAZ_fixed
-        inc_P = inc_fixed
+        BAZ_P = np.deg2rad(BAZ_fixed)
+        inc_P = np.deg2rad(inc_fixed)
     else:
         BAZ_P = np.deg2rad(max_x[0])
         inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
@@ -637,8 +640,8 @@ def plot_polarization_event_noise(waveforms_VBB,
     rose_axes.set_yticklabels('')
     rose_axes.tick_params(grid_color="palegoldenrod", pad=0.0)
     if BAZ:
-        rose_axes.axvline(x=np.radians(BAZ), color='crimson')
-        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='crimson', fontsize=8)
+        rose_axes.axvline(x=np.radians(BAZ), color='black')
+        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='black', fontsize=8)
 
     fig.suptitle(title, fontsize=15)
 
@@ -767,15 +770,14 @@ def plot_polarization_event_noise(waveforms_VBB,
 
 
     #Boxes to separate f-BAZ and inclination-BAZ plots
-    rect = plt.Rectangle(
-    # (lower-left corner), width, height
-    (0.01, 0.63), 0.98, 0.29, fill=False, color="k", lw=2,
-    zorder=1000, transform=fig2.transFigure, figure=fig2)
+    rect = plt.Rectangle((0.01, 0.63), 0.98, 0.29, # (lower-left corner), width, height
+                        fill=False, color="k", lw=2,
+                        zorder=1000, transform=fig2.transFigure, figure=fig2)
     fig2.patches.extend([rect])
 
-    rect2 = plt.Rectangle(
-    (0.01, 0.01), 0.98, 0.61, fill=False, color="k", lw=2,
-    zorder=1000, transform=fig2.transFigure, figure=fig2)
+    rect2 = plt.Rectangle((0.01, 0.01), 0.98, 0.61, 
+                          fill=False, color="k", lw=2,
+                          zorder=1000, transform=fig2.transFigure, figure=fig2)
     fig2.patches.extend([rect2])
 
     fig2.suptitle(title, fontsize=18)
@@ -800,10 +802,15 @@ def plot_polarization_event_noise(waveforms_VBB,
         elif synthetics:
             path_full = pjoin(path, 'Synthetics')
         else:
+            # path_full = pjoin(path, 'Plots')
             path_full = pjoin(path)
-
+            
         if not pexists(path_full):
-            makedirs(path_full)
+            makedirs(path_full)    
+            
+        # fig.savefig(pjoin(path_full, f'{savename}.png'), dpi=200)
+        # fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
+        
 
         #save for automatic plots
         fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
@@ -811,3 +818,4 @@ def plot_polarization_event_noise(waveforms_VBB,
             fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
 
     plt.close('all')
+

@@ -1584,13 +1584,14 @@ class Event:
                           path_out='pol_plots'):
         import mqs_reports.polarisation_analysis as pa
 
-        print(self.name, self.picks)
+
         if self.mars_event_type_short in ['HF', 'VF', '24']:
             timing_P = self.picks['Pg']
             timing_S = self.picks['Sg']
             phase_P = 'Pg'
             phase_S = 'Sg'
             f_band_density=[0.5, 2.]
+            
         elif self.mars_event_type_short in ['LF', 'BB']:
             if self.picks['P']:
                 phase_P = 'P'
@@ -1602,28 +1603,41 @@ class Event:
             timing_P = self.picks[phase_P]
 
             phase_S = 'S' if self.picks['S'] else 'x2'
-            if 'S' in self.picks:
+            if self.picks['S']:
                 timing_S = self.picks['S']
-            elif 'x2' in self.picks:
+            elif self.picks['x2']:
                 timing_S = self.picks['x2']
             else:
                 timing_S = str(utct(timing_P) + 180.)
-                phase_P = 'P + 180sec'
+                phase_S = 'P + 180sec'
 
             f_band_density=[0.3, 1.]
+            
         else:
             print(f'Unknown event type: {self.mars_event_type_short}')
             f_band_density=[0.3, 1.]
 
-        if timing_S == '':
-            timing_S = str(utct(timing_P) + 180.)
+
+        # if timing_S == '':
+        #     timing_S = str(utct(timing_P) + 180.)
+        #     phase_S = 'P + 180sec'
+            
 
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
+        
+
+
+        BAZ_fixed=None
+        inc_fixed=None
+        # BAZ_fixed=90
+        # inc_fixed=50
 
         pa.plot_polarization_event_noise(self.waveforms_VBB,
-                                         t_pick_P, t_pick_S,
-                                         timing_P, timing_S, timing_noise,#P and S picks as strings
+                                         t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+                                         timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
+                                         phase_P, phase_S, #Which phases/picks are used for the P and S windows
                                          rotation = rotation_coords, BAZ=baz,
+                                         BAZ_fixed=BAZ_fixed, inc_fixed=inc_fixed,
                                          kind='cwt', fmin=0.1, fmax=10.,
                                          winlen_sec=20., overlap=0.5,
                                          tstart=None, tend=None, vmin=-210,
