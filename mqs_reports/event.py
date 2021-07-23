@@ -1642,7 +1642,7 @@ class Event:
                                          winlen_sec=20., overlap=0.5,
                                          tstart=None, tend=None, vmin=-210,
                                          vmax=-165, log=True,
-                                         fname=f'{self.name}', path=path_out,
+                                         fname=f'{self.name}', path='.',
                                          dop_winlen=10, dop_specwidth=1.1,
                                          nf=100, w0=8,
                                          use_alpha=True, use_alpha2=False,
