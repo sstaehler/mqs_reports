@@ -554,7 +554,7 @@ def plot_polarization_event_noise(waveforms_VBB,
         ax.set_xlim(rmin,rmax)
         ax.set_xlabel('')
         ax.set_yticklabels('')
-        # ax.set_yticks([])
+        ax.set_yticks([])
         ax.set_ylabel('')
         for spine in ax.spines.values():
             spine.set_edgecolor(color_windows[3])
