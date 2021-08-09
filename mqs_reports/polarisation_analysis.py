@@ -293,20 +293,25 @@ def plot_polarization_event_noise(waveforms_VBB,
         #Scalogram and alpha/masking of signals
         # scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
         # alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
-        if alpha_inc > 0.:
-            func_inc= np.cos
-            func_azi= np.sin
+        if alpha_inc is not None:
+            if alpha_inc > 0.:
+                func_inc= np.cos
+                func_azi= np.sin
+            else:
+                alpha_inc= -alpha_inc
+                func_inc= np.sin
+                func_azi= np.cos
         else:
-            alpha_inc= -alpha_inc
-            func_inc= np.sin
-            func_azi= np.cos
+            #look at azimuth without inclination, let's just set it like this.
+            #So cosinus prefers P waves, set to sinus to prefer S waves (perpendicular to BAZ)
+            func_azi= np.cos 
 
         r1_sum = (r1** 2).sum(axis=-1)
         if alpha_inc is not None:
             r1_sum *= func_inc(inc1)**(2*alpha_inc)
-        elif alpha_azi is not None:
+        if alpha_azi is not None:
             r1_sum *= abs(func_azi(azi1))**(2*alpha_azi)
-        elif alpha_elli is not None:
+        if alpha_elli is not None:
             r1_sum *= (1. - elli)**(2*alpha_elli)
 
         scalogram= 10 * np.log10(r1_sum)
@@ -315,13 +320,13 @@ def plot_polarization_event_noise(waveforms_VBB,
             azi1= azi1 % np.pi
             azi2= azi2 % np.pi
 
-
         if alpha_inc is not None:
             alpha*= func_inc(inc1)**alpha_inc
         if alpha_azi is not None:
             alpha*= abs(func_azi(azi1))**alpha_azi
         if alpha_elli is not None:
             alpha*= (1. - elli)**alpha_elli
+
 
         #Prepare x axis array (datetime)
         t_datetime = np.zeros_like(t,dtype=object)

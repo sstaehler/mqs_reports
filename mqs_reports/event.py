@@ -1631,6 +1631,12 @@ class Event:
         inc_fixed=None
         # BAZ_fixed=90
         # inc_fixed=50
+        
+        # P_UTC = utct('2019-05-23T02:22:57.251')
+        # timing_P = P_UTC+174.
+        # phase_P = 'S'
+        # timing_S = P_UTC+512.
+        # phase_S = 'ScS'
 
         pa.plot_polarization_event_noise(self.waveforms_VBB,
                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks
@@ -1646,7 +1652,7 @@ class Event:
                                          dop_winlen=10, dop_specwidth=1.1,
                                          nf=100, w0=8,
                                          use_alpha=True, use_alpha2=False,
-                                         alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
+                                         alpha_inc = None, alpha_elli = 1.0, alpha_azi = None, #None when not used
                                          f_band_density=f_band_density,
                                          plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
                                          differentiate = True, detick_1Hz = True,
