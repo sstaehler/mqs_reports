@@ -31,7 +31,7 @@ from mqs_reports.utils import detick
 def plot_polarization_event_noise(waveforms_VBB, 
                               t_pick_P, t_pick_S, #Window in [sec, sec] around picks
                               timing_P, timing_S, timing_noise,#UTC timings for the three window anchors (start)
-                              phase_P, phase_S, #Which phases/picks are used for the P and S windows
+                              phase_P, phase_S, #Which phases/picks are used for the P and S windows: string with names
                               rotation = 'ZNE', BAZ=False,
                               BAZ_fixed=None, inc_fixed=None,
                               kind='spec', fmin=1., fmax=10.,
@@ -52,18 +52,12 @@ def plot_polarization_event_noise(waveforms_VBB,
     Plots polarisation of seismic event with window of noise and manually defined event time window
     """
 
-    color_list = ['blue', 'cornflowerblue', 'goldenrod', 'gold', 'yellow', 'darkgreen', 'green', 'mediumseagreen', 'darkred', 'firebrick', 'tomato', 'midnightblue', 'blue']
-    custom_cmap =  LinearSegmentedColormap.from_list('', color_list) #interpolated colormap - or use with bounds
-    bounds = [0, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345, 360]
-
     mod_180 = False #set to True if only mapping 0-180° azimuth, False maps 0-360°
     trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
     
-    st_Copy = waveforms_VBB.copy() 
-    # phase_P = 'P'
-    # phase_S = 'S'  
+    st_Copy = waveforms_VBB.copy()  
 
-    name_timewindows = ['Signal P', 'Signal S', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
+    name_timewindows = [f'Signal {phase_P}', f'Signal {phase_S}', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
 
 
     #Rotate the waveforms into different coordinate system: ZRT or LQT
@@ -118,7 +112,7 @@ def plot_polarization_event_noise(waveforms_VBB,
     signal_P_row = 2
     signal_S_row = 3
     noise_row = 1
-    density_row = 4
+    # density_row = 4
 
     # Create figure to plot in
     if plot_6C: #not tested
@@ -190,7 +184,7 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     #Mark the time window in the freq-time plot used for further analysis
     rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
-    color_windows = ['C0', 'Firebrick', 'grey', 'Peru'] #signal P, S, noise, density C9
+    color_windows = ['C0', 'Firebrick', 'grey', 'Peru'] #signal P, S, noise, density-color
     for j in range(nrows):
         rect[j][0] = patches.Rectangle((utct(tstart_signal_P).datetime,fmin+0.03*fmin),
                                        utct(tend_signal_P).datetime-utct(tstart_signal_P).datetime,
@@ -229,7 +223,6 @@ def plot_polarization_event_noise(waveforms_VBB,
         fBAZ_S = np.zeros_like(fBAZ_P)
         fBAZ_noise = np.zeros_like(fBAZ_P)
 
-
     else:
         binned_data_signal_P = np.zeros((nrows, nf // dsfacf, nbins))
         binned_data_signal_S = np.zeros_like(binned_data_signal_P)
@@ -247,6 +240,10 @@ def plot_polarization_event_noise(waveforms_VBB,
     kde_noiseframe = [[] for _ in range(nrows)]
     kde_weights = [[[] for j in range(3)] for i in range(nrows)]
 
+    #custom colormap for azimuth
+    color_list = ['blue', 'cornflowerblue', 'goldenrod', 'gold', 'yellow', 'darkgreen', 'green', 'mediumseagreen', 'darkred', 'firebrick', 'tomato', 'midnightblue', 'blue']
+    custom_cmap =  LinearSegmentedColormap.from_list('', color_list) #interpolated colormap - or use with bounds
+    bounds = [0, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345, 360]
 
     for tr_Z, tr_N, tr_E in zip(st_Z, st_N, st_E):
         if tr_Z.stats.npts < winlen * 4:
@@ -294,13 +291,15 @@ def plot_polarization_event_noise(waveforms_VBB,
         # scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
         # alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
         if alpha_inc is not None:
-            if alpha_inc > 0.:
+            if alpha_inc > 0.: #S
                 func_inc= np.cos
                 func_azi= np.sin
-            else:
+                # func_azi= np.cos #S0173a special filtering for Cecilia
+            else: #P
                 alpha_inc= -alpha_inc
                 func_inc= np.sin
                 func_azi= np.cos
+                # func_azi= np.sin #S0173a special filtering for Cecilia
         else:
             #look at azimuth without inclination, let's just set it like this.
             #So cosinus prefers P waves, set to sinus to prefer S waves (perpendicular to BAZ)
@@ -578,7 +577,7 @@ def plot_polarization_event_noise(waveforms_VBB,
         max_x[j] = xs[index]
         
         #get the error of the BAZ from the full width of the half maximum
-        #2021-07-23: may have issues if 
+        #2021-07-23: may have issues if multiple peaks are present above halfway of maximum
         if j==0:
             #find the FWHM
             max_y = max(ys)
@@ -587,7 +586,7 @@ def plot_polarization_event_noise(waveforms_VBB,
             right_edge = xs[max(indexes_ymax)]
             
             # axes1[1].plot(xs, ys, color='yellow')
-            axes1[1].axvspan(left_edge, right_edge, color='blue', alpha=0.1)
+            # axes1[1].axvspan(left_edge, right_edge, color='blue', alpha=0.1) #marks the fwhm area, but not wrapping around zero
             # print(f'Error from {left_edge:.0f} to {right_edge:.0f}')
             if left_edge<0.:
                 left_edge = 360.+left_edge #negative value, so 360-6, e.g
@@ -605,14 +604,18 @@ def plot_polarization_event_noise(waveforms_VBB,
     title += ' - BAZ$_{KDE}^P$:'
     title += f' {max_x[0]:.0f}° - FWHM: {left_edge:.0f}°-{right_edge:.0f}°' #needs to be separated because f-strings and subscrips have issues
     ax = axes1[1]
-    ax.axvline(x=max_x[0],c='r')
+    ymin, ymax = ax.get_ylim()
+    ax.axvline(x=max_x[0],c='r') #mark the polarisation BAZ from the maximum of the curve
+    ax.scatter(max_x[0], ymax, color = 'r', marker = 'D', edgecolors = 'k', linewidths = 0.4, zorder = 100)
 
     #Set grid lines, mark BAZ
     if BAZ and ('ZNE' in rotation): #plot BAZ if it exists and if traces have NOT been rotated
         for ax in axes0[1, 1:]:
             ax.axvline(x=BAZ,ls='dashed',c='darkgrey')
+
         ax = axes1[1]
         ax.axvline(x=BAZ,ls='dashed',c='darkgrey')
+        ax.scatter(BAZ, ymax, color = 'darkgrey', marker = 'v', edgecolors = 'k', linewidths = 0.4, zorder = 99)
 
     for ax in axes0[1:, 1:].flatten():
         ax.grid(b=True, which='both', axis='x', linewidth=0.2, color='grey')
@@ -627,7 +630,7 @@ def plot_polarization_event_noise(waveforms_VBB,
     axes1[0].legend(lines, labels, loc='upper right', bbox_to_anchor=box_legend, fontsize=12, handlelength=0.8)
 
 
-    #add compass rose-type plot to see in which direction azimuth colormap lies with respect to NESW
+    #Compass rose-type plot to see in which direction azimuth colormap lies with respect to NESW
     rose_axes = fig.add_axes([gridspec_kw['left']-box_compass_colormap[0],
                               gridspec_kw['top']-box_compass_colormap[1],
                               box_compass_colormap[2], box_compass_colormap[2]], polar=True) # Left, Bottom, Width, Height
@@ -656,7 +659,11 @@ def plot_polarization_event_noise(waveforms_VBB,
         rose_axes.annotate('', xytext=(0.0, 0.0), xy=(np.radians(BAZ),1.3),
                             arrowprops=dict(facecolor='grey', edgecolor='black', linewidth = 0.3, width=0.5, headwidth=4., headlength=4.),
                             xycoords='data', textcoords = 'data', annotation_clip=False)
-        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='grey', fontsize=8, path_effects=[PathEffects.withStroke(linewidth=0.2, foreground="black")])
+
+        align_h = 'right' if BAZ > 180. else 'left'
+        align_v = 'top' if 90. < BAZ < 270. else 'bottom'
+
+        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='grey', fontsize=8, path_effects=[PathEffects.withStroke(linewidth=0.2, foreground="black")], horizontalalignment=align_h, verticalalignment = align_v)
     rose_axes.set_ylim([0, 1])
 
     fig.suptitle(title, fontsize=15)
@@ -832,6 +839,8 @@ def plot_polarization_event_noise(waveforms_VBB,
         # fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
         # if not zoom:
         #     fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
+        
+    # np.savez(f'Data/{savename}_azimuth_P_filtered.npz', azimuth = np.rad2deg(azi1), alpha = alpha, cmap_colors = color_list, cmap_bounds = bounds, f = f, t = t_datetime) #for Cecilia
 
     plt.close('all')
 
