@@ -582,12 +582,35 @@ def plot_polarization_event_noise(waveforms_VBB,
             #find the FWHM
             max_y = max(ys)
             indexes_ymax = [x for x in range(len(ys)) if ys[x] > max_y/2.0]
-            left_edge = xs[min(indexes_ymax)]
-            right_edge = xs[max(indexes_ymax)]
             
-            # axes1[1].plot(xs, ys, color='yellow')
+            #Get correct FWHM in case there are several peaks above the halfway mark
+            index_local = indexes_ymax.index(index) #get index of the maximum index within the list
+            for k in range(index_local, len(indexes_ymax)-1): #forwards through list
+                if indexes_ymax[k+1] > indexes_ymax[k]+1:
+                    index_high = indexes_ymax[k]
+                    break
+                elif k == len(indexes_ymax)-2: #if there is only one peak
+                    index_high = indexes_ymax[-1]
+            for k in range(index_local, 0, -1): #backwards
+                if indexes_ymax[k-1] < indexes_ymax[k]-1:
+                    index_low = indexes_ymax[k]
+                    break
+                elif k == 1: #if there is only one peak
+                    index_low = indexes_ymax[0]
+
+            left_edge = xs[index_low]
+            right_edge = xs[index_high]
+            
+            # left_test = xs[min(indexes_ymax)] #old method, sadly only works if there is only one peak
+            # right_test = xs[max(indexes_ymax)]
+            
+            # print(left_edge, right_edge)
+            # print(left_test, right_test)
+            
+            # axes1[1].plot(xs, ys, color='yellow') #check if manual KDE is equal to seaborn KDE curve (for covariance_factor determination, but .17 seems good)
             # axes1[1].axvspan(left_edge, right_edge, color='blue', alpha=0.1) #marks the fwhm area, but not wrapping around zero
-            # print(f'Error from {left_edge:.0f} to {right_edge:.0f}')
+            
+            #wrap the errors around 0: however, it does not calculate the KDE for wrapped data
             if left_edge<0.:
                 left_edge = 360.+left_edge #negative value, so 360-6, e.g
             if right_edge>360.:
