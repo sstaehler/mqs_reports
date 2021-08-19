@@ -1578,7 +1578,7 @@ class Event:
 
     def plot_polarisation(self, t_pick_P, t_pick_S,
                           rotation_coords='ZNE',
-                          baz=False,
+                          baz=None,
                           impact=False,
                           zoom=False,
                           path_out='pol_plots'):
