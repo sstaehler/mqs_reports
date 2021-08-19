@@ -577,7 +577,6 @@ def plot_polarization_event_noise(waveforms_VBB,
         max_x[j] = xs[index]
         
         #get the error of the BAZ from the full width of the half maximum
-        #2021-07-23: may have issues if multiple peaks are present above halfway of maximum
         if j==0:
             #find the FWHM
             max_y = max(ys)
@@ -598,23 +597,23 @@ def plot_polarization_event_noise(waveforms_VBB,
                 elif k == 1: #if there is only one peak
                     index_low = indexes_ymax[0]
 
-            left_edge = xs[index_low]
-            right_edge = xs[index_high]
+            left_error = xs[index_low]
+            right_error = xs[index_high]
             
             # left_test = xs[min(indexes_ymax)] #old method, sadly only works if there is only one peak
             # right_test = xs[max(indexes_ymax)]
             
-            # print(left_edge, right_edge)
+            # print(left_error, right_error)
             # print(left_test, right_test)
             
             # axes1[1].plot(xs, ys, color='yellow') #check if manual KDE is equal to seaborn KDE curve (for covariance_factor determination, but .17 seems good)
-            # axes1[1].axvspan(left_edge, right_edge, color='blue', alpha=0.1) #marks the fwhm area, but not wrapping around zero
+            # axes1[1].axvspan(left_error, right_error, color='blue', alpha=0.1) #marks the fwhm area, but not wrapping around zero
             
             #wrap the errors around 0: however, it does not calculate the KDE for wrapped data
-            if left_edge<0.:
-                left_edge = 360.+left_edge #negative value, so 360-6, e.g
-            if right_edge>360.:
-                right_edge = right_edge-360.
+            if left_error<0.:
+                left_error = 360.+left_error #negative value, so 360-6, e.g
+            if right_error>360.:
+                right_error = right_error-360.
         
 
     if BAZ_fixed and inc_fixed:
@@ -625,7 +624,7 @@ def plot_polarization_event_noise(waveforms_VBB,
         inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
 
     title += ' - BAZ$_{KDE}^P$:'
-    title += f' {max_x[0]:.0f}° - FWHM: {left_edge:.0f}°-{right_edge:.0f}°' #needs to be separated because f-strings and subscrips have issues
+    title += f' {max_x[0]:.0f}° - FWHM: {left_error:.0f}°-{right_error:.0f}°' #needs to be separated because f-strings and subscrips have issues
     ax = axes1[1]
     ymin, ymax = ax.get_ylim()
     ax.axvline(x=max_x[0],c='r') #mark the polarisation BAZ from the maximum of the curve
@@ -848,7 +847,7 @@ def plot_polarization_event_noise(waveforms_VBB,
         elif synthetics:
             path_full = pjoin(path, 'Synthetics')
         else:
-            path_full = pjoin(path, 'Plots/Test')
+            path_full = pjoin(path, 'Plots/BAZ_search_paper')
             # path_full = pjoin(path)
             
         if not pexists(path_full):
