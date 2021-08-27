@@ -189,7 +189,7 @@ def fit_peak_att(f, p, A0_max=-200., tstar_min=0.05, A0_min=-240.):
     return popt
 
 
-def fit_peak(f, p, A0_min=-240, A0_max=-180,
+def fit_peak(f, p, A0_min=-240, A0_max=-160,
              f0_min=2.25, f0_max=2.5, fw_min=0.05, fw_max=0.4):
     """
     Fit a spectral peak to function PSD p at frequencies f
@@ -320,7 +320,7 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05,
                                  np.log(np.mean(p_sig[ifreq]))) \
                                 / (np.pi * 6.5)
                 else:
-                    tstar_min = 0.05
+                    tstar_min = 0.02
                 try:
                     A0, f_24, f_c, tstar, width_24, ampfac = fit_peak_att(
                         f=f[bol_fitting_mask],

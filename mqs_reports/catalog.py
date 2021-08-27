@@ -9,6 +9,7 @@
 """
 
 from os.path import join as pjoin, exists as pexists
+from sys import stdout as stdout
 from typing import Union
 
 import matplotlib.pylab as pl
@@ -80,6 +81,7 @@ class Catalog:
                                                 quality=quality,
                                                 phase_list=['start', 'end',
                                                             'P', 'S',
+                                                            'PP', 'SS',
                                                             'Pg', 'Sg',
                                                             'Peak_M2.4',
                                                             'Peak_MbP',
@@ -235,7 +237,7 @@ class Catalog:
         set to None.
         :param winlen_sec: window length for Welch estimator
         """
-        for event in tqdm(self):
+        for event in tqdm(self, file=stdout):
             event.calc_spectra(winlen_sec=winlen_sec,
                                detick_nfsamp=detick_nfsamp)
 
@@ -263,7 +265,7 @@ class Catalog:
         :param kind: 'DISP', 'VEL' or 'ACC'. Note that many other functions
                      expect the data to be in displacement
         """
-        for event in tqdm(self):
+        for event in tqdm(self, file=stdout):
             event.read_waveforms(inv=inv, kind=kind, sc3dir=sc3dir,
                                  event_tmp_dir=event_tmp_dir)
 
@@ -1019,7 +1021,7 @@ class Catalog:
         :param annotations: Annotations object; used to mark glitches,
                             if available
         """
-        for event in tqdm(self):
+        for event in tqdm(self, file=stdout):
             for chan in ['Z', 'N', 'E']:
                 fnam_report = pjoin(dir_out,
                                     'mag_report_%s_%s' %
@@ -1052,7 +1054,7 @@ class Catalog:
                 ]
         pool.close()
         result_list_tqdm = []
-        for job in tqdm(jobs):
+        for job in tqdm(jobs, file=stdout):
             result_list_tqdm.append(job.get())
 
         for event_name, fnam in result_list_tqdm:
@@ -1070,7 +1072,7 @@ class Catalog:
                          df_HF: float = 2. ** 0.25
                          ):
 
-        for event in tqdm(self):
+        for event in tqdm(self, file=stdout):
             if event.mars_event_type_short in ['LF', 'BB']:
                 if instrument is None:
                     instrument = 'VBB'
@@ -1142,10 +1144,10 @@ class Catalog:
                                           instrument=instrument,
                                           fnam=fnam, fmin=fmin, fmax=fmax, df=df)
                 except IndexError as err:
-                    print('No data for %s' % event.name)
+                    print(f'Problem with filterbank for event {event.name}')
                     print(err)
                 except AttributeError as err:
-                    print('No data for %s' % event.name)
+                    print(f'Problem with filterbank for event {event.name}')
                     print(err)
                 else:
                     nodata = False
@@ -1153,29 +1155,33 @@ class Catalog:
             if event.quality in ['A', 'B', 'C'] and not nodata:
                 fnam = pjoin(dir_out, event.mars_event_type_short,
                              'filterbank_%s_zoom.png' % event.name)
-                if not pexists(fnam):
-                    event.plot_filterbank(starttime=t_P - 300.,
-                                          endtime=t_P + 1100.,
-                                          normwindow='S',
-                                          annotations=annotations,
-                                          tmin_plot=-240., tmax_plot=900.,
-                                          fnam=fnam,
-                                          instrument=instrument,
-                                          fmin=fmin, fmax=fmax, df=df)
-
-                if t_S is not None:
-                    fnam = pjoin(dir_out, event.mars_event_type_short,
-                                 'filterbank_%s_phases.png' % event.name)
+                try:
                     if not pexists(fnam):
-                        event.plot_filterbank(starttime=t_P - 120.,
-                                              endtime=t_S + 240.,
+                        event.plot_filterbank(starttime=t_P - 300.,
+                                              endtime=t_P + 1100.,
                                               normwindow='S',
                                               annotations=annotations,
-                                              tmin_plot=-50.,
-                                              tmax_plot=t_S - t_P + 200.,
+                                              tmin_plot=-240., tmax_plot=900.,
                                               fnam=fnam,
                                               instrument=instrument,
                                               fmin=fmin, fmax=fmax, df=df)
+
+                    if t_S is not None:
+                        fnam = pjoin(dir_out, event.mars_event_type_short,
+                                     'filterbank_%s_phases.png' % event.name)
+                        if not pexists(fnam):
+                            event.plot_filterbank(starttime=t_P - 120.,
+                                                  endtime=t_S + 240.,
+                                                  normwindow='S',
+                                                  annotations=annotations,
+                                                  tmin_plot=-50.,
+                                                  tmax_plot=t_S - t_P + 200.,
+                                                  fnam=fnam,
+                                                  instrument=instrument,
+                                                  fmin=fmin, fmax=fmax, df=df)
+                except IndexError as err:
+                    print(f'Problem with filterbank for event {event.name}')
+                    print(err)
             plt.close()
 
     def plot_spectra(self,
@@ -1509,8 +1515,11 @@ def make_report_check_exists(event, dir_out, annotations):
                                   'mag_report_%s_%s' %
                                   (event.name, chan))
         if not pexists(fnam_report[chan] + '.html'):
-            event.make_report(fnam_out=fnam_report[chan],
-                              chan=chan,
-                              annotations=annotations)
+            try:
+                event.make_report(fnam_out=fnam_report[chan],
+                                  chan=chan,
+                                  annotations=annotations)
+            except KeyError:
+                print('Incomplete phases for event %s' % event.name)
 
     return event.name, fnam_report
