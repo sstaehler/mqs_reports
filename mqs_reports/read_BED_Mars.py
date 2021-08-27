@@ -366,6 +366,7 @@ if __name__ == '__main__':
     test = read_QuakeML_BED('./mqs_reports/data/catalog_20191002.xml',
                             event_type='BROADBAND',
                             phase_list=['P', 'S', 'noise_start', 'start',
+                                        'PP', 'SS',
                                         'Pg', 'Sg', 'x1', 'x2', 'x3',
                                         'end'])
     print(test)

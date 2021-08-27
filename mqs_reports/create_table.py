@@ -9,6 +9,7 @@
 '''
 
 from argparse import ArgumentParser
+from sys import stdout as stdout
 from os.path import exists as pexists, join as pjoin
 
 import obspy
@@ -128,7 +129,7 @@ def write_html(catalog, fnam_out, magnitude_version):
     ievent = len(catalog)
     print('Filling HTML table with event entries')
     error_events = False
-    for event in tqdm(catalog):
+    for event in tqdm(catalog, file=stdout):
         picks_check = check_picks(ievent, event)
         if picks_check is not None:
             row = '<tr> ' + picks_check + '</tr>\n'
@@ -179,17 +180,26 @@ def check_picks(ievent, event):
             if pick not in event.picks or event.picks[pick] == '':
                 missing_picks.append(pick)
 
-    mandatory_LF_ABC = ['Peak_MbP', 'Peak_MbS']
+    mandatory_LF_ABC = ['Peak_MbP']
     if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['LF', 'BB']:
         for pick in mandatory_LF_ABC:
             if pick not in event.picks or event.picks[pick] == '':
                 missing_picks.append(pick)
 
-    mandatory_LF_AB = ['P', 'S', 'S_spectral_start', 'S_spectral_end']
+    mandatory_LF_AB = ['P', 'S', 'S_spectral_start', 'S_spectral_end', 'Peak_MbS']
+    mandatory_LF_AB_alt = ['PP', 'SS']
     if event.quality in ['A', 'B'] and event.mars_event_type_short in ['LF', 'BB']:
         for pick in mandatory_LF_AB:
             if pick not in event.picks or event.picks[pick] == '':
                 missing_picks.append(pick)
+
+    if 'P' in missing_picks and 'PP' in event.picks:
+        print('no P, but I found a PP')
+        missing_picks.remove('P')
+
+    if 'S' in missing_picks and 'SS' in event.picks:
+        print('no S, but I found a SS')
+        missing_picks.remove('S')
 
     mandatory_HF_ABC = ['Pg', 'Sg', 'S_spectral_start', 'S_spectral_end', 'Peak_M2.4']
     if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['HF', 'VF', '24']:
@@ -199,6 +209,7 @@ def check_picks(ievent, event):
 
     pairs = [['P_spectral_start', 'P_spectral_end'],
              ['P', 'S'],
+             #['PP', 'SS'],
              ['Pg', 'Sg'],
              ['noise_start', 'noise_end'],
              ['start', 'end']]
