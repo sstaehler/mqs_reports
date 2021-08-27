@@ -769,7 +769,11 @@ def uncertainty_from_pdf(variable: np.array, p: np.array):
     _roots = spline.roots()
     # print(_roots, variable[p == np.nanmax(p)], np.diff(_roots) / 2.)
 
-    r1 = _roots[0]
-    r2 = _roots[1]
+    if len(_roots) > 1:
+        r1 = _roots[0]
+        r2 = _roots[1]
+    else:
+        r1 = 0
+        r2 = 30
 
     return r1, r2
