@@ -1595,6 +1595,8 @@ class Event:
         elif self.mars_event_type_short in ['LF', 'BB']:
             if self.picks['P']:
                 phase_P = 'P'
+            elif self.picks['PP']:
+                phase_P = 'P'
             elif self.picks['x1']:
                 phase_P = 'x1'
             else:
@@ -1605,6 +1607,8 @@ class Event:
             phase_S = 'S' if self.picks['S'] else 'x2'
             if self.picks['S']:
                 timing_S = self.picks['S']
+            elif self.picks['SS']:
+                timing_S = self.picks['SS']
             elif self.picks['x2']:
                 timing_S = self.picks['x2']
             else:
@@ -1629,7 +1633,7 @@ class Event:
 
         BAZ_fixed=None
         inc_fixed=None
-        # BAZ_fixed=90
+        # BAZ_fixed=70
         # inc_fixed=50
         
         # P_UTC = utct('2019-05-23T02:22:57.251')

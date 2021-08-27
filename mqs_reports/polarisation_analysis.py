@@ -140,9 +140,9 @@ def plot_polarization_event_noise(waveforms_VBB,
             continue
 
         if detick_1Hz:
-            tr_Z_detick = detick(tr_Z, 5)
-            tr_N_detick = detick(tr_N, 5)
-            tr_E_detick = detick(tr_E, 5)
+            tr_Z_detick = detick(tr_Z, 10)
+            tr_N_detick = detick(tr_N, 10)
+            tr_E_detick = detick(tr_E, 10)
             f, t, u1, u2, u3 = polarization._compute_spec(tr_Z_detick, tr_N_detick, tr_E_detick, kind, fmin, fmax,
                                          winlen, nfft, overlap, nf=nf, w0=w0)
         else:
@@ -461,7 +461,6 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     fig.suptitle(title, fontsize=15)
 
-
 ## ----------------save figure----------------
 
     if fname is None:
@@ -477,11 +476,11 @@ def plot_polarization_event_noise(waveforms_VBB,
             savename += '_zoom'
 
         if impact:
-            path_full = pjoin(path, f'Impact_search/Impact_{impact}')
+            path_full = pjoin(path, f'Plots/Impact_search/Impact_{impact}')
         elif synthetics:
-            path_full = pjoin(path, 'Synthetics')
+            path_full = pjoin(path, 'Plots/Synthetics')
         else:
-            path_full = pjoin(path, 'Plots/BAZ_search_paper')
+            path_full = pjoin(path, 'Plots/Test')
             # path_full = pjoin(path)
             
         if not pexists(path_full):
@@ -489,7 +488,7 @@ def plot_polarization_event_noise(waveforms_VBB,
             
         fig.savefig(pjoin(path_full, f'{savename}.png'), dpi=200)
         
-        
+    # print(f'MQS baz: {BAZ}')
     #Second figure
     plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density, 
                                  iterables, alpha, 
@@ -498,7 +497,7 @@ def plot_polarization_event_noise(waveforms_VBB,
                                  nbins, props, name_timewindows, title, path_full, savename)
         
         
-    # np.savez(f'Data/{savename}_azimuth_P_filtered.npz', azimuth = np.rad2deg(azi1), alpha = alpha, cmap_colors = color_list, cmap_bounds = bounds, f = f, t = t_datetime) #for Cecilia
+    # np.savez(f'Data/{savename}_azimuth_S_filtered.npz', azimuth = np.rad2deg(azi1), alpha = alpha, cmap_colors = color_list, cmap_bounds = bounds, f = f, t = t_datetime) #for Cecilia
 
     plt.close('all')
 
