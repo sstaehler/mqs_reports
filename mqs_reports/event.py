@@ -1590,13 +1590,13 @@ class Event:
             timing_S = self.picks['Sg']
             phase_P = 'Pg'
             phase_S = 'Sg'
-            f_band_density=[0.5, 2.]
+            f_band_density=[0.25, 1.25]
             
         elif self.mars_event_type_short in ['LF', 'BB']:
             if self.picks['P']:
                 phase_P = 'P'
             elif self.picks['PP']:
-                phase_P = 'P'
+                phase_P = 'PP'
             elif self.picks['x1']:
                 phase_P = 'x1'
             else:
@@ -1604,13 +1604,15 @@ class Event:
 
             timing_P = self.picks[phase_P]
 
-            phase_S = 'S' if self.picks['S'] else 'x2'
             if self.picks['S']:
                 timing_S = self.picks['S']
+                phase_S = 'S'
             elif self.picks['SS']:
                 timing_S = self.picks['SS']
+                phase_S = 'SS'
             elif self.picks['x2']:
                 timing_S = self.picks['x2']
+                phase_S = 'x2'
             else:
                 timing_S = str(utct(timing_P) + 180.)
                 phase_S = 'P + 180sec'
