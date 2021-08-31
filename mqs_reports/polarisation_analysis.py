@@ -497,7 +497,7 @@ def plot_polarization_event_noise(waveforms_VBB,
                                  nbins, props, name_timewindows, title, path_full, savename)
         
         
-    # np.savez(f'Data/{savename}_azimuth_S_filtered.npz', azimuth = np.rad2deg(azi1), alpha = alpha, cmap_colors = color_list, cmap_bounds = bounds, f = f, t = t_datetime) #for Cecilia
+    # np.savez(f'Data/{savename}_azimuth_PcS_filtered.npz', azimuth = np.rad2deg(azi1), alpha = alpha, cmap_colors = color_list, cmap_bounds = bounds, f = f, t = t_datetime) #for Cecilia
 
     plt.close('all')
 

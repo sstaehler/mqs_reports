@@ -1496,7 +1496,7 @@ class Catalog:
                 event.mars_event_type_short in ['LF', 'BB'])) \
                and not pexists(
                        pjoin(path_pol_plots, f'{event.name}_polarisation.png')):
-                baz=event.baz if event.baz else False
+                baz=event.baz if event.baz else None
                 for zoom in [False, True]:
                     try:
                         event.plot_polarisation(t_pick_P, t_pick_S,
