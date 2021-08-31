@@ -1578,7 +1578,7 @@ class Event:
 
     def plot_polarisation(self, t_pick_P, t_pick_S,
                           rotation_coords='ZNE',
-                          baz=False,
+                          baz=None,
                           impact=False,
                           zoom=False,
                           path_out='pol_plots'):
@@ -1590,11 +1590,13 @@ class Event:
             timing_S = self.picks['Sg']
             phase_P = 'Pg'
             phase_S = 'Sg'
-            f_band_density=[0.5, 2.]
+            f_band_density=[0.5, 2.0]
             
         elif self.mars_event_type_short in ['LF', 'BB']:
             if self.picks['P']:
                 phase_P = 'P'
+            elif self.picks['PP']:
+                phase_P = 'PP'
             elif self.picks['x1']:
                 phase_P = 'x1'
             else:
@@ -1602,11 +1604,15 @@ class Event:
 
             timing_P = self.picks[phase_P]
 
-            phase_S = 'S' if self.picks['S'] else 'x2'
             if self.picks['S']:
                 timing_S = self.picks['S']
+                phase_S = 'S'
+            elif self.picks['SS']:
+                timing_S = self.picks['SS']
+                phase_S = 'SS'
             elif self.picks['x2']:
                 timing_S = self.picks['x2']
+                phase_S = 'x2'
             else:
                 timing_S = str(utct(timing_P) + 180.)
                 phase_S = 'P + 180sec'
@@ -1616,21 +1622,16 @@ class Event:
         else:
             print(f'Unknown event type: {self.mars_event_type_short}')
             f_band_density=[0.3, 1.]
-
-
-        # if timing_S == '':
-        #     timing_S = str(utct(timing_P) + 180.)
-        #     phase_S = 'P + 180sec'
             
 
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
         
 
-
         BAZ_fixed=None
         inc_fixed=None
-        # BAZ_fixed=90
+        # BAZ_fixed=70
         # inc_fixed=50
+        
 
         pa.plot_polarization_event_noise(self.waveforms_VBB,
                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks
@@ -1642,11 +1643,11 @@ class Event:
                                          winlen_sec=20., overlap=0.5,
                                          tstart=None, tend=None, vmin=-210,
                                          vmax=-165, log=True,
-                                         fname=f'{self.name}', path=path_out,
+                                         fname=f'{self.name}', path='.',
                                          dop_winlen=10, dop_specwidth=1.1,
                                          nf=100, w0=8,
                                          use_alpha=True, use_alpha2=False,
-                                         alpha_inc = False, alpha_elli = 1.0, alpha_azi = False,
+                                         alpha_inc = None, alpha_elli = 1.0, alpha_azi = None, #None when not used
                                          f_band_density=f_band_density,
                                          plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
                                          differentiate = True, detick_1Hz = True,

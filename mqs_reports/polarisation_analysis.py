@@ -12,6 +12,7 @@ import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as PathEffects
 import numpy as np
 import polarization.polarization as polarization
 import seaborn as sns
@@ -23,7 +24,6 @@ from obspy import Stream
 from obspy import UTCDateTime as utct
 from obspy.signal.util import next_pow_2
 from scipy import stats
-
 from mqs_reports.utils import detick
 
 
@@ -31,8 +31,8 @@ from mqs_reports.utils import detick
 def plot_polarization_event_noise(waveforms_VBB, 
                               t_pick_P, t_pick_S, #Window in [sec, sec] around picks
                               timing_P, timing_S, timing_noise,#UTC timings for the three window anchors (start)
-                              phase_P, phase_S, #Which phases/picks are used for the P and S windows
-                              rotation = 'ZNE', BAZ=False,
+                              phase_P, phase_S, #Which phases/picks are used for the P and S windows: string with names
+                              rotation = 'ZNE', BAZ=None,
                               BAZ_fixed=None, inc_fixed=None,
                               kind='spec', fmin=1., fmax=10.,
                               winlen_sec=20., overlap=0.5,
@@ -52,49 +52,13 @@ def plot_polarization_event_noise(waveforms_VBB,
     Plots polarisation of seismic event with window of noise and manually defined event time window
     """
 
-    color_list = ['blue', 'cornflowerblue', 'goldenrod', 'gold', 'yellow', 'darkgreen', 'green', 'mediumseagreen', 'darkred', 'firebrick', 'tomato', 'midnightblue', 'blue']
-    custom_cmap =  LinearSegmentedColormap.from_list('', color_list) #interpolated colormap - or use with bounds
-    bounds = [0, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345, 360]
-
     mod_180 = False #set to True if only mapping 0-180° azimuth, False maps 0-360°
-    trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
-    
-    st_Copy = waveforms_VBB.copy() 
-    # phase_P = 'P'
-    # phase_S = 'S'  
 
-    name_timewindows = ['Signal P', 'Signal S', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
+    name_timewindows = [f'Signal {phase_P}', f'Signal {phase_S}', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
 
 
-    #Rotate the waveforms into different coordinate system: ZRT or LQT
-    if 'ZNE' not in rotation:
-        if 'RT' in rotation:
-            st_Copy.rotate('NE->RT', back_azimuth=BAZ)
-            components = ['Z', 'R', 'T']
-            #need to use -R, otherwise it aligns with 180° instead of 0°
-            tr_R_data = st_Copy[1].data
-            tr_R_data *= -1
-
-        elif 'LQT' in rotation:
-            st_Copy.rotate('ZNE->LQT', back_azimuth=BAZ, inclination = 40.0)
-            components = ['L', 'Q', 'T']
-        else:
-            raise Exception("Sorry, please pick valid rotation system: ZNE, RT, LQT")
-    else:
-        components = ['Z', 'N', 'E']
-
-
-    #differentiate waveforms
-    if differentiate:
-        st_Copy.differentiate()
-
-    #trim the waveforms in length
-    try:
-        st_Copy.trim(starttime=utct(timing_noise[0]) - trim_time[0], #og: -50, +850
-                     endtime=utct(timing_S) + trim_time[1])
-    except ValueError: #if noise window is picked after the event
-        st_Copy.trim(starttime=utct(timing_P) - trim_time[0]-120, #og: -50, +850
-                     endtime=utct(timing_noise[-1]) + trim_time[0])
+    st_Copy, components = waveform_processing(waveforms_VBB, rotation, BAZ, differentiate, 
+                                              timing_P, timing_S, timing_noise)
 
 
     st_Z = Stream(traces=[st_Copy.select(component=components[0])[0]])
@@ -114,103 +78,17 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     tstart, tend, dt = polarization._check_traces(st_Z, st_N, st_E, tstart, tend)
 
-    #define in which row Signal and Noise hist are plotted
+    #Plot preparation
     signal_P_row = 2
     signal_S_row = 3
     noise_row = 1
-    density_row = 4
 
-    # Create figure to plot in
-    if plot_6C: #not tested
-        gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],   # specgram, hist2d
-                           height_ratios=[1, 1, 1, 1, 1, 1],
-                           top=0.93,
-                           bottom=0.05,
-                           left=0.03,
-                           right=0.94,
-                           hspace=0.15,
-                           wspace=0.08)
-        box_legend = (1.3, 1.5)
-        box_compass_colormap = [0.01, 0.01, 0.06] #offset left, top, width/height
-        nrows = 6
-        dy_lmst = -0.4
-        figsize_y = 12
-    elif plot_spec_azi_only:
-        gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],   # specgram, hist2d
-                           height_ratios=[1, 1],
-                           top=0.85,
-                           bottom=0.08,
-                           left=0.03,
-                           right=0.94,
-                           hspace=0.2,
-                           wspace=0.08)
-        box_legend = (1.3, 1.4)
-        box_compass_colormap = [0.04, -0.02, 0.09] #offset left, top, width/height
-        nrows = 2
-        dy_lmst = -0.4
-        figsize_y = 6
-    else:
-        gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],  # specgram, hist2d, hist2d
-                           height_ratios=[1, 1, 1, 1],
-                           top=0.89,
-                           bottom=0.05,
-                           left=0.03, #0.05
-                           right=0.94, #0.89
-                           hspace=0.15,
-                           wspace=0.08) #0.02 original
-        box_legend = (1.3, 1.5)
-        box_compass_colormap = [0.03, -0.02, 0.06] #offset left, top, width/height
-        nrows = 4
-        dy_lmst = -0.25
-        figsize_y = 9
-
-
-    dx_cbar = 0.028
-    w_cbar = 0.005
-
-    title = f'{fname}'
-
-
-    # gridspec inside gridspec - nested subplots
-    fig = plt.figure(figsize=(19, figsize_y))
-    gs0 = gridspec.GridSpec(1, 2, figure=fig,
-                            left=gridspec_kw['left'], bottom=gridspec_kw['bottom'], right=gridspec_kw['right'], top=gridspec_kw['top'],
-                            wspace=0.1, hspace=None,
-                            height_ratios=[1], width_ratios=[7, 1])
-
-    #'Left' subplots
-    gs00 = gridspec.GridSpecFromSubplotSpec(nrows, 4, subplot_spec=gs0[0], wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[4,1,1,1])
-    axes0 = gs00.subplots()
-
-    #'right' subplots - density curves
-    # the following syntax does the same as the GridSpecFromSubplotSpec call above:
-    gs01 = gs0[-1].subgridspec(nrows, 1, wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[1])
-    axes1 = gs01.subplots()
-
-
-
-    if impact:
-        title += f' - {rotation} impact: {impact}'
-    if 'ZNE' not in rotation and not impact:
-        title += f' - {rotation} rotated to {BAZ:.0f}° BAZ'
-
-    #Mark the time window in the freq-time plot used for further analysis
-    rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
-    color_windows = ['C0', 'Firebrick', 'grey', 'Peru'] #signal P, S, noise, density C9
-    for j in range(nrows):
-        rect[j][0] = patches.Rectangle((utct(tstart_signal_P).datetime,fmin+0.03*fmin),
-                                       utct(tend_signal_P).datetime-utct(tstart_signal_P).datetime,
-                                       fmax-fmin-0.03*fmax, linewidth=2,
-                                       edgecolor=color_windows[0], fill = False) #signal
-        rect[j][1] = patches.Rectangle((utct(tstart_signal_S).datetime,fmin+0.03*fmin),
-                                       utct(tend_signal_S).datetime-utct(tstart_signal_S).datetime,
-                                       fmax-fmin-0.03*fmax, linewidth=2,
-                                       edgecolor=color_windows[1], fill = False) #signal
-        rect[j][2] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin),
-                                       utct(tend_noise).datetime-utct(tstart_noise).datetime,
-                                       fmax-fmin-0.03*fmax, linewidth=2,
-                                       edgecolor=color_windows[2], fill = False) #noise
-
+    fig, axes0, axes1, gridspec_kw, nrows, box_legend, box_compass_colormap = create_subplot_layout(plot_spec_azi_only, plot_6C)
+    rect, color_windows = rectangles_for_time_windows(fmin, fmax, 
+                                                      tstart_signal_P, tend_signal_P, 
+                                                      tstart_signal_S, tend_signal_S, 
+                                                      tstart_noise, tend_noise, 
+                                                      nrows)
 
 
     winlen = int(winlen_sec / dt)
@@ -230,21 +108,20 @@ def plot_polarization_event_noise(waveforms_VBB,
         binned_data_signal_S = np.zeros_like(binned_data_signal_P)
         binned_data_noise = np.zeros_like(binned_data_signal_P)
 
-        #for second plot with polar plots
-        fBAZ_P = np.zeros((nfft // (2 * dsfacf) + 1, nbins))
-        fBAZ_S = np.zeros_like(fBAZ_P)
-        fBAZ_noise = np.zeros_like(fBAZ_P)
-
+        # #for second plot with polar plots
+        # fBAZ_P = np.zeros((nfft // (2 * dsfacf) + 1, nbins))
+        # fBAZ_S = np.zeros_like(fBAZ_P)
+        # fBAZ_noise = np.zeros_like(fBAZ_P)
 
     else:
         binned_data_signal_P = np.zeros((nrows, nf // dsfacf, nbins))
         binned_data_signal_S = np.zeros_like(binned_data_signal_P)
         binned_data_noise = np.zeros_like(binned_data_signal_P)
 
-        #for second plot with polar plots
-        fBAZ_P = np.zeros((nf // dsfacf, nbins))
-        fBAZ_S = np.zeros_like(fBAZ_P)
-        fBAZ_noise = np.zeros_like(fBAZ_P)
+        # #for second plot with polar plots
+        # fBAZ_P = np.zeros((nf // dsfacf, nbins))
+        # fBAZ_S = np.zeros_like(fBAZ_P)
+        # fBAZ_noise = np.zeros_like(fBAZ_P)
 
     #For histogram curve
     kde_list = [[[] for j in range(3)] for _ in range(nrows)]
@@ -253,15 +130,19 @@ def plot_polarization_event_noise(waveforms_VBB,
     kde_noiseframe = [[] for _ in range(nrows)]
     kde_weights = [[[] for j in range(3)] for i in range(nrows)]
 
+    #custom colormap for azimuth
+    color_list = ['blue', 'cornflowerblue', 'goldenrod', 'gold', 'yellow', 'darkgreen', 'green', 'mediumseagreen', 'darkred', 'firebrick', 'tomato', 'midnightblue', 'blue']
+    custom_cmap =  LinearSegmentedColormap.from_list('', color_list) #interpolated colormap - or use with bounds
+    bounds = [0, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285, 315, 345, 360]
 
     for tr_Z, tr_N, tr_E in zip(st_Z, st_N, st_E):
         if tr_Z.stats.npts < winlen * 4:
             continue
 
         if detick_1Hz:
-            tr_Z_detick = detick(tr_Z, 5)
-            tr_N_detick = detick(tr_N, 5)
-            tr_E_detick = detick(tr_E, 5)
+            tr_Z_detick = detick(tr_Z, 10)
+            tr_N_detick = detick(tr_N, 10)
+            tr_E_detick = detick(tr_E, 10)
             f, t, u1, u2, u3 = polarization._compute_spec(tr_Z_detick, tr_N_detick, tr_E_detick, kind, fmin, fmax,
                                          winlen, nfft, overlap, nf=nf, w0=w0)
         else:
@@ -275,59 +156,22 @@ def plot_polarization_event_noise(waveforms_VBB,
         t = t[::dsfact]
         t += float(tr_Z.stats.starttime)
         nts += len(t)
-        #Prep bool mask for timing of the P, S, and noise window
-        bol_signal_P_mask= np.array((t > tstart_signal_P, t< tend_signal_P)).all(axis=0)
-        bol_signal_S_mask= np.array((t > tstart_signal_S, t< tend_signal_S)).all(axis=0)
-        bol_noise_mask= np.array((t > tstart_noise, t< tend_noise)).all(axis=0)
 
-        #get indexes where f lies in the defined f-band for density subplot
-        twodmask_P = [[] for i in range(3)]
-        twodmask_S = [[] for i in range(3)]
-        twodmask_noise = [[] for i in range(3)]
-
-        f_middle = f_band_density[0] + (f_band_density[1]-f_band_density[0])/2
-
-        for i, (f_low, f_high) in enumerate(zip((f_band_density[0], f_band_density[0], f_middle),
-                                                (f_band_density[1], f_middle, f_band_density[1]))):
-            # Whole f-band, lower f-band, higher f-band
-            bol_density_f_mask = np.array((f >= f_low, f < f_high)).all(axis=0)
-            twodmask_P[i] = bol_density_f_mask[:, None] & bol_signal_P_mask[None, :]
-            twodmask_S[i] = bol_density_f_mask[:, None] & bol_signal_S_mask[None, :]
-            twodmask_noise[i] = bol_density_f_mask[:, None] & bol_noise_mask[None, :]
-
+        bol_density_f_mask, bol_signal_P_mask, bol_signal_S_mask, bol_noise_mask, twodmask_P, twodmask_S, twodmask_noise = boolean_masks_f_t(f, t, 
+                                                                                                                                             tstart_signal_P, tend_signal_P,
+                                                                                                                                             tstart_signal_S, tend_signal_S, 
+                                                                                                                                             tstart_noise, tend_noise, 
+                                                                                                                                             f_band_density)
 
         #Scalogram and alpha/masking of signals
         # scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
         # alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
-        if alpha_inc > 0.:
-            func_inc= np.cos
-            func_azi= np.sin
-        else:
-            alpha_inc= -alpha_inc
-            func_inc= np.sin
-            func_azi= np.cos
-
-        r1_sum = (r1** 2).sum(axis=-1)
-        if alpha_inc is not None:
-            r1_sum *= func_inc(inc1)**(2*alpha_inc)
-        elif alpha_azi is not None:
-            r1_sum *= abs(func_azi(azi1))**(2*alpha_azi)
-        elif alpha_elli is not None:
-            r1_sum *= (1. - elli)**(2*alpha_elli)
-
+        r1_sum, alpha, alpha2 = polarisation_filtering(r1, inc1, azi1, azi2, elli,
+                                                       alpha_inc, alpha_azi, alpha_elli,
+                                                       P, use_alpha, use_alpha2, mod_180)
         scalogram= 10 * np.log10(r1_sum)
-        alpha, alpha2= polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
-        if mod_180:
-            azi1= azi1 % np.pi
-            azi2= azi2 % np.pi
 
 
-        if alpha_inc is not None:
-            alpha*= func_inc(inc1)**alpha_inc
-        if alpha_azi is not None:
-            alpha*= abs(func_azi(azi1))**alpha_azi
-        if alpha_elli is not None:
-            alpha*= (1. - elli)**alpha_elli
 
         #Prepare x axis array (datetime)
         t_datetime = np.zeros_like(t,dtype=object)
@@ -338,23 +182,23 @@ def plot_polarization_event_noise(waveforms_VBB,
 
         iterables = [
             (scalogram, vmin, vmax, np.ones_like(alpha),
-             'amplitude\n/ dB', np.arange(vmin, vmax+1, 20), 'plasma', None),
+             'amplitude\n [dB]', np.arange(vmin, vmax+1, 20), 'plasma', None),
             (np.rad2deg(azi1), 0, 360, alpha,
-             'major azimuth\n/ degree', np.arange(0, 361, 90), custom_cmap, bounds), #was 45 deg steps, tab20b
+             'major azimuth\n [degree]', np.arange(0, 361, 90), custom_cmap, bounds), #was 45 deg steps, tab20b
             (elli, 0, 1, alpha,
              'ellipticity\n', np.arange(0, 1.1, 0.2), 'gnuplot', None),
             (np.rad2deg(abs(inc1)), -0, 90, alpha,
-             'major inclination\n/ degree', np.arange(0, 91, 20), 'gnuplot', None)]
+             'major inclination\n [degree]', np.arange(0, 91, 20), 'gnuplot', None)]
 
         if plot_spec_azi_only:
             del iterables[-2:]
-        if plot_6C:
+        elif plot_6C:
             iterables.append(
                 (np.rad2deg(azi2), 0, 180, alpha2,
-                 'minor azimuth\n/ degree', np.arange(0, 181, 30), custom_cmap, bounds))
+                 'minor azimuth\n [degree]', np.arange(0, 181, 30), custom_cmap, bounds))
             iterables.append(
                 (np.rad2deg(inc2), -90, 90, alpha2,
-                 'minor inclination\n/ degree', np.arange(-90, 91, 30), 'gnuplot', None))
+                 'minor inclination\n [degree]', np.arange(-90, 91, 30), 'gnuplot', None))
 
         for irow, [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] in \
                 enumerate(iterables):
@@ -363,14 +207,10 @@ def plot_polarization_event_noise(waveforms_VBB,
 
             if log and kind == 'cwt':
                 # imshow can't do the log sampling in frequency
-                # print(t_datetime.shape)
-                # print(f.shape)
-                # print(data.shape)
-                # print(a.shape)
                 cm = polarization.pcolormesh_alpha(ax, t_datetime, f, data,
                                                    alpha=a, cmap=cmap,
-                                                   vmin=rmin, vmax=rmax)
-                #, bounds=boundaries)
+                                                   vmin=rmin, vmax=rmax, bounds=boundaries)
+
             else:
                 cm = polarization.imshow_alpha(ax, t_datetime, f, data, alpha=a, cmap=cmap,
                                   vmin=rmin, vmax=rmax)
@@ -411,7 +251,7 @@ def plot_polarization_event_noise(waveforms_VBB,
 
         for a in ax[:]:
             a.set_ylim(fmin, fmax)
-            a.set_ylabel("frequency / Hz")
+            a.set_ylabel("frequency [Hz]")
         if log:
             ax[0].set_yscale('log')
         ax[0].yaxis.set_ticks_position('both')
@@ -438,6 +278,8 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     for ax in axes0[:, 2]:
         ax.set_ylabel('')
+    for ax in axes0[:, 3]:
+        ax.set_ylabel('frequency [Hz]', rotation=-90, labelpad=15)
 
 
     for i,ax in enumerate(axes0[:, 0]):
@@ -471,13 +313,13 @@ def plot_polarization_event_noise(waveforms_VBB,
     axes0[0, signal_S_row].set_title(f'{name_timewindows[1]} \n {t_pick_S[1]-t_pick_S[0]}s')
     axes0[0, noise_row].set_title(f'{name_timewindows[2]} \n {tend_noise-tstart_noise:.0f}s')
     axes1[0].set_title(f'Density \n {f_band_density[0]}-{f_band_density[1]} Hz')
-    axes0[0, 0].text(utct(tstart_signal_P).datetime, fmax+1, f'{name_timewindows[0]}', c=color_windows[0], fontsize=12)
-    axes0[0, 0].text(utct(tstart_signal_S).datetime, fmax+1, f'{name_timewindows[1]}', c=color_windows[1], fontsize=12)
+    axes0[0, 0].text(utct(tstart_signal_P).datetime, fmax+0.1*fmax, f'{name_timewindows[0]}', c=color_windows[0], fontsize=12)
+    axes0[0, 0].text(utct(tstart_signal_S).datetime, fmax+0.1*fmax, f'{name_timewindows[1]}', c=color_windows[1], fontsize=12)
     if not zoom or (zoom and (utct(tstart_noise).datetime >= utct(utct(timing_P) - 120).datetime and \
                               utct(tstart_noise).datetime < utct(utct(timing_S) + 120).datetime)):
-        axes0[0, 0].text(utct(tstart_noise).datetime, fmax+1, f'{name_timewindows[2]}', c=color_windows[2], fontsize=12)
-    axes0[0, 0].text(utct(timing_P).datetime, fmin-0.3*fmin, phase_P, c='black', fontsize=12)
-    axes0[0, 0].text(utct(timing_S).datetime, fmin-0.3*fmin, phase_S, c='black', fontsize=12)
+        axes0[0, 0].text(utct(tstart_noise).datetime, fmax+0.1*fmax, f'{name_timewindows[2]}', c=color_windows[2], fontsize=12)
+    axes0[0, 0].text(utct(timing_P).datetime, fmin-0.35*fmin, phase_P, c='black', fontsize=12)
+    axes0[0, 0].text(utct(timing_S).datetime, fmin-0.35*fmin, phase_S, c='black', fontsize=12)
 
 
     # linewidth_twofour = 1.0
@@ -560,23 +402,17 @@ def plot_polarization_event_noise(waveforms_VBB,
 
         ax.set_xticks(xticks)
         ax.set_xlim(rmin,rmax)
-        ax.set_ylabel('')
         ax.set_xlabel('')
+        ax.set_yticklabels('')
+        ax.set_yticks([])
+        ax.set_ylabel('')
         for spine in ax.spines.values():
             spine.set_edgecolor(color_windows[3])
             spine.set_linewidth(2)
 
 
     #Get BAZ from max density of P curve, mark in density column
-    max_x = [[],[]]
-    for j, (i, xlim) in enumerate(zip((1,3), (360,90))):
-        kernel = stats.gaussian_kde(kde_dataframe_P[i]['P'], weights = kde_dataframe_P[i]['weights'])
-        kernel.covariance_factor = lambda : .20
-        kernel._compute_covariance()
-        xs = np.linspace(0,xlim,1000)
-        ys = kernel(xs)
-        index = np.argmax(ys)
-        max_x[j] = xs[index]
+    max_x, error = calculate_kde_maxima(kde_dataframe_P)
 
     if BAZ_fixed and inc_fixed:
         BAZ_P = np.deg2rad(BAZ_fixed)
@@ -585,16 +421,20 @@ def plot_polarization_event_noise(waveforms_VBB,
         BAZ_P = np.deg2rad(max_x[0])
         inc_P = np.deg2rad(max_x[1]) #needed later for polar plots
 
-    title += f' - P BAZ: {max_x[0]:.0f}°'
+
     ax = axes1[1]
-    ax.axvline(x=max_x[0],c='r')
+    ymin, ymax = ax.get_ylim()
+    ax.axvline(x=max_x[0],c='r') #mark the polarisation BAZ from the maximum of the curve
+    ax.scatter(max_x[0], ymax, color = 'r', marker = 'D', edgecolors = 'k', linewidths = 0.4, zorder = 100)
 
     #Set grid lines, mark BAZ
-    if BAZ and ('ZNE' in rotation): #plot BAZ if it exists and if traces have NOT been rotated
+    if BAZ is not None and ('ZNE' in rotation): #plot BAZ if it exists and if traces have NOT been rotated
         for ax in axes0[1, 1:]:
             ax.axvline(x=BAZ,ls='dashed',c='darkgrey')
+
         ax = axes1[1]
         ax.axvline(x=BAZ,ls='dashed',c='darkgrey')
+        ax.scatter(BAZ, ymax, color = 'darkgrey', marker = 'v', edgecolors = 'k', linewidths = 0.4, zorder = 99)
 
     for ax in axes0[1:, 1:].flatten():
         ax.grid(b=True, which='both', axis='x', linewidth=0.2, color='grey')
@@ -602,51 +442,69 @@ def plot_polarization_event_noise(waveforms_VBB,
     for ax in axes0[:, 1:-1].flatten():
         ax.set_yticklabels('')
 
-
-    cbar_axes = fig.add_axes([gridspec_kw['right'] + dx_cbar,
-                              gridspec_kw['bottom'], w_cbar,
-                              gridspec_kw['top'] - gridspec_kw['bottom']])
-    plt.colorbar(cm, cax=cbar_axes, label='weighted relative frequency')
-
     #Legend for density column
     colors = color_windows[:-1]
     lines = [Line2D([0], [0], color=c, linewidth=3, linestyle='-') for c in colors]
     labels = [f'{name_timewindows[-2]}', f'{name_timewindows[-1]}', f'{name_timewindows[2]}']
-    axes1[0].legend(lines, labels, loc='upper right', bbox_to_anchor=box_legend)
+    axes1[0].legend(lines, labels, loc='upper right', bbox_to_anchor=box_legend, fontsize=12, handlelength=0.8)
 
-
-    #add compass rose-type plot to see in which direction azimuth colormap lies with respect to NESW
-    rose_axes = fig.add_axes([gridspec_kw['left']-box_compass_colormap[0],
-                              gridspec_kw['top']-box_compass_colormap[1],
-                              box_compass_colormap[2], box_compass_colormap[2]], polar=True) # Left, Bottom, Width, Height
-    if 'ZNE' not in rotation: #rotate the colormap so that 0° is in direction of the BAZ
-        theta = [x+BAZ for x in bounds]
-        theta = np.array(theta)
-        theta[theta > 360] = theta[theta > 360] - 360 #remap values over 360°
-    else:
-        theta = bounds
-    radii = [1]*len(theta)
-    #Width of pie segments: first and last entry separately since blue is both at beginning and end of the color list= half the width each
-    width = [30]*(len(theta)-2)
-    width.insert(0, 15)
-    width.insert((len(width)), 15)
-
-    rose_axes.bar(np.radians(theta), radii, width=np.radians(width), color=color_list, align='edge')
-
-    rose_axes.set_theta_zero_location("N")
-    rose_axes.set_theta_direction('clockwise')
-    rose_axes.set_xticks(np.radians(range(0, 360, 90)))
-    rose_axes.set_xticklabels(['N', 'E', 'S', 'W'], fontsize=8)
-    rose_axes.set_yticklabels('')
-    rose_axes.tick_params(grid_color="palegoldenrod", pad=0.0)
-    if BAZ:
-        rose_axes.axvline(x=np.radians(BAZ), color='black')
-        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='black', fontsize=8)
+    #Plot compass rose to visualise azimuth colors and mark BAZ_mqs
+    compass_rose(fig, gridspec_kw, box_compass_colormap, rotation, BAZ, bounds, color_list)
+    
+    title = f'{fname}'
+    if impact:
+        title += f' - {rotation} impact: {impact}'
+    if 'ZNE' not in rotation and not impact:
+        title += f' - {rotation} rotated to {BAZ:.0f}° BAZ'
+    title += ' - BAZ$_{KDE}^P$:'
+    title += f' {max_x[0]:.0f}° - FWHM: {error[0]:.0f}°-{error[1]:.0f}°' #needs to be separated because f-strings and subscrips have issues
 
     fig.suptitle(title, fontsize=15)
 
+## ----------------save figure----------------
+
+    if fname is None:
+        plt.show()
+    else:
+        # savename = f'{fname}_diff' if differentiate else f'{fname}'
+        savename = fname
+        if plot_spec_azi_only:
+            savename += '_2Row'
+        elif plot_6C:
+            savename += '_6Row'
+        if zoom:
+            savename += '_zoom'
+
+        if impact:
+            path_full = pjoin(path, f'Plots/Impact_search/Impact_{impact}')
+        elif synthetics:
+            path_full = pjoin(path, 'Plots/Synthetics')
+        else:
+            # path_full = pjoin(path, 'Plots/Test')
+            path_full = pjoin(path)
+            
+        if not pexists(path_full):
+            makedirs(path_full)    
+            
+        fig.savefig(pjoin(path_full, f'{savename}.png'), dpi=200)
+        
+    # print(f'MQS baz: {BAZ}')
+    #Second figure
+    plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density, 
+                                 iterables, alpha, 
+                                 binned_data_signal_P, binned_data_signal_S, binned_data_noise, 
+                                 twodmask_P, twodmask_S, twodmask_noise, 
+                                 nbins, props, name_timewindows, title, path_full, savename)
+
+    plt.close('all')
 
 
+
+def plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density, 
+                                 iterables, alpha, 
+                                 binned_data_signal_P, binned_data_signal_S, binned_data_noise, 
+                                 twodmask_P, twodmask_S, twodmask_noise, 
+                                 nbins, props, name_timewindows, title, path_full, savename):
     ## ----------------new figure for polar plots----------------
     #new figure with polar projections
     fig2, axes2 = plt.subplots(ncols=3, nrows=3, subplot_kw={'projection': 'polar'}, figsize=(10,11))
@@ -660,52 +518,36 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     f_band_density_high = 3.
     bol_density_f_mask = np.array((f > f_band_density[0], f < f_band_density_high)).all(axis=0)
+    f_middle = f_band_density[0] + (f_band_density[1]-f_band_density[0])/2
 
     [data, rmin, rmax, a, xlabel, xticks, cmap, boundaries] = iterables[1] #azimuth
-    inc_data = np.rad2deg(abs(inc1)) #data inclination
+    inc_data = iterables[3][0] #inclination
 
     #Top row in plot: frequency vs BAZ
-    for i in range(len(f)):
-        fBAZ_P[i,:] += np.histogram(data[i,bol_signal_P_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_P_mask])[0]
-        fBAZ_S[i,:] += np.histogram(data[i,bol_signal_S_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_S_mask])[0]
-        fBAZ_noise[i,:] += np.histogram(data[i,bol_noise_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_noise_mask])[0]
+    fBAZ_P = binned_data_signal_P[1, :, :]
+    fBAZ_S = binned_data_signal_S[1, :, :]
+    fBAZ_noise = binned_data_noise[1, :, :]
+    
+    # for i in range(len(f)):
+        # fBAZ_P[i,:] += np.histogram(data[i,bol_signal_P_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_P_mask])[0]
+        # fBAZ_S[i,:] += np.histogram(data[i,bol_signal_S_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_S_mask])[0]
+        # fBAZ_noise[i,:] += np.histogram(data[i,bol_noise_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_noise_mask])[0]
 
     #Following rows in plot: inclination vs BAZ
     for i in range(2):
-        BAZ_Inc_P[i] = np.histogram2d(data[twodmask_P[i+1]], inc_data[twodmask_P[i+1]], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_P[i+1]])[0]
-        BAZ_Inc_S[i] = np.histogram2d(data[twodmask_S[i+1]], inc_data[twodmask_S[i+1]], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_S[i+1]])[0]
-        BAZ_Inc_noise[i] = np.histogram2d(data[twodmask_noise[i+1]], inc_data[twodmask_noise[i+1]], bins=nbins, range=((rmin, rmax),(0,90)), weights=alpha[twodmask_noise[i+1]])[0]
+        BAZ_Inc_P[i] = np.histogram2d(data[twodmask_P[i+1]], inc_data[twodmask_P[i+1]], 
+                                      bins=nbins, range=((rmin, rmax),(0,90)), 
+                                      weights=alpha[twodmask_P[i+1]], 
+                                      density=True)[0]
+        BAZ_Inc_S[i] = np.histogram2d(data[twodmask_S[i+1]], inc_data[twodmask_S[i+1]], 
+                                      bins=nbins, range=((rmin, rmax),(0,90)), 
+                                      weights=alpha[twodmask_S[i+1]], 
+                                      density=True)[0]
+        BAZ_Inc_noise[i] = np.histogram2d(data[twodmask_noise[i+1]], inc_data[twodmask_noise[i+1]], 
+                                          bins=nbins, range=((rmin, rmax),(0,90)), 
+                                          weights=alpha[twodmask_noise[i+1]], 
+                                          density=True)[0]
 
-
-    #Vector fun
-    #get P coordinates from kde curve maxima?
-    BAZ_S = []
-    inc_S = []
-
-    #Define uP vector in cartesian coordinates from BAZ and inclination (inclination from polarisation is NOT the spherical coordinate inclination)
-    gamma = np.linspace(0,2*np.pi, num=300)
-    y = np.sin(np.pi/2-inc_P)*np.sin(BAZ_P)
-    x = np.sin(np.pi/2-inc_P)*np.cos(BAZ_P)
-    z = np.cos(np.pi/2-inc_P) #arbitrarily set r = 1
-    uP = np.array([x, y, z])
-
-    #get two orthogonal vectors uS1, uS2
-    uS1 = np.random.randn(3)  # take a random vector
-    uS1 -= uS1.dot(uP) * uP / np.linalg.norm(uP)**2       # make it orthogonal to uP
-    uS1 /= np.linalg.norm(uS1)  # normalize it
-    uS2 = np.cross(uP, uS1)      # cross product with uP to get second vector
-
-    for i in gamma: #loop from 0 to 2pi
-        uS = np.sin(i)*uS1 + np.cos(i)*uS2 #general vector uS from linear combination of uS1 and uS2
-        r = np.sqrt(uS[0]**2+uS[1]**2+uS[2]**2)
-        BAZ_S.append(np.arctan2(uS[1],uS[0]))
-        inclination = np.pi/2-np.arccos(uS[2]/r) #inclination again defined as for polarisation analysis: 90° is vertical
-        if inclination < 0: #'upper' part of sphere, ignore
-            inc_S.append(np.nan)
-        elif inclination <= np.pi/2:
-            inc_S.append(inclination)
-        else: #is landing on the other side, re-map to 0-90°
-            inc_S.append(np.pi-inclination)
 
 
     #Plot all histograms
@@ -759,11 +601,12 @@ def plot_polarization_event_noise(waveforms_VBB,
         for ax in flat_ax:
             ax.set_title(sub_title, fontsize=15)
             ax.invert_yaxis()
-            if BAZ:
+            if BAZ is not None:
                 ax.axvline(x=np.radians(BAZ), color='C0')
                 ax.text(np.radians(BAZ), rlim, 'BAZ', c='C0', fontsize=13)
 
     #Plot the orthogonal plane to the P wave
+    BAZ_S, inc_S = vector_to_orthogonal_plane(BAZ_P, inc_P)
     for ax in axes2[1:,1:].flatten():
         ax.scatter(BAZ_P,np.rad2deg(inc_P), color='C9', zorder=100) #P-vector: point
         ax.plot(BAZ_S, np.rad2deg(inc_S), color= 'C9', zorder=101) #Orthogonal plane: line
@@ -781,41 +624,341 @@ def plot_polarization_event_noise(waveforms_VBB,
     fig2.patches.extend([rect2])
 
     fig2.suptitle(title, fontsize=18)
+    fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
+    
+    # #save for automatic plots
+        # fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
+        # if not zoom:
+        #     fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
+    
+    
+    
+def vector_to_orthogonal_plane(BAZ_P, inc_P):
+    #Vector fun: calculates orthogonal plane (S-wave lies there somewhere) when given a vector (defined from BAZ and inclination; P-wave)
+    #get P coordinates from kde curve maxima
+    BAZ_S = []
+    inc_S = []
 
+    #Define uP vector in cartesian coordinates from BAZ and inclination (inclination from polarisation is NOT the spherical coordinate inclination)
+    gamma = np.linspace(0,2*np.pi, num=300)
+    y = np.sin(np.pi/2-inc_P)*np.sin(BAZ_P)
+    x = np.sin(np.pi/2-inc_P)*np.cos(BAZ_P)
+    z = np.cos(np.pi/2-inc_P) #arbitrarily set r = 1
+    uP = np.array([x, y, z])
 
-## ----------------save figures----------------
+    #get two orthogonal vectors uS1, uS2
+    uS1 = np.random.randn(3)  # take a random vector
+    uS1 -= uS1.dot(uP) * uP / np.linalg.norm(uP)**2       # make it orthogonal to uP
+    uS1 /= np.linalg.norm(uS1)  # normalize it
+    uS2 = np.cross(uP, uS1)      # cross product with uP to get second vector
 
-    if fname is None:
-        plt.show()
-    else:
-        # savename = f'{fname}_diff' if differentiate else f'{fname}'
-        savename = fname
-        if plot_spec_azi_only:
-            savename += '_2Row'
-        elif plot_6C:
-            savename += '_6Row'
-        if zoom:
-            savename += '_zoom'
-
-        if impact:
-            path_full = pjoin(path, f'Impact_search/Impact_{impact}')
-        elif synthetics:
-            path_full = pjoin(path, 'Synthetics')
-        else:
-            # path_full = pjoin(path, 'Plots')
-            path_full = pjoin(path)
+    for i in gamma: #loop from 0 to 2pi
+        uS = np.sin(i)*uS1 + np.cos(i)*uS2 #general vector uS from linear combination of uS1 and uS2
+        r = np.sqrt(uS[0]**2+uS[1]**2+uS[2]**2)
+        BAZ_S.append(np.arctan2(uS[1],uS[0]))
+        inclination = np.pi/2-np.arccos(uS[2]/r) #inclination again defined as for polarisation analysis: 90° is vertical
+        if inclination < 0: #'upper' part of sphere, ignore
+            inc_S.append(np.nan)
+        elif inclination <= np.pi/2:
+            inc_S.append(inclination)
+        else: #is landing on the other side, re-map to 0-90°
+            inc_S.append(np.pi-inclination)
             
-        if not pexists(path_full):
-            makedirs(path_full)    
-            
-        # fig.savefig(pjoin(path_full, f'{savename}.png'), dpi=200)
-        # fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
+    return BAZ_S, inc_S
+
+
+
+def calculate_kde_maxima(kde_dataframe_P):
+    max_x = [[],[]]
+    for j, (i, xlim) in enumerate(zip((1,3), (360,90))):
+        kernel = stats.gaussian_kde(kde_dataframe_P[i]['P'], weights = kde_dataframe_P[i]['weights'])
+        kernel.covariance_factor = lambda : .17 #old:  lambda : .20
+        kernel._compute_covariance()
+        xs = np.linspace(-50,xlim+50,1000) #extend to positive and negative spaces so that the error can be wrapped around
+        ys = kernel(xs)
+        index = np.argmax(ys)
+        max_x[j] = xs[index]
         
+        #get the error of the BAZ from the full width of the half maximum
+        if j==0:
+            #find the FWHM
+            error = fwhm_error_from_kde(xs, ys, index)
+            # axes1[1].plot(xs, ys, color='yellow') #check if manual KDE is equal to seaborn KDE curve (for covariance_factor determination, but .17 seems good)
+            # axes1[1].axvspan(error[0], error[1], color='blue', alpha=0.1) #marks the fwhm area, but not wrapping around zero
+            
+    return max_x, error
 
-        #save for automatic plots
-        fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
-        if not zoom:
-            fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
 
-    plt.close('all')
+    
+def fwhm_error_from_kde(xs, ys, index):
+    #get the error of the BAZ from the full width of the half maximum
+    #find the FWHM
+    max_y = max(ys)
+    indexes_ymax = [x for x in range(len(ys)) if ys[x] > max_y/2.0]
+    
+    #Get correct FWHM in case there are several peaks above the halfway mark
+    index_local = indexes_ymax.index(index) #get index of the maximum index within the list
+    for k in range(index_local, len(indexes_ymax)-1): #forwards through list
+        if indexes_ymax[k+1] > indexes_ymax[k]+1:
+            index_high = indexes_ymax[k]
+            break
+        elif k == len(indexes_ymax)-2: #if there is only one peak
+            index_high = indexes_ymax[-1]
+    for k in range(index_local, 0, -1): #backwards
+        if indexes_ymax[k-1] < indexes_ymax[k]-1:
+            index_low = indexes_ymax[k]
+            break
+        elif k == 1: #if there is only one peak
+            index_low = indexes_ymax[0]
 
+    left_error = xs[index_low]
+    right_error = xs[index_high]
+    
+    #wrap the errors around 0: however, it does not calculate the KDE for wrapped data
+    if left_error<0.:
+        left_error = 360.+left_error #negative value, so 360-6, e.g
+    if right_error>360.:
+        right_error = right_error-360.
+
+    error = [left_error, right_error]
+        
+    return error
+
+def polarisation_filtering(r1, inc1, azi1, azi2, elli,
+                           alpha_inc, alpha_azi, alpha_elli,
+                           P, use_alpha, use_alpha2, mod_180):
+    if alpha_inc is not None:
+        if alpha_inc > 0.: #S
+            func_inc= np.cos
+            func_azi= np.sin
+            # func_azi= np.cos #S0173a special filtering for Cecilia
+        else: #P
+            alpha_inc= -alpha_inc
+            func_inc= np.sin
+            func_azi= np.cos
+            # func_azi= np.sin #S0173a special filtering for Cecilia
+    else:
+        #look at azimuth without inclination, let's just set it like this.
+        #So cosinus prefers P waves, set to sinus to prefer S waves (perpendicular to BAZ)
+        func_azi= np.cos 
+
+    r1_sum = (r1** 2).sum(axis=-1)
+    if alpha_inc is not None:
+        r1_sum *= func_inc(inc1)**(2*alpha_inc)
+    if alpha_azi is not None:
+        r1_sum *= abs(func_azi(azi1))**(2*alpha_azi)
+    if alpha_elli is not None:
+        r1_sum *= (1. - elli)**(2*alpha_elli)
+
+    alpha, alpha2= polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
+    if mod_180:
+        azi1= azi1 % np.pi
+        azi2= azi2 % np.pi
+
+    if alpha_inc is not None:
+        alpha*= func_inc(inc1)**alpha_inc
+    if alpha_azi is not None:
+        alpha*= abs(func_azi(azi1))**alpha_azi
+    if alpha_elli is not None:
+        alpha*= (1. - elli)**alpha_elli
+        
+    return r1_sum, alpha, alpha2
+    
+def boolean_masks_f_t(f, t, 
+                      tstart_signal_P, tend_signal_P,
+                      tstart_signal_S, tend_signal_S, 
+                      tstart_noise, tend_noise, 
+                      f_band_density):
+    #Prep bool mask for timing of the P, S, and noise window
+    bol_signal_P_mask= np.array((t > tstart_signal_P, t< tend_signal_P)).all(axis=0)
+    bol_signal_S_mask= np.array((t > tstart_signal_S, t< tend_signal_S)).all(axis=0)
+    bol_noise_mask= np.array((t > tstart_noise, t< tend_noise)).all(axis=0)
+
+    #get indexes where f lies in the defined f-band for density subplot
+    twodmask_P = [[] for i in range(3)]
+    twodmask_S = [[] for i in range(3)]
+    twodmask_noise = [[] for i in range(3)]
+
+    f_middle = f_band_density[0] + (f_band_density[1]-f_band_density[0])/2
+
+    for i, (f_low, f_high) in enumerate(zip((f_band_density[0], f_band_density[0], f_middle),
+                                            (f_band_density[1], f_middle, f_band_density[1]))):
+        # Whole f-band, lower f-band, higher f-band
+        bol_density_f_mask = np.array((f >= f_low, f < f_high)).all(axis=0)
+        twodmask_P[i] = bol_density_f_mask[:, None] & bol_signal_P_mask[None, :]
+        twodmask_S[i] = bol_density_f_mask[:, None] & bol_signal_S_mask[None, :]
+        twodmask_noise[i] = bol_density_f_mask[:, None] & bol_noise_mask[None, :]
+        
+    return bol_density_f_mask, bol_signal_P_mask, bol_signal_S_mask, bol_noise_mask, twodmask_P, twodmask_S, twodmask_noise
+    
+def waveform_processing(waveforms_VBB, rotation, BAZ, differentiate, 
+                           timing_P, timing_S, timing_noise):
+    #Handles waveforms: make copy of VBB data
+    #rotate if specified, differentiate to velocity (if useing mqs data, is in displacement) if specified
+    #trim the waveforms
+    #hands back stream with data, and components
+    trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
+    st_Copy = waveforms_VBB.copy()  
+    
+    #Rotate the waveforms into different coordinate system: ZRT or LQT
+    if 'ZNE' not in rotation:
+        if 'RT' in rotation:
+            st_Copy.rotate('NE->RT', back_azimuth=BAZ)
+            components = ['Z', 'R', 'T']
+            #need to use -R, otherwise it aligns with 180° instead of 0°
+            tr_R_data = st_Copy[1].data
+            tr_R_data *= -1
+
+        elif 'LQT' in rotation:
+            st_Copy.rotate('ZNE->LQT', back_azimuth=BAZ, inclination = 40.0)
+            components = ['L', 'Q', 'T']
+        else:
+            raise Exception("Sorry, please pick valid rotation system: ZNE, RT, LQT")
+    else:
+        components = ['Z', 'N', 'E']
+
+
+    #differentiate waveforms
+    if differentiate:
+        st_Copy.differentiate()
+
+    #trim the waveforms in length
+    try:
+        st_Copy.trim(starttime=utct(timing_noise[0]) - trim_time[0], #og: -50, +850
+                     endtime=utct(timing_S) + trim_time[1])
+    except ValueError: #if noise window is picked after the event
+        st_Copy.trim(starttime=utct(timing_P) - trim_time[0]-120, #og: -50, +850
+                     endtime=utct(timing_noise[-1]) + trim_time[0])
+        
+    return st_Copy, components
+
+
+def compass_rose(fig, gridspec_kw, box_compass_colormap, rotation, BAZ, bounds, color_list):
+    #Compass rose-type plot to see in which direction azimuth colormap lies with respect to NESW
+    rose_axes = fig.add_axes([gridspec_kw['left']-box_compass_colormap[0],
+                              gridspec_kw['top']-box_compass_colormap[1],
+                              box_compass_colormap[2], box_compass_colormap[2]], polar=True) # Left, Bottom, Width, Height
+    if 'ZNE' not in rotation: #rotate the colormap so that 0° is in direction of the BAZ
+        theta = [x+BAZ for x in bounds]
+        theta = np.array(theta)
+        theta[theta > 360] = theta[theta > 360] - 360 #remap values over 360°
+    else:
+        theta = bounds
+    radii = [1]*len(theta)
+    #Width of pie segments: first and last entry separately since blue is both at beginning and end of the color list= half the width each
+    width = [30]*(len(theta)-2)
+    width.insert(0, 15)
+    width.insert((len(width)), 15)
+
+    rose_axes.bar(np.radians(theta), radii, width=np.radians(width), color=color_list, align='edge')
+
+    rose_axes.set_theta_zero_location("N")
+    rose_axes.set_theta_direction('clockwise')
+    rose_axes.set_xticks(np.radians(range(0, 360, 90)))
+    rose_axes.set_xticklabels(['N', 'E', 'S', 'W'], fontsize=8, )
+    rose_axes.set_yticklabels('')
+    rose_axes.tick_params(pad=-5.0)
+    if BAZ is not None:
+        # rose_axes.axvline(x=np.radians(BAZ), color='black')
+        rose_axes.annotate('', xytext=(0.0, 0.0), xy=(np.radians(BAZ),1.3),
+                            arrowprops=dict(facecolor='grey', edgecolor='black', linewidth = 0.3, width=0.5, headwidth=4., headlength=4.),
+                            xycoords='data', textcoords = 'data', annotation_clip=False)
+
+        align_h = 'right' if BAZ > 180. else 'left'
+        align_v = 'top' if 90. < BAZ < 270. else 'bottom'
+
+        rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='grey', fontsize=8, path_effects=[PathEffects.withStroke(linewidth=0.2, foreground="black")], horizontalalignment=align_h, verticalalignment = align_v)
+    rose_axes.set_ylim([0, 1])
+
+def rectangles_for_time_windows(fmin, fmax, 
+                                tstart_signal_P, tend_signal_P, 
+                                tstart_signal_S, tend_signal_S, 
+                                tstart_noise, tend_noise, 
+                                nrows):
+    #Mark the time window in the freq-time plot used for further analysis
+    color_windows = ['C0', 'Firebrick', 'grey', 'Peru'] #signal P, S, noise, density-color
+    
+    rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
+    for j in range(nrows):
+        rect[j][0] = patches.Rectangle((utct(tstart_signal_P).datetime,fmin+0.03*fmin),
+                                       utct(tend_signal_P).datetime-utct(tstart_signal_P).datetime,
+                                       fmax-fmin-0.03*fmax, linewidth=2,
+                                       edgecolor=color_windows[0], fill = False) #signal
+        rect[j][1] = patches.Rectangle((utct(tstart_signal_S).datetime,fmin+0.03*fmin),
+                                       utct(tend_signal_S).datetime-utct(tstart_signal_S).datetime,
+                                       fmax-fmin-0.03*fmax, linewidth=2,
+                                       edgecolor=color_windows[1], fill = False) #signal
+        rect[j][2] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin),
+                                       utct(tend_noise).datetime-utct(tstart_noise).datetime,
+                                       fmax-fmin-0.03*fmax, linewidth=2,
+                                       edgecolor=color_windows[2], fill = False) #noise
+    return rect, color_windows
+    
+def define_plot_layout(plot_spec_azi_only, plot_6C):
+    #define in which row Signal and Noise hist are plotted
+
+    # Create figure to plot in
+    if plot_6C: #not tested
+        gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],   # specgram, hist2d
+                           height_ratios=[1, 1, 1, 1, 1, 1],
+                           top=0.93,
+                           bottom=0.05,
+                           left=0.03,
+                           right=0.96,
+                           hspace=0.15,
+                           wspace=0.08)
+        box_legend = (1.3, 1.5)
+        box_compass_colormap = [0.01, 0.01, 0.06] #offset left, top, width/height
+        nrows = 6
+        figsize_y = 12
+    elif plot_spec_azi_only:
+        gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],   # specgram, hist2d
+                           height_ratios=[1, 1],
+                           top=0.85,
+                           bottom=0.08,
+                           left=0.03,
+                           right=0.98,
+                           hspace=0.2,
+                           wspace=0.08)
+        box_legend = (1.3, 1.4)
+        box_compass_colormap = [0.02, -0.02, 0.09] #offset left, top, width/height
+        nrows = 2
+        figsize_y = 6
+    else:
+        gridspec_kw = dict(width_ratios=[10, 2, 2, 2, 2],  # specgram, hist2d, hist2d
+                           height_ratios=[1, 1, 1, 1],
+                           top=0.89,
+                           bottom=0.05,
+                           left=0.03, #0.05
+                           right=0.98, #0.89
+                           hspace=0.15,
+                           wspace=0.08) #0.02 original
+        box_legend = (1.2, 1.55)
+        box_compass_colormap = [0.02, -0.02, 0.06] #offset left, top, width/height
+        nrows = 4
+        figsize_y = 9
+        
+    return gridspec_kw, nrows, figsize_y, box_legend, box_compass_colormap
+
+
+def create_subplot_layout(plot_spec_azi_only, plot_6C):
+    #get the layout parameters/boundaries
+    gridspec_kw, nrows, figsize_y, box_legend, box_compass_colormap = define_plot_layout(plot_spec_azi_only, plot_6C)
+    
+    # gridspec inside gridspec - nested subplots
+    fig = plt.figure(figsize=(19, figsize_y))
+    gs0 = gridspec.GridSpec(1, 2, figure=fig,
+                            left=gridspec_kw['left'], bottom=gridspec_kw['bottom'], right=gridspec_kw['right'], top=gridspec_kw['top'],
+                            wspace=0.1, hspace=None,
+                            height_ratios=[1], width_ratios=[7, 1])
+
+    #'Left' subplots
+    gs00 = gridspec.GridSpecFromSubplotSpec(nrows, 4, subplot_spec=gs0[0], wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[4,1,1,1])
+    axes0 = gs00.subplots()
+
+    #'right' subplots - density curves
+    # the following syntax does the same as the GridSpecFromSubplotSpec call above:
+    gs01 = gs0[-1].subgridspec(nrows, 1, wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[1])
+    axes1 = gs01.subplots()
+    
+    return fig, axes0, axes1, gridspec_kw, nrows, box_legend, box_compass_colormap
