@@ -1590,7 +1590,7 @@ class Event:
             timing_S = self.picks['Sg']
             phase_P = 'Pg'
             phase_S = 'Sg'
-            f_band_density=[0.25, 1.25]
+            f_band_density=[0.5, 2.0]
             
         elif self.mars_event_type_short in ['LF', 'BB']:
             if self.picks['P']:
@@ -1622,27 +1622,16 @@ class Event:
         else:
             print(f'Unknown event type: {self.mars_event_type_short}')
             f_band_density=[0.3, 1.]
-
-
-        # if timing_S == '':
-        #     timing_S = str(utct(timing_P) + 180.)
-        #     phase_S = 'P + 180sec'
             
 
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
         
-
 
         BAZ_fixed=None
         inc_fixed=None
         # BAZ_fixed=70
         # inc_fixed=50
         
-        # P_UTC = utct('2019-05-23T02:22:57.251')
-        # timing_P = P_UTC+174.
-        # phase_P = 'S'
-        # timing_S = P_UTC+512.
-        # phase_S = 'ScS'
 
         pa.plot_polarization_event_noise(self.waveforms_VBB,
                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks

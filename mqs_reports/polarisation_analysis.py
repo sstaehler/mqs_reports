@@ -480,8 +480,8 @@ def plot_polarization_event_noise(waveforms_VBB,
         elif synthetics:
             path_full = pjoin(path, 'Plots/Synthetics')
         else:
-            path_full = pjoin(path, 'Plots/Test')
-            # path_full = pjoin(path)
+            # path_full = pjoin(path, 'Plots/Test')
+            path_full = pjoin(path)
             
         if not pexists(path_full):
             makedirs(path_full)    
@@ -495,9 +495,6 @@ def plot_polarization_event_noise(waveforms_VBB,
                                  binned_data_signal_P, binned_data_signal_S, binned_data_noise, 
                                  twodmask_P, twodmask_S, twodmask_noise, 
                                  nbins, props, name_timewindows, title, path_full, savename)
-        
-        
-    # np.savez(f'Data/{savename}_azimuth_PcS_filtered.npz', azimuth = np.rad2deg(azi1), alpha = alpha, cmap_colors = color_list, cmap_bounds = bounds, f = f, t = t_datetime) #for Cecilia
 
     plt.close('all')
 

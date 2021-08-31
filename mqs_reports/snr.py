@@ -33,7 +33,6 @@ def calc_SNR(event: Event, fmin: float, fmax: float,
                            spectra['noise']['f'] < fmax)).all(axis=0)
         power_noise = np.trapz(p_noise[f_bool], dx=df_noise)
         for spec_win in ['S', 'P', 'all']:
-        # for spec_win in ['P', 'S', 'all']: #BAZ paper SNR calculation: based on P window
             if spec_win in spectra:
                 p_signal = spectra[spec_win][comp]
                 df_signal = spectra[spec_win]['f'][1]
