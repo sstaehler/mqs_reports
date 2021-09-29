@@ -1494,7 +1494,8 @@ def make_report_check_exists(event, dir_out, annotations):
                 event.make_report(fnam_out=fnam_report[chan],
                                   chan=chan,
                                   annotations=annotations)
-            except KeyError:
+            except KeyError as e:
                 print('Incomplete phases for event %s' % event.name)
+                print(e)
 
     return event.name, fnam_report

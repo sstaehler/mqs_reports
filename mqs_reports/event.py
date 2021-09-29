@@ -82,9 +82,10 @@ class Event:
                                  utct(self.picks['start']))
             self.duration_s = utct(self.picks['end']) - utct(
                 self.picks['start'])
-        except TypeError:
+        except TypeError as e:
             print('incomplete picks for event %s' % self.name)
             print(self.picks)
+            print(e)
 
         self.amplitudes = dict()
 
@@ -1138,7 +1139,7 @@ class Event:
 
     def mark_phases(self, ax, tref):
         for a in ax:
-            for pick in ['P', 'S', 'Pg', 'Sg', 'x1', 'x2', 'x3']:
+            for pick in ['P', 'S', 'Pg', 'Sg', 'x1', 'x2', 'x3', 'PP', 'SS']:
                 try:
                     if pick in self.picks:
                         x = utct(self.picks[pick]) - tref
