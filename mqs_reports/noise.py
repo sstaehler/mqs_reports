@@ -489,6 +489,7 @@ class Noise:
                        'HIGH_FREQUENCY': '^',
                        'VERY_HIGH_FREQUENCY': '*',
                        'LOW_FREQUENCY': 's',
+                       # 'ABOVE': 10,
                        'BROADBAND': 'D'}
         elif color_scheme == 'Knapmeyer':
             # Knapmeyer edition
@@ -512,16 +513,20 @@ class Noise:
 
         if cat is not None:
             cmap = plt.cm.get_cmap(cmap_dist)
-            cmap.set_over('white')
+            cmap.set_under('lightgrey')
             for event in cat.select(event_type=['HF', 'VF']):
-                markers_HF.append(symbols[event.mars_event_type])
+                if event.amplitudes['A_24'] < -180:
+                    markers_HF.append(symbols[event.mars_event_type])
+                    HF_amps.append(event.amplitudes['A_24'])
+                else:
+                    markers_HF.append(10)
+                    HF_amps.append(-181)
                 if event.distance is None:
                     HF_dists.append(50.)
                 else:
                     HF_dists.append(event.distance)
                 HF_times.append(float(solify(event.starttime)) /
                                 SECONDS_PER_DAY)
-                HF_amps.append(event.amplitudes['A_24'])
 
             for event in cat.select(event_type=['24']):
                 markers_TF.append(symbols[event.mars_event_type])
@@ -536,7 +541,7 @@ class Noise:
             for event in cat.select(event_type=['LF', 'BB']):
                 markers_LF.append(symbols[event.mars_event_type])
                 if event.distance is None:
-                    LF_dists.append(120.)
+                    LF_dists.append(0.)
                 else:
                     LF_dists.append(event.distance)
                 amp_P = event.pick_amplitude(
@@ -559,21 +564,22 @@ class Noise:
                 LF_amps.append(20 * np.log10(amp))
 
             for event_type, m in symbols.items():
-                bol = np.array(markers_LF) == m
-                if len(bol) > 0:
-                    if color_scheme == 'standard':
-                        sc = ax_LF.scatter(x=np.array(LF_times)[bol],
-                                           y=np.array(LF_amps)[bol],
-                                           c=np.array(LF_dists)[bol],
-                                           vmin=15., vmax=100., cmap=cmap,
-                                           edgecolors='k', linewidths=0.5,
-                                           s=80., marker=m, zorder=100)
-                    else:
-                        sc = ax_LF.scatter(x=np.array(LF_times)[bol],
-                                           y=np.array(LF_amps)[bol],
-                                           c=cols[event_type],
-                                           edgecolors='k', linewidths=0.5,
-                                           s=80., marker=m, zorder=100)
+                if event_type != 'ABOVE':
+                    bol = np.array(markers_LF) == m
+                    if len(bol) > 0:
+                        if color_scheme == 'standard':
+                            sc = ax_LF.scatter(x=np.array(LF_times)[bol],
+                                               y=np.array(LF_amps)[bol],
+                                               c=np.array(LF_dists)[bol],
+                                               vmin=15., vmax=100., cmap=cmap,
+                                               edgecolors='k', linewidths=0.5,
+                                               s=80., marker=m, zorder=100)
+                        else:
+                            sc = ax_LF.scatter(x=np.array(LF_times)[bol],
+                                               y=np.array(LF_amps)[bol],
+                                               c=cols[event_type],
+                                               edgecolors='k', linewidths=0.5,
+                                               s=80., marker=m, zorder=100)
 
             cax = fig.add_axes([w_LF + w_base + 0.02,
                                 h_base + 0.1,
@@ -653,9 +659,9 @@ class Noise:
         #            transform=ax_HF.transAxes)
 
         # Daytimes legend
-        l = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.6, 0.1, 0.2),
-                         bbox_transform=fig.transFigure, framealpha=1.0)
-        l.set_zorder(50)
+        l_LF = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.6, 0.1, 0.2),
+                            bbox_transform=fig.transFigure, framealpha=1.0)
+        l_LF.set_zorder(50)
 
         handles = []
         labels = []
@@ -665,10 +671,10 @@ class Noise:
                             marker=m, ls=None, lw=0., ms=8.)
             handles.append(h)
             labels.append(EVENT_TYPES_PRINT[event_type])
-        l = ax_HF.legend(handles=handles, labels=labels,
-                         bbox_to_anchor=(w_LF + w_base, h_base, 0.1, 0.1),
-                         bbox_transform=fig.transFigure, framealpha=1.0)
-        l.set_zorder(50)
+        l_HF = ax_HF.legend(handles=handles, labels=labels,
+                            bbox_to_anchor=(w_LF + w_base, h_base, 0.1, 0.1),
+                            bbox_transform=fig.transFigure, framealpha=1.0)
+        l_HF.set_zorder(50)
 
         if data_apss:
             ax_apss.set_title('Pressure power %3.1f-%3.1f seconds' %
