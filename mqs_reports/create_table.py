@@ -79,6 +79,7 @@ def write_html(catalog, fnam_out, magnitude_version):
                       'Start time<br>(LMST)',
                       'duration<br>[minutes]',
                       'distance<br>[degree]',
+                      'BAZ<br>[degree]',
                       'SNR',
                       'P-amp<br>[m]',
                       'S-amp<br>[m]',
@@ -103,7 +104,7 @@ def write_html(catalog, fnam_out, magnitude_version):
                       'LQ',
                       'missing picks',
                       'picks in wrong order'))
-    formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
+    formats = ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
                '%s', '%8.2E', '%8.2E', '%8.2E', '%8.2E',
                '%4d&plusmn;%d',
                '%3.1f', '%3.1f',
@@ -120,6 +121,15 @@ def write_html(catalog, fnam_out, magnitude_version):
                    'aligned': '<i>{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}</i>&dagger;',
                    'PgSg': '<i>{0.distance:.3g}&plusmn;{0.distance_sigma:.2g}</i>*',
                    'unknown': '<i>-</i>'}
+    baz_links = ' <br> <a href="{pol:s}" target="_blank">F</a> ' + \
+                '<a href="{pol_zoom:s}" target="_blank">Z</a> ' + \
+                '<a href="{pol_polar:s}" target="_blank">P</a> '
+    baz_string = {'A': '{0.baz:5.1f}' + baz_links,
+                  'B': '<i>-</i>' + baz_links,
+                  'C': '<i>-</i>' + baz_links,
+                  'D': '<i>-</i>'
+                  }
+
     event_type_idx = {'LF': 1,
                       'BB': 2,
                       'HF': 3,
@@ -140,6 +150,7 @@ def write_html(catalog, fnam_out, magnitude_version):
             try:
                 row = create_event_row(dist_string,
                                        time_string,
+                                       baz_string,
                                        event,
                                        event_type_idx,
                                        formats,
@@ -233,7 +244,8 @@ def check_picks(ievent, event):
     else:
         False
 
-def create_event_row(dist_string, time_string, event, event_type_idx, formats,
+def create_event_row(dist_string, time_string, baz_string,
+                     event, event_type_idx, formats,
                      ievent,
                      magnitude_version='Giardini2020',
                      path_images_local='/usr/share/nginx/html/InSight_plots',
@@ -256,16 +268,30 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                                          'event_summary',
                                          '%s_event_summary.png' %
                                          event.name)
-    event.fnam_report['pol_local'] = pjoin(path_images_local,
-                                           'event_plots',
-                                           event.name,
-                                           '%s_polarization.png' %
-                                           event.name)
     event.fnam_report['pol'] = pjoin(path_images,
-                                     'event_plots',
-                                     event.name,
-                                     '%s_polarization.png' %
+                                     'pol_plots',
+                                     '%s_polarisation.png' %
                                      event.name)
+    event.fnam_report['pol_zoom'] = pjoin(path_images,
+                                          'pol_plots',
+                                          '%s_zoom_polarisation.png' %
+                                          event.name)
+    event.fnam_report['pol_polar'] = pjoin(path_images,
+                                          'pol_plots',
+                                          '%s_polarPlots.png' %
+                                          event.name)
+    event.fnam_report['pol_local'] = pjoin(path_images_local,
+                                           'pol_plots',
+                                           '%s_polarisation.png' %
+                                           event.name)
+    event.fnam_report['pol_zoom_local'] = pjoin(path_images_local,
+                                                'pol_plots',
+                                                '%s_zoom_polarisation.png' %
+                                                event.name)
+    event.fnam_report['pol_polar_local'] = pjoin(path_images_local,
+                                                'pol_plots',
+                                                '%s_polarPlots.png' %
+                                                event.name)
     event.fnam_report['fb_local'] = pjoin(path_images_local,
                                           'filterbanks',
                                           event.mars_event_type_short,
@@ -301,6 +327,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
                float(solify(event.starttime)) % 86400,
                None,
                event.distance,
+               event.baz,
                snr,
                event.pick_amplitude('Peak_MbP',
                                     comp='vertical',
@@ -363,6 +390,7 @@ def create_event_row(dist_string, time_string, event, event_type_idx, formats,
          link_lmst,
          link_duration,
          dist_string[event.distance_type].format(event),
+         baz_string[event.quality].format(event, **event.fnam_report),
          snr_string,
          event.pick_amplitude('Peak_MbP',
                               comp='vertical',
@@ -530,6 +558,9 @@ if __name__ == '__main__':
 
     print('Plot filter banks')
     catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
+
+    print('Plot polarisation analysis')
+    catalog.plot_polarisation_analysis()
 
     print('Make magnitude reports')
     catalog.make_report_parallel(dir_out='reports', annotations=ann)

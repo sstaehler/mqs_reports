@@ -21,6 +21,7 @@ from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 from obspy.taup import TauPyModel
 
 from mqs_reports.annotations import Annotations
+from mqs_reports.constants import magnitude as mag_const
 from mqs_reports.constants import mag_exceptions as mag_exc
 from mqs_reports.magnitudes import fit_spectra, calc_magnitude
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
@@ -154,6 +155,7 @@ class Event:
         self.spectra_SP = None
 
         self.fnam_report = dict()
+        self.fnam_polarisation = dict()
 
     @property
     def mars_event_type_short(self):
@@ -529,6 +531,7 @@ class Event:
         set to None.
         :param winlen_sec: window length for Welch estimator
         """
+
         if not self._waveforms_read:
             raise RuntimeError('waveforms not read in Event object\n' +
                                'Call Event.read_waveforms() first.')
@@ -647,6 +650,9 @@ class Event:
                     break
             if amplitudes is not None:
                 self.amplitudes = amplitudes
+
+        if self.name in mag_const["A0_override"]:
+            amplitudes["A0"] = mag_const["A0_override"][self.name]
 
         self._spectra_available = True
 
@@ -1569,3 +1575,82 @@ class Event:
         ax_fbs.set_ylabel('frequency')
 
         return freqs, envs_out
+
+
+    def plot_polarisation(self, t_pick_P, t_pick_S,
+                          rotation_coords='ZNE',
+                          baz=None,
+                          impact=False,
+                          zoom=False,
+                          path_out='pol_plots'):
+        import mqs_reports.polarisation_analysis as pa
+
+
+        if self.mars_event_type_short in ['HF', 'VF', '24']:
+            timing_P = self.picks['Pg']
+            timing_S = self.picks['Sg']
+            phase_P = 'Pg'
+            phase_S = 'Sg'
+            f_band_density=[0.5, 2.0]
+            
+        elif self.mars_event_type_short in ['LF', 'BB']:
+            if self.picks['P']:
+                phase_P = 'P'
+            elif self.picks['PP']:
+                phase_P = 'PP'
+            elif self.picks['x1']:
+                phase_P = 'x1'
+            else:
+                phase_P = 'start'
+
+            timing_P = self.picks[phase_P]
+
+            if self.picks['S']:
+                timing_S = self.picks['S']
+                phase_S = 'S'
+            elif self.picks['SS']:
+                timing_S = self.picks['SS']
+                phase_S = 'SS'
+            elif self.picks['x2']:
+                timing_S = self.picks['x2']
+                phase_S = 'x2'
+            else:
+                timing_S = str(utct(timing_P) + 180.)
+                phase_S = 'P + 180sec'
+
+            f_band_density=[0.3, 1.]
+            
+        else:
+            print(f'Unknown event type: {self.mars_event_type_short}')
+            f_band_density=[0.3, 1.]
+            
+
+        timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
+        
+
+        BAZ_fixed=None
+        inc_fixed=None
+        # BAZ_fixed=70
+        # inc_fixed=50
+        
+
+        pa.plot_polarization_event_noise(self.waveforms_VBB,
+                                         t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+                                         timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
+                                         phase_P, phase_S, #Which phases/picks are used for the P and S windows
+                                         rotation = rotation_coords, BAZ=baz,
+                                         BAZ_fixed=BAZ_fixed, inc_fixed=inc_fixed,
+                                         kind='cwt', fmin=0.1, fmax=10.,
+                                         winlen_sec=20., overlap=0.5,
+                                         tstart=None, tend=None, vmin=-210,
+                                         vmax=-165, log=True,
+                                         fname=f'{self.name}', path='.',
+                                         dop_winlen=10, dop_specwidth=1.1,
+                                         nf=100, w0=8,
+                                         use_alpha=True, use_alpha2=False,
+                                         alpha_inc = None, alpha_elli = 1.0, alpha_azi = None, #None when not used
+                                         f_band_density=f_band_density,
+                                         plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
+                                         differentiate = True, detick_1Hz = True,
+                                         impact = impact)
+
