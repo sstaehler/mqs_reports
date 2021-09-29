@@ -1,8 +1,8 @@
 {
   "events_A0": {
     "S0128a": {
-      "kind": "GUI",
-      "value": -1
+      "kind": "manual",
+      "value": -204.5
     },
     "S0264e": {
       "kind": "GUI",

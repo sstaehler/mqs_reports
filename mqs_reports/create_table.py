@@ -156,14 +156,14 @@ def write_html(catalog, fnam_out, magnitude_version):
                                        formats,
                                        ievent,
                                        magnitude_version=magnitude_version)
-            except KeyError as e:
+            except (KeyError, IndexError) as e:
                 print('Problem with event %s (%s-%s):' %
                       (event.name, event.mars_event_type_short, event.quality))
 
                 print(e)
                 print(event.picks)
                 print(event.amplitudes)
-                raise e
+                # raise e
             else:
                 output += row
         ievent -= 1
@@ -258,7 +258,7 @@ def create_event_row(dist_string, time_string, baz_string,
 
     utc_time = event.starttime.strftime('%Y-%m-%d<br>%H:%M:%S')
     lmst_time = solify(event.starttime).strftime('%H:%M:%S')
-    duration = event.duration.strftime('%M:%S')
+    duration = '%3d:%02d' % (float(event.duration) / 60, float(event.duration) % 60) #.strftime('%M:%S')
     event.fnam_report['name'] = event.name
     event.fnam_report['summary_local'] = pjoin(path_images_local,
                                                'event_summary',

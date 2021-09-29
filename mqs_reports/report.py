@@ -66,6 +66,7 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
         tr.differentiate()
         z, f, t = calc_cwf(tr,
                            fmin=fmin, fmax=fmax)
+        t -= 180.
         z = 10 * np.log10(z)
         z[z < -220] = -220.
         z[z > -150] = -150.
@@ -81,7 +82,8 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
         fig.add_trace(data_heatmap,
                       row=row, col=col)
 
-    for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
+    for pick in ['start', 'end', 'P', 'S', 'PP', 'SS', 'Pg', 'Sg',
+                 'x1', 'x2', 'x3']:
         if event.picks[pick] != '':
             time_pick = utct(event.picks[pick]).datetime
             if pick not in ['start', 'end']:
@@ -139,27 +141,28 @@ def plot_spec(event,
                                    line=go.scatter.Line(color=color),
                                    mode="lines", **kwargs),
                         row=row, col=col)
-    if 'S' in event.spectra:
-        kind = 'S'
-    elif 'P' in event.spectra:
-        kind = 'P'
-    else:
-        kind = 'all'
-    f = event.spectra[kind]['f']
-    p = event.spectra[kind]['p_' + chan]
-    fig.add_trace(
-        go.Scatter(x=f[amps['fitting_mask']],
-                   y=10 * np.log10(p[amps['fitting_mask']]),
-                   name='data used for fit',
-                   marker=dict(size=5,
-                               line=dict(width=1,
-                                         color='DarkSlateGrey')),
-                   # line=go.scatter.Line(color='red', width=5),
-                   mode="markers",
-                   **kwargs),
-        row=row, col=col)
 
-    if event.waveforms_SP is not None:
+    if event.quality in ['A', 'B', 'C']:
+        if 'S' in event.spectra:
+            kind = 'S'
+        else:
+            kind = 'P'
+        f = event.spectra[kind]['f']
+        p = event.spectra[kind]['p_' + chan]
+        fig.add_trace(
+            go.Scatter(x=f[amps['fitting_mask']],
+                       y=10 * np.log10(p[amps['fitting_mask']]),
+                       name='data used for fit',
+                       marker=dict(size=5,
+                                   line=dict(width=1,
+                                             color='DarkSlateGrey')),
+                       # line=go.scatter.Line(color='red', width=5),
+                       mode="markers",
+                       **kwargs),
+            row=row, col=col)
+
+    if event.waveforms_SP is not None \
+            and event.waveforms_SP[0].stats.channel[0:2]=='EH':
         # Add marker for SP/VBB transition
         fig.add_trace(
             go.Scatter(x=[f_VBB_SP_transition,
@@ -359,7 +362,8 @@ def pick_plot(event, fig, types, row, col, chan, annotations=None, **kwargs):
                                          **kwargs),
                               row=row, col=col)
 
-        for pick in ['start', 'end', 'P', 'S', 'Pg', 'Sg']:
+        for pick in ['start', 'end', 'P', 'S', 'PP', 'SS', 'Pg', 'Sg',
+                     'x1', 'x2', 'x3']:
             if event.picks[pick] != '':
                 time_pick = utct(event.picks[pick]).datetime
                 ymax = np.max(abs(tr.data))

@@ -1,21 +1,5 @@
 {
   "Giardini2020": {
-    "MwspecHF": {
-      "fac": 0.6666666666666666,
-      "ai": 0.9,
-      "ai_sigma": null,
-      "ci": 12.375000000000002,
-      "ci_sigma": null,
-      "sigma": 0.5
-    },
-    "MwspecLF": {
-      "fac": 0.6666666666666666,
-      "ai": 1.1,
-      "ai_sigma": null,
-      "ci": 12.375000000000002,
-      "ci_sigma": null,
-      "sigma": 0.5
-    },
     "MFB_HF": {
       "fac": 0.6666666666666666,
       "ai": 0.9,
