@@ -110,7 +110,11 @@ class Event:
             self.baz = baz
             self.az = az
             self.origin_time = utct(origin_time)
-            self.calc_distance_sigma_from_pdf()
+            try:
+                self.calc_distance_sigma_from_pdf()
+            except TypeError as e:
+                print(self)
+                raise e
             self.distance_type = 'GUI'
 
         # Case that distance exists, but not BAZ. Then, distance and origin
@@ -1592,7 +1596,7 @@ class Event:
             phase_P = 'Pg'
             phase_S = 'Sg'
             f_band_density=[0.5, 2.0]
-            
+
         elif self.mars_event_type_short in ['LF', 'BB']:
             if self.picks['P']:
                 phase_P = 'P'
@@ -1619,20 +1623,20 @@ class Event:
                 phase_S = 'P + 180sec'
 
             f_band_density=[0.3, 1.]
-            
+
         else:
             print(f'Unknown event type: {self.mars_event_type_short}')
             f_band_density=[0.3, 1.]
-            
+
 
         timing_noise = [self.picks['noise_start'], self.picks['noise_end']]
-        
+
 
         BAZ_fixed=None
         inc_fixed=None
         # BAZ_fixed=70
         # inc_fixed=50
-        
+
 
         pa.plot_polarization_event_noise(self.waveforms_VBB,
                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks
