@@ -594,7 +594,6 @@ class Catalog:
                         quality='B', event_type=['2.4_HZ', 'HIGH_FREQUENCY',
                                                  'VERY_HIGH_FREQUENCY'],
                         fmax=10., use_SP=False, fig=None, show=True):
-        from mpldatacursor import datacursor
         if fig is None:
             fig = plt.figure()
         ax = fig.gca()
@@ -671,8 +670,6 @@ class Catalog:
                      color='lightgray', zorder=-10, lw=lw,
                      label=f'{event.name}, S noise')
 
-        if tooltip:
-            datacursor(formatter='{label}'.format)
 
         # plot lorenz with attenuation
         f = np.linspace(0.01, 10., 1000)
