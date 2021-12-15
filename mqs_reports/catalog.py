@@ -975,7 +975,8 @@ class Catalog:
     def plot_distance_distribution_density(
          self, fig=None,
          xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP/CRUST_VS:3.1f}]',
-         label=None, show=True, color=None, plot_event_marker=True):
+         label=None, show=True, color=None, plot_event_marker=True,
+            bw_method=None, weights=None):
 
         if fig is None:
             fig = plt.figure()
@@ -988,12 +989,16 @@ class Catalog:
             plt.plot(d, np.zeros(d.shape), '|', ms=20, color=color)
 
         # kde_factor = len(d) ** (-0.2)  # Scott's rule
-        kde = stats.gaussian_kde(d)
+        if weights is None:
+            weights = np.ones_like(d)
+        if bw_method is None:
+            bw_method = 'scott'
+        kde = stats.gaussian_kde(d, weights=weights, bw_method=bw_method)
         x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
         plt.plot(x, pdf1, color=color, label=label)
 
-        kde = stats.gaussian_kde(d, weights=1./d**2)
+        kde = stats.gaussian_kde(d, weights=weights/d**2, bw_method=bw_method)
         x = np.linspace(0., 50., 1000)
         pdf1 = kde(x)
         plt.plot(x, pdf1, color=color, label=label + ' (area weighted)', ls='--')

@@ -11,7 +11,9 @@
 import inspect
 from glob import glob
 from os import makedirs
+from os.path import exists as pexists
 from os.path import join as pjoin
+from os.path import split as psplit
 from typing import Union
 
 import numpy as np
@@ -21,8 +23,8 @@ from obspy.geodetics.base import kilometers2degrees, gps2dist_azimuth
 from obspy.taup import TauPyModel
 
 from mqs_reports.annotations import Annotations
-from mqs_reports.constants import magnitude as mag_const
 from mqs_reports.constants import mag_exceptions as mag_exc
+from mqs_reports.constants import magnitude as mag_const
 from mqs_reports.magnitudes import fit_spectra, calc_magnitude
 from mqs_reports.utils import create_fnam_event, read_data, calc_PSD, detick, \
     calc_cwf, solify
@@ -229,7 +231,7 @@ class Event:
             return None, None, None
 
     def calc_distance_taup(self,
-                           model: TauPyModel,
+                           model: Union[TauPyModel, str],
                            depth_in_km = 50.) -> Union[float, None]:
         """
         Calculate distance of event in a taup model, based on P and S picks, if available,
@@ -238,7 +240,21 @@ class Event:
         :param depth_in_km: Fixed depth of event
         :return: distance in degree or None if no picks available
         """
+        from obspy.taup.taup_create import build_taup_model
         from taup_distance.taup_distance import get_dist, _get_SSmP
+
+        if type(model) == str:
+            fnam_nd = model
+            tmp_dir = "./taup_tmp/"
+            fnam_npz = tmp_dir \
+                       + psplit(fnam_nd)[-1][:-3] + ".npz"
+            if not pexists(tmp_dir):
+                makedirs(tmp_dir)
+            if not pexists(fnam_npz):
+                build_taup_model(fnam_nd,
+                                 output_folder=tmp_dir
+                                 )
+            model = TauPyModel(model=fnam_npz)
 
         if len(self.picks['S']) > 0 and len(self.picks['P']) > 0:
             deltat = float(utct(self.picks['S']) - utct(self.picks['P']))
