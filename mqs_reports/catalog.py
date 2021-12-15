@@ -148,7 +148,6 @@ class Catalog:
         for item in dt:
             print(item[0], item[1])
 
-
     def select(self,
                name: Union[tuple, list, str] = None,
                event_type: Union[tuple, list, str] = None,
@@ -226,7 +225,7 @@ class Catalog:
             event.load_distance_manual(fnam_csv,
                                        overwrite=overwrite)
 
-    def calc_spectra(self, winlen_sec: float, detick_nfsamp=0) -> None:
+    def calc_spectra(self, winlen_sec: float, detick_nfsamp=0, padding=False) -> None:
         """
         Add spectra to each Event object in Catalog.
         Spectra are stored in dictionaries
@@ -236,10 +235,14 @@ class Catalog:
         "P" and "S". If any of the necessary picks is missing, this entry is
         set to None.
         :param winlen_sec: window length for Welch estimator
+        :param detick_nfsamp: How many samples (in f-domain) to smoothen around
+                              1 Hz
+        :param padding: Zeropad signal by factor of 2 to smoothen spectra?
         """
         for event in tqdm(self, file=stdout):
             event.calc_spectra(winlen_sec=winlen_sec,
-                               detick_nfsamp=detick_nfsamp)
+                               detick_nfsamp=detick_nfsamp,
+                               padding=padding)
 
     def save_magnitudes(self, fnam, version='Giardini2020', verbose=False):
         mags = []

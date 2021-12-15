@@ -524,7 +524,7 @@ class Event:
 
         return available
 
-    def calc_spectra(self, winlen_sec, detick_nfsamp=0):
+    def calc_spectra(self, winlen_sec, detick_nfsamp=0, padding=True):
         """
         Add spectra to event object.
         Spectra are stored in dictionaries
@@ -534,6 +534,9 @@ class Event:
         "P" and "S". If any of the necessary picks is missing, this entry is
         set to None.
         :param winlen_sec: window length for Welch estimator
+        :param detick_nfsamp: How many samples (in f-domain) to smoothen around
+                              1 Hz
+        :param padding: Zeropad signal by factor of 2 to smoothen spectra?
         """
 
         if not self._waveforms_read:
@@ -566,7 +569,8 @@ class Event:
                             endtime=utct(twin[1]))
 
                     if tr.stats.npts > 0:
-                        f, p = calc_PSD(tr, winlen_sec=winlen_sec)
+                        f, p = calc_PSD(tr, winlen_sec=winlen_sec,
+                                        padding=padding)
                         spectrum_variable['p_' + chan] = p
                         spectrum_variable['f'] = f
 
@@ -584,7 +588,8 @@ class Event:
                                 endtime=utct(twin[1]))
 
                         if tr.stats.npts > 0:
-                            f, p = calc_PSD(tr, winlen_sec=winlen_sec)
+                            f, p = calc_PSD(tr, winlen_sec=winlen_sec,
+                                            padding=padding)
                             spectrum_variable['p_' + chan] = p
                             spectrum_variable['f'] = f
                     else:
