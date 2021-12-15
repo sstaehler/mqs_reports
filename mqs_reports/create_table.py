@@ -33,7 +33,7 @@ def create_row(list, fmts=None, extras=None):
         fmts = []
         for i in range(len(list)):
             fmts.append('%s')
-    row = 4 * ' ' +'<tr>\n'
+    row = 4 * ' ' + '<tr>\n'
     ind_string = 6 * ' '
     if extras is None:
         for li, fmt in zip(list, fmts):
@@ -61,9 +61,11 @@ def create_row(list, fmts=None, extras=None):
     row += 4 * ' ' + '</tr>\n'
     return row
 
+
 def add_information():
     string = '<H2>Distance types: &dagger;: alignment, *: Pg/Sg based; GUI-based otherwise</H2><br>\n\n'
     return string
+
 
 def write_html(catalog, fnam_out, magnitude_version):
     output = create_html_header()
@@ -270,11 +272,11 @@ def create_event_row(dist_string, time_string, baz_string,
                                          event.name)
     event.fnam_report['pol'] = pjoin(path_images,
                                      'pol_plots',
-                                     '%s_polarisation.png' %
+                                     '%s.png' %
                                      event.name)
     event.fnam_report['pol_zoom'] = pjoin(path_images,
                                           'pol_plots',
-                                          '%s_zoom_polarisation.png' %
+                                          '%s_zoom.png' %
                                           event.name)
     event.fnam_report['pol_polar'] = pjoin(path_images,
                                           'pol_plots',
@@ -282,11 +284,11 @@ def create_event_row(dist_string, time_string, baz_string,
                                           event.name)
     event.fnam_report['pol_local'] = pjoin(path_images_local,
                                            'pol_plots',
-                                           '%s_polarisation.png' %
+                                           '%s.png' %
                                            event.name)
     event.fnam_report['pol_zoom_local'] = pjoin(path_images_local,
                                                 'pol_plots',
-                                                '%s_zoom_polarisation.png' %
+                                                '%s_zoom.png' %
                                                 event.name)
     event.fnam_report['pol_polar_local'] = pjoin(path_images_local,
                                                 'pol_plots',
@@ -356,12 +358,17 @@ def create_event_row(dist_string, time_string, baz_string,
                None,
                None
                )
-    if pexists(event.fnam_report['summary_local']):
+    # They never exist locally, since Savas creates them manually
+    # if pexists(event.fnam_report['summary_local']):
+    if (event.mars_event_type_short in ('LF', 'BB') and
+        event.quality in ('A', 'B', 'C')) or \
+       (event.mars_event_type_short in ('VF', 'HF') and
+        event.quality in ('A', 'B')):
         link_report = \
             ('<a href="{summary:s}" target="_blank">{name:s}</a><br>' +
-             '<a href="{Z:s}" target="_blank">Z</a> ' +
-             '<a href="{N:s}" target="_blank">N</a> ' +
-             '<a href="{E:s}" target="_blank">E</a>').format(
+             '<a href="{Z:s}.html" target="_blank">Z</a> ' +
+             '<a href="{N:s}.html" target="_blank">N</a> ' +
+             '<a href="{E:s}.html" target="_blank">E</a>').format(
                 **event.fnam_report)
     else:
         link_report = \
@@ -560,7 +567,7 @@ if __name__ == '__main__':
     catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
 
     print('Plot polarisation analysis')
-    catalog.plot_polarisation_analysis()
+    catalog.plot_polarisation_analysis(dir_out='pol_plots')
 
     print('Make magnitude reports')
     catalog.make_report_parallel(dir_out='reports', annotations=ann)

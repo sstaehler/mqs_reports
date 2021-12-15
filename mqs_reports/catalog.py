@@ -1490,20 +1490,20 @@ class Catalog:
         else:
             raise ValueError()
 
-    def plot_polarisation_analysis(self):
+    def plot_polarisation_analysis(self, dir_out):
         """
         Create polarisation analysis plot
         """
         #Seconds before and after phase picks for signal window
         t_pick_P = [-5, 10]
         t_pick_S = [-5, 10]
-        path_pol_plots = 'pol_plots'
+        path_pol_plots = dir_out
         for event in tqdm(self):
             if (event.quality in ['A', 'B'] or \
                 (event.quality == 'C' and
                 event.mars_event_type_short in ['LF', 'BB'])) \
                and not pexists(
-                       pjoin(path_pol_plots, f'{event.name}_polarisation.png')):
+                       pjoin(path_pol_plots, f'{event.name}.png')):
                 baz=event.baz if event.baz else None
                 for zoom in [False, True]:
                     try:
@@ -1512,9 +1512,8 @@ class Catalog:
                                                 path_out=path_pol_plots,
                                                 impact=False, zoom=zoom)
                     except ValueError as e:
-                        print('Problem with event %s' % event.name)
+                        print('Problem with Polarization plot for event %s' % event.name)
                         print(e)
-                        raise e
 
 def make_report_check_exists(event, dir_out, annotations):
     fnam_report = dict()
