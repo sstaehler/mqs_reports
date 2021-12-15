@@ -129,16 +129,24 @@ class Event:
 
         # Case that distance can be estimated from Pg/Sg arrivals
         elif self.mars_event_type_short in ['HF', 'SF', 'VF', '24']:
-            distance_tmp, otime_tmp, distance_sigma_tmp = self.calc_distance()
-            if distance_tmp is not None:
-                self.distance = distance_tmp
-                self.origin_time = utct(otime_tmp)
-                self.distance_type = 'PgSg'
-                self.distance_sigma = distance_sigma_tmp
-            else:
+            try:
+                distance_tmp, otime_tmp, distance_sigma_tmp = self.calc_distance()
+            except ValueError as e:
+                print('Problem with event %s' % self.name)
+                print(e)
                 self.distance = None
                 self.distance_sigma = None
                 self.origin_time = utct(origin_time)
+            else:
+                if distance_tmp is not None:
+                    self.distance = distance_tmp
+                    self.origin_time = utct(otime_tmp)
+                    self.distance_type = 'PgSg'
+                    self.distance_sigma = distance_sigma_tmp
+                else:
+                    self.distance = None
+                    self.distance_sigma = None
+                    self.origin_time = utct(origin_time)
 
             self.baz = None
 
@@ -1205,6 +1213,9 @@ class Event:
         if 'P' in self.picks and len(self.picks['P']) > 0:
             t_ref = utct(self.picks['P'])
             t_ref_type = 'P'
+        elif 'PP' in self.picks and len(self.picks['PP']) > 0:
+            t_ref = utct(self.picks['PP'])
+            t_ref_type = 'PP'
         else:
             t_ref = self.starttime
             t_ref_type = 'start time'
@@ -1300,14 +1311,14 @@ class Event:
                     if log:
                         tr_norm = tr.slice(starttime=tstart_norm,
                                            endtime=tend_norm)
-                        maxfac = np.quantile(tr_norm.data, q=0.9)
+                        maxfac = np.quantile(tr_norm.data, q=0.8)
                         offset = np.quantile(tr_norm.data, q=0.1)
                     else:
                         tr_norm = tr.slice(starttime=tstart_norm,
                                            endtime=tend_norm,
                                            nearest_sample=True)
                         try:
-                            maxfac = np.quantile(tr_norm.data, q=0.9)
+                            maxfac = np.quantile(tr_norm.data, q=0.8)
                             offset = np.quantile(tr_norm.data, q=0.1)
                         except:
                             maxfac = 1.e-9
@@ -1446,6 +1457,9 @@ class Event:
         if 'P' in self.picks and len(self.picks['P']) > 0:
             t_ref = utct(self.picks['P'])
             t_ref_type = 'P'
+        elif 'PP' in self.picks and len(self.picks['PP']) > 0:
+            t_ref = utct(self.picks['PP'])
+            t_ref_type = 'PP'
         else:
             t_ref = self.starttime
             t_ref_type = 'start time'
@@ -1648,7 +1662,7 @@ class Event:
                                          winlen_sec=20., overlap=0.5,
                                          tstart=None, tend=None, vmin=-210,
                                          vmax=-165, log=True,
-                                         fname=f'{self.name}', path='.',
+                                         fname=f'{self.name}', path=path_out,
                                          dop_winlen=10, dop_specwidth=1.1,
                                          nf=100, w0=8,
                                          use_alpha=True, use_alpha2=False,
