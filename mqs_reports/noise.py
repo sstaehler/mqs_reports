@@ -515,14 +515,17 @@ class Noise:
             cmap = plt.cm.get_cmap(cmap_dist)
             cmap.set_under('lightgrey')
             for event in cat.select(event_type=['HF', 'VF']):
+                markers_HF.append(symbols[event.mars_event_type])
+
+                #  Plot HF events with high amplitudes at top of plot
                 if event.amplitudes['A_24'] < -180:
-                    markers_HF.append(symbols[event.mars_event_type])
                     HF_amps.append(event.amplitudes['A_24'])
                 else:
-                    markers_HF.append(10)
                     HF_amps.append(-181)
+
+                #  Make events without a distance lightgrey
                 if event.distance is None:
-                    HF_dists.append(50.)
+                    HF_dists.append(-1)
                 else:
                     HF_dists.append(event.distance)
                 HF_times.append(float(solify(event.starttime)) /
@@ -531,7 +534,7 @@ class Noise:
             for event in cat.select(event_type=['24']):
                 markers_TF.append(symbols[event.mars_event_type])
                 if event.distance is None:
-                    TF_dists.append(50.)
+                    TF_dists.append(-1.)
                 else:
                     TF_dists.append(event.distance)
                 TF_times.append(float(solify(event.starttime)) /
@@ -541,7 +544,7 @@ class Noise:
             for event in cat.select(event_type=['LF', 'BB']):
                 markers_LF.append(symbols[event.mars_event_type])
                 if event.distance is None:
-                    LF_dists.append(0.)
+                    LF_dists.append(-1.)
                 else:
                     LF_dists.append(event.distance)
                 amp_P = event.pick_amplitude(
@@ -571,7 +574,7 @@ class Noise:
                             sc = ax_LF.scatter(x=np.array(LF_times)[bol],
                                                y=np.array(LF_amps)[bol],
                                                c=np.array(LF_dists)[bol],
-                                               vmin=15., vmax=100., cmap=cmap,
+                                               vmin=00., vmax=100., cmap=cmap,
                                                edgecolors='k', linewidths=0.5,
                                                s=80., marker=m, zorder=100)
                         else:
@@ -582,29 +585,12 @@ class Noise:
                                                s=80., marker=m, zorder=100)
 
             cax = fig.add_axes([w_LF + w_base + 0.02,
-                                h_base + 0.1,
+                                h_base + 0.165,
                                 0.018,
-                                1 - h_base - 0.5])
+                                1 - h_base - 0.55])
             cb = plt.colorbar(sc, ax=ax_LF, cax=cax)
             cb.ax.set_ylabel('distance / degree', rotation=270.,
                              labelpad=4.45)
-            for event_type, m in symbols.items():
-                bol = np.array(markers_HF) == m
-                if len(bol) > 0:
-                    if color_scheme == 'standard':
-                        sc = ax_HF.scatter(x=np.array(HF_times)[bol],
-                                           y=np.array(HF_amps)[bol],
-                                           c=np.array(HF_dists)[bol],
-                                           vmin=15., vmax=100., cmap=cmap,
-                                           edgecolors='k', linewidths=0.5,
-                                           s=40., marker=m, zorder=100)
-                    else:
-                        sc = ax_HF.scatter(x=np.array(HF_times)[bol],
-                                           y=np.array(HF_amps)[bol],
-                                           c=cols[event_type],
-                                           edgecolors='k', linewidths=0.5,
-                                           s=40., marker=m, zorder=100)
-
             for event_type, m in symbols.items():
                 bol = np.array(markers_TF) == m
                 if len(bol) > 0:
@@ -612,15 +598,32 @@ class Noise:
                         sc = ax_HF.scatter(x=np.array(TF_times)[bol],
                                            y=np.array(TF_amps)[bol],
                                            c=np.array(TF_dists)[bol],
-                                           vmin=15., vmax=100., cmap=cmap,
+                                           vmin=00., vmax=100., cmap=cmap,
                                            edgecolors='k', linewidths=0.5,
-                                           s=20., marker=m, zorder=100)
+                                           s=20., marker=m, zorder=8)
                     else:
                         sc = ax_HF.scatter(x=np.array(TF_times)[bol],
                                            y=np.array(TF_amps)[bol],
                                            c=cols[event_type],
                                            edgecolors='k', linewidths=0.5,
-                                           s=20., marker=m, zorder=100)
+                                           s=20., marker=m, zorder=8)
+            for event_type, m in symbols.items():
+                bol = np.array(markers_HF) == m
+                if len(bol) > 0:
+                    if color_scheme == 'standard':
+                        sc = ax_HF.scatter(x=np.array(HF_times)[bol],
+                                           y=np.array(HF_amps)[bol],
+                                           c=np.array(HF_dists)[bol],
+                                           vmin=00., vmax=100., cmap=cmap,
+                                           edgecolors='k', linewidths=0.5,
+                                           s=40., marker=m, zorder=10)
+                    else:
+                        sc = ax_HF.scatter(x=np.array(HF_times)[bol],
+                                           y=np.array(HF_amps)[bol],
+                                           c=cols[event_type],
+                                           edgecolors='k', linewidths=0.5,
+                                           s=40., marker=m, zorder=10)
+
             # cax = plt.colorbar(sc, ax=ax_HF, use_gridspec=True,
             #                    fraction=0.08)
             # cax.ax.set_ylabel('distance / degree', rotation=270.,
@@ -658,21 +661,26 @@ class Noise:
         # ax_HF.text(0.7, -0.12, s=str(self),
         #            transform=ax_HF.transAxes)
 
-        # Daytimes legend
-        l_LF = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.6, 0.1, 0.2),
+        # Daytimes or quantiles legend
+        l_LF = ax_LF.legend(bbox_to_anchor=(w_LF + w_base, 0.61),
+                            loc='lower left',
                             bbox_transform=fig.transFigure, framealpha=1.0)
         l_LF.set_zorder(50)
 
         handles = []
         labels = []
+        EVENT_TYPES_PRINT['VERY_HIGH_FREQUENCY'] = 'very high\nfrequency'
+        EVENT_TYPES_PRINT['HIGH_FREQUENCY'] = 'high\nfrequency'
         for event_type, m in symbols.items():
             h, = ax_HF.plot(-100, -100, markeredgecolor='k',
                             markerfacecolor='white',
                             marker=m, ls=None, lw=0., ms=8.)
             handles.append(h)
             labels.append(EVENT_TYPES_PRINT[event_type])
+        #  Event type legend
         l_HF = ax_HF.legend(handles=handles, labels=labels,
-                            bbox_to_anchor=(w_LF + w_base, h_base, 0.1, 0.1),
+                            bbox_to_anchor=(w_LF + w_base, h_base - 0.01),
+                            loc='lower left',
                             bbox_transform=fig.transFigure, framealpha=1.0)
         l_HF.set_zorder(50)
 

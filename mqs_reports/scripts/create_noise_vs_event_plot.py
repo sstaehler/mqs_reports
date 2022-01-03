@@ -11,10 +11,10 @@ from argparse import ArgumentParser
 
 import numpy as np
 import obspy
-from obspy import UTCDateTime as utct
 
 from mqs_reports.catalog import Catalog
 from mqs_reports.noise import Noise, read_noise
+from mqs_reports.utils import UTCify
 
 
 def define_arguments():
@@ -58,13 +58,16 @@ def define_arguments():
 
 args = define_arguments()
 
+sol_end = args.sol_end
+sol_start = args.sol_start
+
 inv = obspy.read_inventory(args.inventory)
 if args.old_noise:
     noise = read_noise('noise.npz')
 else:
     noise = Noise(sc3_dir=args.sc3_dir,
-                  starttime=utct('20190202'),
-                  endtime=utct(),
+                  starttime=UTCify((sol_start-1) * 86400),
+                  endtime=UTCify(sol_end * 86400),
                   inv=inv,
                   winlen_sec=120.
                   )
@@ -76,12 +79,12 @@ tau = np.loadtxt('./data/nsyt_tau_report.txt', skiprows=1,
                  usecols=[1, 2])
 cat = Catalog(fnam_quakeml=args.input_quakeml,
               quality=['A', 'B', 'C', 'D'])
-cat = cat.select(event_type=['VF', 'HF', 'LF', 'BB', '24'])
+cat = cat.select(event_type=['VF', 'HF', 'LF', 'BB', '24'],
+                 starttime=UTCify((sol_start-1) * 86400),
+                 endtime=UTCify(sol_end * 86400))
 cat.load_distances(fnam_csv=args.input_dist)
 cat.read_waveforms(inv=inv, sc3dir=args.sc3_dir)
 cat.calc_spectra(winlen_sec=10.)
-sol_end = args.sol_end
-sol_start = args.sol_start
 
 noise.plot_daystats(cat, data_apss=False,
                     sol_start=sol_start,
