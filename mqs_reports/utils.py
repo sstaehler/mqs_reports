@@ -41,7 +41,7 @@ def create_fnam_event(
     hour = utct(time).strftime('%H')
     fnam_inst = pjoin(dirnam_inst,
                       filenam_inst % (utct(time).year, utct(time).julday))
-    if hour in ['00', '23']:
+    if hour in ['00', '23', '22']:
         fnam_inst = fnam_inst[:-1] + '?'
 
     return fnam_inst
