@@ -232,7 +232,8 @@ class Event:
 
     def calc_distance_taup(self,
                            model: Union[TauPyModel, str],
-                           depth_in_km = 50.) -> Union[float, None]:
+                           depth_in_km = 50.) \
+            -> [Union[float, None], Union[float, None]]:
         """
         Calculate distance of event in a taup model, based on P and S picks, if available,
         otherwise return None
@@ -293,7 +294,8 @@ class Event:
                        event_tmp_dir='./events',
                        kind: str = 'DISP',
                        fmin_SP: float = 0.5,
-                       fmin_VBB: float = 1. / 30.) -> None:
+                       fmin_VBB: float = 1. / 30.,
+                       t_pad_VBB:float = 300.) -> None:
         """
         Wrapper to check whether local copy of corrected waveform exists and
         read it from sc3dir otherwise (and create local copy)
@@ -305,7 +307,8 @@ class Event:
         if not self.read_data_local(dir_cache=event_tmp_dir):
             self.read_data_from_sc3dir(inv, sc3dir, kind,
                                        fmin_SP=fmin_SP,
-                                       fmin_VBB=fmin_VBB)
+                                       fmin_VBB=fmin_VBB,
+                                       tpre_VBB=t_pad_VBB)
             self.write_data_local(dir_cache=event_tmp_dir)
 
         if self.baz is not None:
@@ -1607,6 +1610,15 @@ class Event:
                           baz=None,
                           impact=False,
                           zoom=False,
+                          kind='cwt', fmin=0.1, fmax=10.,
+                          winlen_sec=20., overlap=0.5,
+                          tstart=None, tend=None, vmin=-210,
+                          vmax=-165, log=True,
+                          dop_winlen=10, dop_specwidth=1.1,
+                          nf=100, w0=8,
+                          use_alpha=True, use_alpha2=False,
+                          alpha_inc=None, alpha_elli=1.0, alpha_azi=None,  # None when not used
+                          show=False,
                           path_out='pol_plots'):
         import mqs_reports.polarisation_analysis as pa
 
@@ -1658,24 +1670,28 @@ class Event:
         # BAZ_fixed=70
         # inc_fixed=50
 
+        if show:
+            fname=None
+        else:
+            fname = f'{self.name}'
 
         pa.plot_polarization_event_noise(self.waveforms_VBB,
                                          t_pick_P, t_pick_S, #Window in [sec, sec] around picks
-                                         timing_P, timing_S, timing_noise,##UTC timings for the three window anchors
+                                         utct(timing_P), utct(timing_S), timing_noise,##UTC timings for the three window anchors
                                          phase_P, phase_S, #Which phases/picks are used for the P and S windows
                                          rotation = rotation_coords, BAZ=baz,
                                          BAZ_fixed=BAZ_fixed, inc_fixed=inc_fixed,
-                                         kind='cwt', fmin=0.1, fmax=10.,
-                                         winlen_sec=20., overlap=0.5,
-                                         tstart=None, tend=None, vmin=-210,
-                                         vmax=-165, log=True,
-                                         fname=f'{self.name}', path='.',
-                                         dop_winlen=10, dop_specwidth=1.1,
-                                         nf=100, w0=8,
-                                         use_alpha=True, use_alpha2=False,
-                                         alpha_inc = None, alpha_elli = 1.0, alpha_azi = None, #None when not used
+                                         kind=kind, fmin=fmin, fmax=fmax,
+                                         winlen_sec=winlen_sec, overlap=overlap,
+                                         tstart=tstart, tend=tend, vmin=vmin,
+                                         vmax=vmax, log=log,
+                                         dop_winlen=dop_winlen, dop_specwidth=dop_specwidth,
+                                         nf=nf, w0=w0,
+                                         use_alpha=use_alpha, use_alpha2=use_alpha2,
+                                         alpha_inc = alpha_inc, alpha_elli = alpha_elli, alpha_azi = alpha_azi,
                                          f_band_density=f_band_density,
                                          plot_6C = False, plot_spec_azi_only = False, zoom=zoom,
                                          differentiate = True, detick_1Hz = True,
+                                         fname=fname, path='.',
                                          impact = impact)
 

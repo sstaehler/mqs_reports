@@ -11,9 +11,10 @@ from os.path import join as pjoin, exists as pexists
 import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as patches
-import matplotlib.pyplot as plt
 import matplotlib.patheffects as PathEffects
+import matplotlib.pyplot as plt
 import numpy as np
+import obspy
 import polarization.polarization as polarization
 import seaborn as sns
 from matplotlib.colorbar import make_axes
@@ -24,13 +25,15 @@ from obspy import Stream
 from obspy import UTCDateTime as utct
 from obspy.signal.util import next_pow_2
 from scipy import stats
+
 from mqs_reports.utils import detick
 
 
-
-def plot_polarization_event_noise(waveforms_VBB, 
-                              t_pick_P, t_pick_S, #Window in [sec, sec] around picks
-                              timing_P, timing_S, timing_noise,#UTC timings for the three window anchors (start)
+def plot_polarization_event_noise(waveforms_VBB,
+                                  t_pick_P, t_pick_S, #Window in [sec, sec] around picks
+                                  timing_P: obspy.UTCDateTime,
+                                  timing_S: obspy.UTCDateTime,
+                                  timing_noise: list,#UTC timings for the three window anchors (start)
                               phase_P, phase_S, #Which phases/picks are used for the P and S windows: string with names
                               rotation = 'ZNE', BAZ=None,
                               BAZ_fixed=None, inc_fixed=None,
@@ -56,9 +59,19 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     name_timewindows = [f'Signal {phase_P}', f'Signal {phase_S}', 'Noise', f'{phase_P}', f'{phase_S}'] #the last two are for the legend labeling
 
+    if tstart is None:
+        tstart = utct(min((timing_P, timing_S, timing_noise[0])))
+        tstart_waveform = tstart
+    else:
+        tstart_waveform = utct(min((tstart, timing_noise[0])))
+    if tend is None:
+        tend = tstart + 300.
+        tend_waveform = tend
+    else:
+        tend_waveform = max((tend, utct(timing_noise[1])))
 
-    st_Copy, components = waveform_processing(waveforms_VBB, rotation, BAZ, differentiate, 
-                                              timing_P, timing_S, timing_noise)
+    st_Copy, components = waveform_processing(waveforms_VBB, rotation, BAZ, differentiate,
+                                              tstart=tstart_waveform, tend=tend_waveform)
 
 
     st_Z = Stream(traces=[st_Copy.select(component=components[0])[0]])
@@ -84,10 +97,10 @@ def plot_polarization_event_noise(waveforms_VBB,
     noise_row = 1
 
     fig, axes0, axes1, gridspec_kw, nrows, box_legend, box_compass_colormap = create_subplot_layout(plot_spec_azi_only, plot_6C)
-    rect, color_windows = rectangles_for_time_windows(fmin, fmax, 
-                                                      tstart_signal_P, tend_signal_P, 
-                                                      tstart_signal_S, tend_signal_S, 
-                                                      tstart_noise, tend_noise, 
+    rect, color_windows = rectangles_for_time_windows(fmin, fmax,
+                                                      tstart_signal_P, tend_signal_P,
+                                                      tstart_signal_S, tend_signal_S,
+                                                      tstart_noise, tend_noise,
                                                       nrows)
 
 
@@ -157,18 +170,23 @@ def plot_polarization_event_noise(waveforms_VBB,
         t += float(tr_Z.stats.starttime)
         nts += len(t)
 
-        bol_density_f_mask, bol_signal_P_mask, bol_signal_S_mask, bol_noise_mask, twodmask_P, twodmask_S, twodmask_noise = boolean_masks_f_t(f, t, 
+        bol_density_f_mask, bol_signal_P_mask, bol_signal_S_mask, bol_noise_mask, twodmask_P, twodmask_S, twodmask_noise = boolean_masks_f_t(f, t,
                                                                                                                                              tstart_signal_P, tend_signal_P,
-                                                                                                                                             tstart_signal_S, tend_signal_S, 
-                                                                                                                                             tstart_noise, tend_noise, 
+                                                                                                                                             tstart_signal_S, tend_signal_S,
+                                                                                                                                             tstart_noise, tend_noise,
                                                                                                                                              f_band_density)
 
         #Scalogram and alpha/masking of signals
         # scalogram = 10 * np.log10((r1 ** 2).sum(axis=-1))
         # alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
+        if BAZ is None:
+            azi_event = 0.
+        else:
+            azi_event = BAZ
         r1_sum, alpha, alpha2 = polarisation_filtering(r1, inc1, azi1, azi2, elli,
                                                        alpha_inc, alpha_azi, alpha_elli,
-                                                       P, use_alpha, use_alpha2, mod_180)
+                                                       P, use_alpha, use_alpha2, mod_180,
+                                                       azi_event=azi_event)
         scalogram= 10 * np.log10(r1_sum)
 
 
@@ -450,7 +468,7 @@ def plot_polarization_event_noise(waveforms_VBB,
 
     #Plot compass rose to visualise azimuth colors and mark BAZ_mqs
     compass_rose(fig, gridspec_kw, box_compass_colormap, rotation, BAZ, bounds, color_list)
-    
+
     title = f'{fname}'
     if impact:
         title += f' - {rotation} impact: {impact}'
@@ -482,28 +500,28 @@ def plot_polarization_event_noise(waveforms_VBB,
         else:
             # path_full = pjoin(path, 'Plots/Test')
             path_full = pjoin(path)
-            
+
         if not pexists(path_full):
-            makedirs(path_full)    
-            
+            makedirs(path_full)
+
         fig.savefig(pjoin(path_full, f'{savename}.png'), dpi=200)
-        
+
     # print(f'MQS baz: {BAZ}')
     #Second figure
-    plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density, 
-                                 iterables, alpha, 
-                                 binned_data_signal_P, binned_data_signal_S, binned_data_noise, 
-                                 twodmask_P, twodmask_S, twodmask_noise, 
+    plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density,
+                                 iterables, alpha,
+                                 binned_data_signal_P, binned_data_signal_S, binned_data_noise,
+                                 twodmask_P, twodmask_S, twodmask_noise,
                                  nbins, props, name_timewindows, title, path_full, savename)
 
     plt.close('all')
 
 
 
-def plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density, 
-                                 iterables, alpha, 
-                                 binned_data_signal_P, binned_data_signal_S, binned_data_noise, 
-                                 twodmask_P, twodmask_S, twodmask_noise, 
+def plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density,
+                                 iterables, alpha,
+                                 binned_data_signal_P, binned_data_signal_S, binned_data_noise,
+                                 twodmask_P, twodmask_S, twodmask_noise,
                                  nbins, props, name_timewindows, title, path_full, savename):
     ## ----------------new figure for polar plots----------------
     #new figure with polar projections
@@ -527,7 +545,7 @@ def plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density,
     fBAZ_P = binned_data_signal_P[1, :, :]
     fBAZ_S = binned_data_signal_S[1, :, :]
     fBAZ_noise = binned_data_noise[1, :, :]
-    
+
     # for i in range(len(f)):
         # fBAZ_P[i,:] += np.histogram(data[i,bol_signal_P_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_P_mask])[0]
         # fBAZ_S[i,:] += np.histogram(data[i,bol_signal_S_mask], bins=nbins, range=(rmin, rmax), weights=alpha[i,bol_signal_S_mask])[0]
@@ -535,17 +553,17 @@ def plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density,
 
     #Following rows in plot: inclination vs BAZ
     for i in range(2):
-        BAZ_Inc_P[i] = np.histogram2d(data[twodmask_P[i+1]], inc_data[twodmask_P[i+1]], 
-                                      bins=nbins, range=((rmin, rmax),(0,90)), 
-                                      weights=alpha[twodmask_P[i+1]], 
+        BAZ_Inc_P[i] = np.histogram2d(data[twodmask_P[i+1]], inc_data[twodmask_P[i+1]],
+                                      bins=nbins, range=((rmin, rmax),(0,90)),
+                                      weights=alpha[twodmask_P[i+1]],
                                       density=True)[0]
-        BAZ_Inc_S[i] = np.histogram2d(data[twodmask_S[i+1]], inc_data[twodmask_S[i+1]], 
-                                      bins=nbins, range=((rmin, rmax),(0,90)), 
-                                      weights=alpha[twodmask_S[i+1]], 
+        BAZ_Inc_S[i] = np.histogram2d(data[twodmask_S[i+1]], inc_data[twodmask_S[i+1]],
+                                      bins=nbins, range=((rmin, rmax),(0,90)),
+                                      weights=alpha[twodmask_S[i+1]],
                                       density=True)[0]
-        BAZ_Inc_noise[i] = np.histogram2d(data[twodmask_noise[i+1]], inc_data[twodmask_noise[i+1]], 
-                                          bins=nbins, range=((rmin, rmax),(0,90)), 
-                                          weights=alpha[twodmask_noise[i+1]], 
+        BAZ_Inc_noise[i] = np.histogram2d(data[twodmask_noise[i+1]], inc_data[twodmask_noise[i+1]],
+                                          bins=nbins, range=((rmin, rmax),(0,90)),
+                                          weights=alpha[twodmask_noise[i+1]],
                                           density=True)[0]
 
 
@@ -618,21 +636,21 @@ def plot_3D_polar_phase_analysis(BAZ_P, inc_P, BAZ, f, f_band_density,
                         zorder=1000, transform=fig2.transFigure, figure=fig2)
     fig2.patches.extend([rect])
 
-    rect2 = plt.Rectangle((0.01, 0.01), 0.98, 0.61, 
+    rect2 = plt.Rectangle((0.01, 0.01), 0.98, 0.61,
                           fill=False, color="k", lw=2,
                           zorder=1000, transform=fig2.transFigure, figure=fig2)
     fig2.patches.extend([rect2])
 
     fig2.suptitle(title, fontsize=18)
     fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
-    
+
     # #save for automatic plots
         # fig.savefig(pjoin(path_full, f'{savename}_polarisation.png'), dpi=200)
         # if not zoom:
         #     fig2.savefig(pjoin(path_full, f'{savename}_polarPlots.png'), dpi=200)
-    
-    
-    
+
+
+
 def vector_to_orthogonal_plane(BAZ_P, inc_P):
     #Vector fun: calculates orthogonal plane (S-wave lies there somewhere) when given a vector (defined from BAZ and inclination; P-wave)
     #get P coordinates from kde curve maxima
@@ -663,7 +681,7 @@ def vector_to_orthogonal_plane(BAZ_P, inc_P):
             inc_S.append(inclination)
         else: #is landing on the other side, re-map to 0-90°
             inc_S.append(np.pi-inclination)
-            
+
     return BAZ_S, inc_S
 
 
@@ -678,24 +696,24 @@ def calculate_kde_maxima(kde_dataframe_P):
         ys = kernel(xs)
         index = np.argmax(ys)
         max_x[j] = xs[index]
-        
+
         #get the error of the BAZ from the full width of the half maximum
         if j==0:
             #find the FWHM
             error = fwhm_error_from_kde(xs, ys, index)
             # axes1[1].plot(xs, ys, color='yellow') #check if manual KDE is equal to seaborn KDE curve (for covariance_factor determination, but .17 seems good)
             # axes1[1].axvspan(error[0], error[1], color='blue', alpha=0.1) #marks the fwhm area, but not wrapping around zero
-            
+
     return max_x, error
 
 
-    
+
 def fwhm_error_from_kde(xs, ys, index):
     #get the error of the BAZ from the full width of the half maximum
     #find the FWHM
     max_y = max(ys)
     indexes_ymax = [x for x in range(len(ys)) if ys[x] > max_y/2.0]
-    
+
     #Get correct FWHM in case there are several peaks above the halfway mark
     index_local = indexes_ymax.index(index) #get index of the maximum index within the list
     for k in range(index_local, len(indexes_ymax)-1): #forwards through list
@@ -713,7 +731,7 @@ def fwhm_error_from_kde(xs, ys, index):
 
     left_error = xs[index_low]
     right_error = xs[index_high]
-    
+
     #wrap the errors around 0: however, it does not calculate the KDE for wrapped data
     if left_error<0.:
         left_error = 360.+left_error #negative value, so 360-6, e.g
@@ -721,53 +739,62 @@ def fwhm_error_from_kde(xs, ys, index):
         right_error = right_error-360.
 
     error = [left_error, right_error]
-        
+
     return error
 
 def polarisation_filtering(r1, inc1, azi1, azi2, elli,
                            alpha_inc, alpha_azi, alpha_elli,
-                           P, use_alpha, use_alpha2, mod_180):
+                           P, use_alpha, use_alpha2, mod_180,
+                           azi_event = 0.):
     if alpha_inc is not None:
         if alpha_inc > 0.: #S
-            func_inc= np.cos
-            func_azi= np.sin
-            # func_azi= np.cos #S0173a special filtering for Cecilia
+            func_inc = np.cos
         else: #P
-            alpha_inc= -alpha_inc
-            func_inc= np.sin
-            func_azi= np.cos
-            # func_azi= np.sin #S0173a special filtering for Cecilia
-    else:
-        #look at azimuth without inclination, let's just set it like this.
-        #So cosinus prefers P waves, set to sinus to prefer S waves (perpendicular to BAZ)
-        func_azi= np.cos 
+            alpha_inc = -alpha_inc
+            func_inc = np.sin
+
+    if alpha_azi is not None:
+        if alpha_azi > 0.: #S
+            func_azi = np.cos
+        else: #P
+            alpha_azi = -alpha_azi
+            func_azi = np.sin
 
     r1_sum = (r1** 2).sum(axis=-1)
     if alpha_inc is not None:
         r1_sum *= func_inc(inc1)**(2*alpha_inc)
     if alpha_azi is not None:
-        r1_sum *= abs(func_azi(azi1))**(2*alpha_azi)
+        r1_sum *= abs(func_azi(azi1 - azi_event))**(2*alpha_azi)
     if alpha_elli is not None:
-        r1_sum *= (1. - elli)**(2*alpha_elli)
+        if alpha_elli > 0:
+            # Elliptical pixels (elli>0) should be reduced in amplitude
+            r1_sum *= (1. - elli)**(2*alpha_elli)
+        else:
+            # Elliptical pixels (elli>0) should be enhanced in amplitude
+            r1_sum *= elli ** (-2 * alpha_elli)
 
-    alpha, alpha2= polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
+
+    alpha, alpha2 = polarization._dop_elli_to_alpha(P, elli, use_alpha, use_alpha2)
     if mod_180:
-        azi1= azi1 % np.pi
-        azi2= azi2 % np.pi
+        azi1 = azi1 % np.pi
+        azi2 = azi2 % np.pi
 
     if alpha_inc is not None:
-        alpha*= func_inc(inc1)**alpha_inc
+        alpha *= np.abs(func_inc(inc1))**alpha_inc
     if alpha_azi is not None:
-        alpha*= abs(func_azi(azi1))**alpha_azi
+        alpha *= np.abs(func_azi(azi1 - azi_event))**alpha_azi
     if alpha_elli is not None:
-        alpha*= (1. - elli)**alpha_elli
-        
-    return r1_sum, alpha, alpha2
-    
-def boolean_masks_f_t(f, t, 
+        if alpha_elli > 0:
+            alpha *= (1. - elli)**alpha_elli
+        else:
+            alpha *= elli**(-alpha_elli)
+
+    return r1_sum, np.abs(alpha), alpha2
+
+def boolean_masks_f_t(f, t,
                       tstart_signal_P, tend_signal_P,
-                      tstart_signal_S, tend_signal_S, 
-                      tstart_noise, tend_noise, 
+                      tstart_signal_S, tend_signal_S,
+                      tstart_noise, tend_noise,
                       f_band_density):
     #Prep bool mask for timing of the P, S, and noise window
     bol_signal_P_mask= np.array((t > tstart_signal_P, t< tend_signal_P)).all(axis=0)
@@ -788,18 +815,18 @@ def boolean_masks_f_t(f, t,
         twodmask_P[i] = bol_density_f_mask[:, None] & bol_signal_P_mask[None, :]
         twodmask_S[i] = bol_density_f_mask[:, None] & bol_signal_S_mask[None, :]
         twodmask_noise[i] = bol_density_f_mask[:, None] & bol_noise_mask[None, :]
-        
+
     return bol_density_f_mask, bol_signal_P_mask, bol_signal_S_mask, bol_noise_mask, twodmask_P, twodmask_S, twodmask_noise
-    
-def waveform_processing(waveforms_VBB, rotation, BAZ, differentiate, 
-                           timing_P, timing_S, timing_noise):
+
+def waveform_processing(waveforms_VBB, rotation, BAZ, differentiate,
+                        tstart: obspy.UTCDateTime,
+                        tend: obspy.UTCDateTime):
     #Handles waveforms: make copy of VBB data
     #rotate if specified, differentiate to velocity (if useing mqs data, is in displacement) if specified
     #trim the waveforms
     #hands back stream with data, and components
-    trim_time = [60., 300.] #[time before noise start, time after S] [seconds] Trims waveform
-    st_Copy = waveforms_VBB.copy()  
-    
+    st_Copy = waveforms_VBB.copy()
+
     #Rotate the waveforms into different coordinate system: ZRT or LQT
     if 'ZNE' not in rotation:
         if 'RT' in rotation:
@@ -823,13 +850,10 @@ def waveform_processing(waveforms_VBB, rotation, BAZ, differentiate,
         st_Copy.differentiate()
 
     #trim the waveforms in length
-    try:
-        st_Copy.trim(starttime=utct(timing_noise[0]) - trim_time[0], #og: -50, +850
-                     endtime=utct(timing_S) + trim_time[1])
-    except ValueError: #if noise window is picked after the event
-        st_Copy.trim(starttime=utct(timing_P) - trim_time[0]-120, #og: -50, +850
-                     endtime=utct(timing_noise[-1]) + trim_time[0])
-        
+    trim_time = [60., 60.]
+    st_Copy.trim(starttime=tstart - trim_time[0],
+                 endtime=tend + trim_time[1])
+
     return st_Copy, components
 
 
@@ -870,30 +894,30 @@ def compass_rose(fig, gridspec_kw, box_compass_colormap, rotation, BAZ, bounds, 
         rose_axes.text(np.radians(BAZ), 1.3, 'BAZ', c='grey', fontsize=8, path_effects=[PathEffects.withStroke(linewidth=0.2, foreground="black")], horizontalalignment=align_h, verticalalignment = align_v)
     rose_axes.set_ylim([0, 1])
 
-def rectangles_for_time_windows(fmin, fmax, 
-                                tstart_signal_P, tend_signal_P, 
-                                tstart_signal_S, tend_signal_S, 
-                                tstart_noise, tend_noise, 
+def rectangles_for_time_windows(fmin, fmax,
+                                tstart_signal_P, tend_signal_P,
+                                tstart_signal_S, tend_signal_S,
+                                tstart_noise, tend_noise,
                                 nrows):
     #Mark the time window in the freq-time plot used for further analysis
     color_windows = ['C0', 'Firebrick', 'grey', 'Peru'] #signal P, S, noise, density-color
-    
+
     rect = [[None for i in range(3)] for j in range(nrows)] #prepare rectangles to mark the time windows
     for j in range(nrows):
         rect[j][0] = patches.Rectangle((utct(tstart_signal_P).datetime,fmin+0.03*fmin),
-                                       utct(tend_signal_P).datetime-utct(tstart_signal_P).datetime,
+                                        utct(tend_signal_P).datetime-utct(tstart_signal_P).datetime,
                                        fmax-fmin-0.03*fmax, linewidth=2,
                                        edgecolor=color_windows[0], fill = False) #signal
         rect[j][1] = patches.Rectangle((utct(tstart_signal_S).datetime,fmin+0.03*fmin),
-                                       utct(tend_signal_S).datetime-utct(tstart_signal_S).datetime,
+                                        utct(tend_signal_S).datetime-utct(tstart_signal_S).datetime,
                                        fmax-fmin-0.03*fmax, linewidth=2,
                                        edgecolor=color_windows[1], fill = False) #signal
         rect[j][2] = patches.Rectangle((utct(tstart_noise).datetime,fmin+0.03*fmin),
-                                       utct(tend_noise).datetime-utct(tstart_noise).datetime,
+                                        utct(tend_noise).datetime-utct(tstart_noise).datetime,
                                        fmax-fmin-0.03*fmax, linewidth=2,
                                        edgecolor=color_windows[2], fill = False) #noise
     return rect, color_windows
-    
+
 def define_plot_layout(plot_spec_azi_only, plot_6C):
     #define in which row Signal and Noise hist are plotted
 
@@ -937,14 +961,14 @@ def define_plot_layout(plot_spec_azi_only, plot_6C):
         box_compass_colormap = [0.02, -0.02, 0.06] #offset left, top, width/height
         nrows = 4
         figsize_y = 9
-        
+
     return gridspec_kw, nrows, figsize_y, box_legend, box_compass_colormap
 
 
 def create_subplot_layout(plot_spec_azi_only, plot_6C):
     #get the layout parameters/boundaries
     gridspec_kw, nrows, figsize_y, box_legend, box_compass_colormap = define_plot_layout(plot_spec_azi_only, plot_6C)
-    
+
     # gridspec inside gridspec - nested subplots
     fig = plt.figure(figsize=(19, figsize_y))
     gs0 = gridspec.GridSpec(1, 2, figure=fig,
@@ -960,5 +984,5 @@ def create_subplot_layout(plot_spec_azi_only, plot_6C):
     # the following syntax does the same as the GridSpecFromSubplotSpec call above:
     gs01 = gs0[-1].subgridspec(nrows, 1, wspace=gridspec_kw['wspace'], hspace=gridspec_kw['hspace'], height_ratios=gridspec_kw['height_ratios'], width_ratios=[1])
     axes1 = gs01.subplots()
-    
+
     return fig, axes0, axes1, gridspec_kw, nrows, box_legend, box_compass_colormap
