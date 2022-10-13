@@ -5,13 +5,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import obspy
 from matplotlib import mlab as mlab
-from mqs_reports.constants import SEC_PER_DAY_EARTH, SEC_PER_DAY_MARS
 from obspy import UTCDateTime as utct, UTCDateTime
 from obspy.signal.filter import envelope
 from obspy.signal.rotate import rotate2zne
 from obspy.signal.util import next_pow_2
 from scipy.fftpack import fft, ifft
 from scipy.signal import hilbert
+
+from mqs_reports.constants import SEC_PER_DAY_EARTH, SEC_PER_DAY_MARS
 
 
 def solify(UTC_time, sol0=UTCDateTime(2018, 11, 26, 5, 10, 50.33508)):
@@ -382,7 +383,7 @@ def __dayplot_set_x_ticks(ax, starttime, endtime, sol=False):
                 float(endtime))
 
 
-def calc_PSD(tr, winlen_sec, detick_nfsamp=0):
+def calc_PSD(tr, winlen_sec, detick_nfsamp=0, padding=True):
     Fs = tr.stats.sampling_rate
 
     if detick_nfsamp > 0:
@@ -391,7 +392,10 @@ def calc_PSD(tr, winlen_sec, detick_nfsamp=0):
     winlen = min(winlen_sec * Fs,
                  (tr.stats.endtime - tr.stats.starttime) * Fs / 2.)
     NFFT = next_pow_2(winlen)
-    pad_to = np.max((NFFT * 2, 1024))
+    if padding:
+        pad_to = np.max((NFFT * 2, 1024))
+    else:
+        pad_to = NFFT
     p, f = mlab.psd(tr.data,
                     Fs=Fs, NFFT=NFFT, detrend='linear',
                     pad_to=pad_to, noverlap=NFFT // 2)
