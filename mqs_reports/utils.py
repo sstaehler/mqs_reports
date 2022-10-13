@@ -40,7 +40,7 @@ def create_fnam_event(
     hour = utct(time).strftime('%H')
     fnam_inst = pjoin(dirnam_inst,
                       filenam_inst % (utct(time).year, utct(time).julday))
-    if hour in ['00', '23']:
+    if hour in ['00', '22', '23']:
         fnam_inst = fnam_inst[:-1] + '?'
 
     return fnam_inst
@@ -730,7 +730,7 @@ def calc_specgram(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
     s, f, t = specgram(x=tr.data, NFFT=512, Fs=tr.stats.sampling_rate,
                        noverlap=256, pad_to=1024)
 
-    # t = create_timevector(tr)
+    t = create_timevector(tr)
     f_bol = np.asarray(((fmin < f),
                         (f < fmax))).all(axis=0)
 
@@ -744,8 +744,8 @@ def calc_cwf(tr, fmin=1. / 50, fmax=1. / 2, w0=16):
     scalogram = abs(cwt(tr.data, dt, w0=w0, nf=200,
                         fmin=fmin, fmax=fmax))
 
-    # t = create_timevector(tr)
-    t = np.linspace(0, dt * tr.stats.npts, tr.stats.npts)
+    t = create_timevector(tr)
+    # t = np.linspace(0, dt * tr.stats.npts, tr.stats.npts)
     f = np.logspace(np.log10(fmin),
                     np.log10(fmax),
                     scalogram.shape[0])
