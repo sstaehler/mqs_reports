@@ -272,7 +272,7 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05,
     if event_type == 'LF':
         fmax = 0.9
         # noise_threshold = 1.2
-    elif event_type == 'BB':
+    elif event_type in ['BB', 'XB']:
         fmax = 2.0
         # noise_threshold = 1.2
     elif event_type == 'HF':

@@ -66,7 +66,7 @@ def plot_specgram(event, fig, row, col, chan, fmin=0.05, fmax=10.0):
         tr.differentiate()
         z, f, t = calc_cwf(tr,
                            fmin=fmin, fmax=fmax)
-        t -= 180.
+        # t -= 180.
         z = 10 * np.log10(z)
         z[z < -220] = -220.
         z[z > -150] = -150.
