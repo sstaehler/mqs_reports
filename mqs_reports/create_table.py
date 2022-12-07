@@ -134,11 +134,11 @@ def write_html(catalog, fnam_out, magnitude_version):
 
     event_type_idx = {'LF': 1,
                       'BB': 2,
-                      'XB': 7,
                       'HF': 3,
                       '24': 4,
                       'VF': 5,
-                      'SF': 6}
+                      'SF': 6,
+                      'XB': 7}
     ievent = len(catalog)
     print('Filling HTML table with event entries')
     error_events = False
