@@ -38,6 +38,7 @@ LANDER_LON = 135.6234
 EVENT_TYPES_SHORT = {
     'SUPER_HIGH_FREQUENCY': 'SF',
     'VERY_HIGH_FREQUENCY': 'VF',
+    'EXTREMELY_BROADBAND': 'XB',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
     'HIGH_FREQUENCY': 'HF',
@@ -46,6 +47,7 @@ EVENT_TYPES_SHORT = {
 EVENT_TYPES_PRINT = {
     'SUPER_HIGH_FREQUENCY': 'super high frequency',
     'VERY_HIGH_FREQUENCY': 'very high frequency',
+    'EXTREMELY_BROADBAND': 'extremely broadband',
     'BROADBAND': 'broadband',
     'LOW_FREQUENCY': 'low frequency',
     'HIGH_FREQUENCY': 'high frequency',
@@ -769,7 +771,7 @@ class Event:
                   mag_type: str,
                   distance: float = None,
                   distance_sigma: float = None,
-                  version: str = 'Giardini2020',
+                  version: str = 'Boese2021',
                   verbose = False,
                   instrument: str = 'VBB') -> Union[float, None]:
         """
@@ -787,7 +789,7 @@ class Event:
                     mag_type = "MFB"
                 else:
                     mag_type = "m2.4"
-            elif self.mars_event_type_short in ['LF', 'BB', 'HF']:
+            elif self.mars_event_type_short in ['LF', 'XB', 'BB', 'HF']:
                 mag_type = "MFB"
             else:
                 mag_type = "m2.4"
@@ -797,16 +799,19 @@ class Event:
         pick_name = {'mb_P': 'Peak_MbP',
                      'mb_S': 'Peak_MbS',
                      'm2.4': None,
+                     'm2.4r': None,
                      'MFB': None
                      }
         freqs = {'mb_P': (1. / 6., 1. / 2.),
                  'mb_S': (1. / 6., 1. / 2.),
                  'm2.4': None,
+                 'm2.4r': None,
                  'MFB': None
                  }
         component = {'mb_P': 'vertical',
                      'mb_S': 'horizontal',
                      'm2.4': None,
+                     'm2.4r': None,
                      'MFB': None
                      }
         if self.distance is None and distance is None:
@@ -840,6 +845,12 @@ class Event:
             # for generally poor fitting
             amplitude_dB_sigma = self.amplitudes['A0_err'] / 2. * 2. \
                 if 'A0_err' in self.amplitudes and self.amplitudes['A0_err'] is not None else None
+
+        elif mag_type == 'm2.4r':
+            amplitude_dB = self.amplitudes['A_24_red'] / 2. \
+                if 'A_24_red' in self.amplitudes and self.amplitudes['A_24_red'] is not None else None
+            amplitude_dB_sigma = 5.
+
         elif mag_type == 'm2.4':
             amplitude_dB = self.amplitudes['A_24'] / 2. \
                 if 'A_24' in self.amplitudes and self.amplitudes['A_24'] is not None else None
@@ -1644,7 +1655,7 @@ class Event:
             phase_S = 'Sg'
             f_band_density=[0.5, 2.0]
 
-        elif self.mars_event_type_short in ['LF', 'BB']:
+        elif self.mars_event_type_short in ['LF', 'XB', 'BB']:
             if self.picks['P']:
                 phase_P = 'P'
             elif self.picks['PP']:

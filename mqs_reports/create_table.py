@@ -9,8 +9,8 @@
 '''
 
 from argparse import ArgumentParser
-from sys import stdout as stdout
 from os.path import exists as pexists, join as pjoin
+from sys import stdout as stdout
 
 import obspy
 from obspy import UTCDateTime as utct
@@ -134,6 +134,7 @@ def write_html(catalog, fnam_out, magnitude_version):
 
     event_type_idx = {'LF': 1,
                       'BB': 2,
+                      'XB': 7,
                       'HF': 3,
                       '24': 4,
                       'VF': 5,
@@ -194,14 +195,14 @@ def check_picks(ievent, event):
                 missing_picks.append(pick)
 
     mandatory_LF_ABC = ['Peak_MbP']
-    if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['LF', 'BB']:
+    if event.quality in ['A', 'B', 'C'] and event.mars_event_type_short in ['LF', 'XB', 'BB']:
         for pick in mandatory_LF_ABC:
             if pick not in event.picks or event.picks[pick] == '':
                 missing_picks.append(pick)
 
     mandatory_LF_AB = ['P', 'S', 'S_spectral_start', 'S_spectral_end', 'Peak_MbS']
     mandatory_LF_AB_alt = ['PP', 'SS']
-    if event.quality in ['A', 'B'] and event.mars_event_type_short in ['LF', 'BB']:
+    if event.quality in ['A', 'B'] and event.mars_event_type_short in ['LF', 'XB', 'BB']:
         for pick in mandatory_LF_AB:
             if pick not in event.picks or event.picks[pick] == '':
                 missing_picks.append(pick)
@@ -360,7 +361,7 @@ def create_event_row(dist_string, time_string, baz_string,
                )
     # They never exist locally, since Savas creates them manually
     # if pexists(event.fnam_report['summary_local']):
-    if (event.mars_event_type_short in ('LF', 'BB') and
+    if (event.mars_event_type_short in ('LF', 'XB', 'BB') and
         event.quality in ('A', 'B', 'C')) or \
        (event.mars_event_type_short in ('VF', 'HF') and
         event.quality in ('A', 'B')):
@@ -563,11 +564,11 @@ if __name__ == '__main__':
     print('Calc spectra')
     catalog.calc_spectra(winlen_sec=20., detick_nfsamp=10)
 
-    print('Plot filter banks')
-    catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
+    ##  print('Plot filter banks')
+    ##  catalog.plot_filterbanks(dir_out='filterbanks', annotations=ann)
 
-    print('Plot polarisation analysis')
-    catalog.plot_polarisation_analysis(dir_out='pol_plots')
+    ##  print('Plot polarisation analysis')
+    ##  catalog.plot_polarisation_analysis(dir_out='pol_plots')
 
     print('Make magnitude reports')
     catalog.make_report_parallel(dir_out='reports', annotations=ann)

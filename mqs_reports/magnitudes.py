@@ -133,12 +133,12 @@ def lorentz_att(f: np.array,
     :param f_c: Corner frequency of the Source (Hz)
     :param tstar: t* value from attenuation
     :param fw: Width of Lorentz peak
-    :param ampfac: Amplification factor of Lorentz peak
+    :param ampfac: Amplification factor of Lorentz peak (AS FACTOR, NOT IN DB!!!)
     :return predicted spectrum
     """
     w = (f - f0) / (fw / 2.)
     stf_amp = 1 / (1 + (f / f_c) ** 2)
-    return A0 + 10 * np.log10(
+    return A0 + 20 * np.log10(
         (1 + ampfac / (1 + w ** 2)) *
         stf_amp *
         np.exp(- tstar * f * np.pi))
@@ -297,9 +297,11 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05,
     tstar_err = None
     ampfac = None
     width_24 = None
-    f_24 = None
     f_c = None
     A_24 = None
+    f_24 = None
+    A_24_red = None
+    f_24_red = None
     if event_type not in ['24', 'SF']:
         if sum(bol_fitting_mask) > 5:
 
@@ -354,8 +356,12 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05,
 
     if event_type not in ['LF', 'BB']:
         bol_24_mask = np.array((f > mute_24[0],
-                                f < mute_24[1])).all(axis=0)
+                                f < mute_24[1],
+                                p_sig > p_noise)).all(axis=0)
+        p_red = p_sig - p_noise
+        A_24_red, f_24_red, tmp = fit_peak(f[bol_24_mask], p_red[bol_24_mask])
         A_24, f_24, tmp = fit_peak(f[bol_24_mask], p_sig[bol_24_mask])
+        # A_24_noise, f_24_noise, tmp_noise = fit_peak(f[bol_24_mask], p_noise[bol_24_mask])
         if width_24 is None:
             width_24 = tmp
 
@@ -366,12 +372,13 @@ def fit_spectra(f_sig, p_sig, f_noise, p_noise, event_type, df_mute=1.05,
     amps['tstar_err'] = tstar_err
     amps['A_24'] = A_24
     amps['f_24'] = f_24
+    amps['A_24_red'] = A_24_red
+    amps['f_24_red'] = f_24_red
     amps['f_c'] = f_c
     amps['width_24'] = width_24
     amps['ampfac'] = ampfac
     amps['fitting_mask'] = bol_fitting_mask
     return amps
-
 
 
 def fit_spectra_modes(f_sig, p_sig, mute_24, fminmax, width_peak, ampFactor, kind=None):

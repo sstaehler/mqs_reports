@@ -69,6 +69,8 @@ class Catalog:
                             'BROADBAND']
             elif isinstance(type_select, str):
                 type_des = [type_select]
+            elif isinstance(type_select, tuple):
+                type_des = type_select
             elif isinstance(type_select, list):
                 type_des = type_select
             else:
@@ -92,7 +94,9 @@ class Catalog:
                                                             'P_spectral_start',
                                                             'P_spectral_end',
                                                             'S_spectral_start',
-                                                            'S_spectral_end']))
+                                                            'S_spectral_end',
+                                                            'R1', 'G1'
+                                                            ]))
         else:
             if isinstance(events, Event):
                 events = [events]
@@ -970,10 +974,12 @@ class Catalog:
             return fig
 
     def plot_distance_distribution_density(
-         self, fig=None,
+         self, fig=None, fnam_txt_out=None,
          xlabel=f'distance / degree [vs = {CRUST_VS:3.1f} km/s, vp/vs = {CRUST_VP/CRUST_VS:3.1f}]',
          label=None, show=True, color=None, plot_event_marker=True,
             bw_method=None, weights=None):
+
+        ndist = 200
 
         if fig is None:
             fig = plt.figure()
@@ -991,14 +997,14 @@ class Catalog:
         if bw_method is None:
             bw_method = 'scott'
         kde = stats.gaussian_kde(d, weights=weights, bw_method=bw_method)
-        x = np.linspace(0., 50., 1000)
-        pdf1 = kde(x)
-        plt.plot(x, pdf1, color=color, label=label)
+        x = np.linspace(0., 50., ndist)
+        pdf_raw = kde(x)
+        plt.plot(x, pdf_raw, color=color, label=label)
 
         kde = stats.gaussian_kde(d, weights=weights/d**2, bw_method=bw_method)
-        x = np.linspace(0., 50., 1000)
-        pdf1 = kde(x)
-        plt.plot(x, pdf1, color=color, label=label + ' (area weighted)', ls='--')
+        x = np.linspace(0., 50., ndist)
+        pdf_weight = kde(x)
+        plt.plot(x, pdf_weight, color=color, label=label + ' (area weighted)', ls='--')
 
         # kde = stats.gaussian_kde(np.log10(d), weights=1./d**2)
         # x = np.linspace(1., 50, 1000.)
@@ -1011,6 +1017,10 @@ class Catalog:
 
         if label is not None:
             ax.legend()
+        if fnam_txt_out is not None:
+            with open(fnam_txt_out, 'w') as f:
+                for i in range(0, ndist):
+                    f.write(f'{x[i]}, {pdf_raw[i]}, {pdf_weight[i]}\n')
 
         if show:
             plt.show()
@@ -1078,7 +1088,7 @@ class Catalog:
                          ):
 
         for event in tqdm(self, file=stdout):
-            if event.mars_event_type_short in ['LF', 'BB']:
+            if event.mars_event_type_short in ['LF', 'XB', 'BB']:
                 if instrument is None:
                     instrument = 'VBB'
                 if len(event.picks['S']) * len(event.picks['P']) > 0:
@@ -1201,7 +1211,7 @@ class Catalog:
         :param df_mute: percentage to mute around 1 Hz
         """
         nevents = len(self.events)
-        nevents_LF = len(self.select(event_type=['LF', 'BB']))
+        nevents_LF = len(self.select(event_type=['LF', 'XB', 'BB']))
         nevents_HF = len(self.select(event_type=['HF', '24', 'VF']))
         nrows_HF = max(1, (nevents_HF + 1) // 2)
         nrows_LF = max(2, (nevents_LF + 1) // 2)
@@ -1498,7 +1508,7 @@ class Catalog:
         for event in tqdm(self):
             if (event.quality in ['A', 'B'] or \
                 (event.quality == 'C' and
-                event.mars_event_type_short in ['LF', 'BB'])) \
+                event.mars_event_type_short in ['LF', 'XB', 'BB'])) \
                and not pexists(
                        pjoin(path_pol_plots, f'{event.name}.png')):
                 baz=event.baz if event.baz else None
