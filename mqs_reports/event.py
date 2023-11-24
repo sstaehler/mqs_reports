@@ -39,6 +39,7 @@ EVENT_TYPES_SHORT = {
     'SUPER_HIGH_FREQUENCY': 'SF',
     'VERY_HIGH_FREQUENCY': 'VF',
     'EXTREMELY_BROADBAND': 'XB',
+    'WIDEBAND': 'XB',
     'BROADBAND': 'BB',
     'LOW_FREQUENCY': 'LF',
     'HIGH_FREQUENCY': 'HF',
@@ -49,6 +50,7 @@ EVENT_TYPES_PRINT = {
     'VERY_HIGH_FREQUENCY': 'very high frequency',
     'EXTREMELY_BROADBAND': 'extremely broadband',
     'BROADBAND': 'broadband',
+    'WIDEBAND': 'wideband',
     'LOW_FREQUENCY': 'low frequency',
     'HIGH_FREQUENCY': 'high frequency',
     '2.4_HZ': '2.4 Hz'}
@@ -207,7 +209,7 @@ class Event:
                         self.origin_time = utct(row['time'])
                         self.distance_type = 'aligned'
                         if 'sigma_dist' in row:
-                            self.distance_sigma = np.float(row['sigma_dist'])
+                            self.distance_sigma = float(row['sigma_dist'])
                         else:
                             self.distance_sigma = self.distance * 0.25
 
@@ -227,8 +229,8 @@ class Event:
         """
         if len(self.picks['Sg']) > 0 and len(self.picks['Pg']) > 0:
             deltat = float(utct(self.picks['Sg']) - utct(self.picks['Pg']))
-            deltat_sigma = np.sqrt(np.float(self.picks_sigma['Sg'])**2. +
-                                   np.float(self.picks_sigma['Pg'])**2.)
+            deltat_sigma = np.sqrt(float(self.picks_sigma['Sg'])**2. +
+                                   float(self.picks_sigma['Pg'])**2.)
             distance_km = deltat / (1. / vs - 1. / vp)
             distance_sigma_km = deltat_sigma / (1. / vs - 1. / vp)
             distance_degree = kilometers2degrees(distance_km,

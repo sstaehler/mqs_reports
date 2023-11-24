@@ -59,17 +59,17 @@ class Catalog:
                 type_des = ['HIGH_FREQUENCY',
                             'VERY_HIGH_FREQUENCY',
                             'LOW_FREQUENCY',
-                            'EXTREMELY_BROADBAND',
+                            'EXTREMELY_BROADBAND', 'WIDEBAND',
                             '2.4_HZ',
                             'BROADBAND']
             elif type_select == 'higher':
                 type_des = ['HIGH_FREQUENCY',
                             'VERY_HIGH_FREQUENCY',
-                            'EXTREMELY_BROADBAND',
+                            'EXTREMELY_BROADBAND', 'WIDEBAND',
                             'BROADBAND']
             elif type_select == 'lower':
                 type_des = ['LOW_FREQUENCY',
-                            'EXTREMELY_BROADBAND',
+                            'EXTREMELY_BROADBAND', 'WIDEBAND',
                             'BROADBAND']
             elif isinstance(type_select, str):
                 type_des = [type_select]
